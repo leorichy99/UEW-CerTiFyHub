@@ -103,6 +103,15 @@ export const certificateAPI = {
     const formData = new FormData();
 
     // Append text fields
+    if (data.student !== undefined && data.student !== null && data.student !== "") {
+      formData.append("student", data.student);
+    }
+    if (data.template !== undefined && data.template !== null && data.template !== "") {
+      formData.append("template", data.template);
+    }
+    if (data.status !== undefined && data.status !== null && data.status !== "") {
+      formData.append("status", data.status);
+    }
     formData.append("student_name", data.student_name);
     formData.append("degree_type", data.degree_type);
     formData.append("honors", data.honors);
@@ -184,6 +193,20 @@ export const templateAPI = {
   create: (data) => api.post("/templates/", data),
   update: (id, data) => api.patch(`/templates/${id}/`, data),
   delete: (id) => api.delete(`/templates/${id}/`),
+};
+
+// User Management API stubs (backend to implement)
+export const usersAPI = {
+  // Admin management (Super Admin only)
+  getAdmins: () => api.get("/users/admins/"),
+  createAdmin: (data) => api.post("/users/admins/", data),
+  deactivateAdmin: (id) => api.patch(`/users/admins/${id}/`, { is_active: false }),
+
+  // Student management (Admin+)
+  getStudents: () => api.get("/users/students/"),
+  bulkImportStudents: (formData) => api.post("/users/students/bulk_import/", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  }),
 };
 
 export default api;

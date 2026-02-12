@@ -1,13 +1,19 @@
 import { useState, useEffect } from "react";
+import { useToast } from "../components/ToastContainer";
+import { confirmDialog } from "../components/ConfirmDialog";
 import { studentAPI } from "../services/api";
 import ExcelUploader from "../components/ExcelUploader";
+import Pagination from "../components/Pagination";
 import { Users, Trash2, Upload, Pencil, X } from "lucide-react";
 
 export default function StudentsPage() {
+  const toast = useToast();
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showUploader, setShowUploader] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [editForm, setEditForm] = useState({
     student_id: "",
     full_name: "",
@@ -32,27 +38,45 @@ export default function StudentsPage() {
     fetchStudents();
   }, []);
 
+  // Pagination calculations
+  const totalItems = students.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedStudents = students.slice(startIndex, endIndex);
+
+  // Reset to page 1 when items per page changes
+  const handleItemsPerPageChange = (newItemsPerPage) => {
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1);
+  };
+
   const handleBulkImport = async (mappedData) => {
     try {
       await studentAPI.bulkCreate(mappedData);
-      alert(`Successfully imported ${mappedData.length} students!`);
+      toast.success(`Successfully imported ${mappedData.length} students!`);
       setShowUploader(false);
       fetchStudents();
     } catch (error) {
       console.error("Import failed:", error);
-      alert("Failed to import students");
+      toast.error("Failed to import students");
     }
   };
 
   const handleDelete = async (id) => {
-    if (confirm("Are you sure you want to delete this student?")) {
-      try {
-        await studentAPI.delete(id);
-        fetchStudents();
-      } catch (error) {
-        console.error("Delete failed:", error);
+    confirmDialog(
+      "Are you sure you want to delete this student?",
+      async () => {
+        try {
+          await studentAPI.delete(id);
+          fetchStudents();
+          toast.success("Student deleted successfully");
+        } catch (error) {
+          console.error("Delete failed:", error);
+          toast.error("Failed to delete student");
+        }
       }
-    }
+    );
   };
 
   const openEditModal = (student) => {
@@ -90,7 +114,7 @@ export default function StudentsPage() {
 
     try {
       await studentAPI.update(editingStudent.id, editForm);
-      alert("Student updated successfully!");
+      toast.success("Student updated successfully!");
       closeEditModal();
       fetchStudents();
     } catch (error) {
@@ -101,7 +125,7 @@ export default function StudentsPage() {
         details?.error ||
         details?.detail ||
         (details ? JSON.stringify(details) : "");
-      alert(message ? `Failed to update student. ${message}` : "Failed to update student.");
+      toast.error(message ? `Failed to update student. ${message}` : "Failed to update student.");
     }
   };
 
@@ -156,7 +180,7 @@ export default function StudentsPage() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {students.map((student) => (
+            {paginatedStudents.map((student) => (
               <tr key={student.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 text-sm text-gray-900">
                   {student.student_id}
@@ -197,6 +221,19 @@ export default function StudentsPage() {
         {students.length === 0 && (
           <div className="text-center py-12 text-gray-500">
             No students found. Import from Excel to get started.
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-200">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              itemsPerPage={itemsPerPage}
+              onItemsPerPageChange={handleItemsPerPageChange}
+              totalItems={totalItems}
+            />
           </div>
         )}
       </div>

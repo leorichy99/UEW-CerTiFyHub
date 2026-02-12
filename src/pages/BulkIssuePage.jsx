@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { studentAPI, templateAPI, certificateAPI } from "../services/api";
+import { useToast } from "../components/ToastContainer";
+import { templateAPI, studentAPI, certificateAPI } from "../services/api";
 import { useDropzone } from "react-dropzone";
-import * as XLSX from "xlsx";
 import {
   Upload,
   FileText,
@@ -29,7 +29,41 @@ export default function BulkIssuePage() {
   );
   const [loading, setLoading] = useState(true);
   const [issuing, setIssuing] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchPaused, setBatchPaused] = useState(false);
+  const [batchComplete, setBatchComplete] = useState(false);
+  const [batchStats, setBatchStats] = useState({
+    total: 0,
+    processed: 0,
+    success: 0,
+    failed: 0,
+  });
+  const [activityFeed, setActivityFeed] = useState([]);
+  const [previewPdfUrl, setPreviewPdfUrl] = useState("");
+  const batchStartRef = useRef(0);
+  const pauseRef = useRef(false);
+  const cancelRef = useRef(false);
+  const xlsxRef = useRef(null);
+  const xlsxPromiseRef = useRef(null);
   const navigate = useNavigate();
+  const toast = useToast();
+
+  const loadXLSX = async () => {
+    if (xlsxRef.current) return xlsxRef.current;
+    if (!xlsxPromiseRef.current) {
+      xlsxPromiseRef.current = import("xlsx").then((mod) => {
+        xlsxRef.current = mod;
+        return mod;
+      });
+    }
+    return xlsxPromiseRef.current;
+  };
+
+  useEffect(() => {
+    return () => {
+      if (previewPdfUrl) window.URL.revokeObjectURL(previewPdfUrl);
+    };
+  }, [previewPdfUrl]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -53,6 +87,105 @@ export default function BulkIssuePage() {
     "graduation_date",
   ];
 
+  const normalizeStudentRow = (row) => {
+    const next = { ...(row || {}) };
+    for (const k of Object.keys(next)) {
+      const v = next[k];
+      if (typeof v === "string") next[k] = v.trim();
+    }
+    if (typeof next.email === "string") next.email = next.email.trim().toLowerCase();
+    if (typeof next.student_id === "string") next.student_id = next.student_id.trim();
+    if (typeof next.full_name === "string") next.full_name = next.full_name.trim();
+    if (typeof next.program === "string") next.program = next.program.trim();
+    return next;
+  };
+
+  const findDuplicateValues = (rows, key) => {
+    const counts = new Map();
+    for (const r of rows) {
+      const raw = r?.[key];
+      let v = raw === undefined || raw === null ? "" : String(raw).trim();
+      if (key === "email") v = v.toLowerCase();
+      if (!v) continue;
+      counts.set(v, (counts.get(v) || 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .filter(([, c]) => c > 1)
+      .map(([v, c]) => ({ value: v, count: c }));
+  };
+
+  const findDuplicateIndices = (rows, key) => {
+    const idxByVal = new Map();
+    for (let i = 0; i < rows.length; i += 1) {
+      const raw = rows[i]?.[key];
+      let v = raw === undefined || raw === null ? "" : String(raw).trim();
+      if (key === "email") v = v.toLowerCase();
+      if (!v) continue;
+      const list = idxByVal.get(v) || [];
+      list.push(i);
+      idxByVal.set(v, list);
+    }
+    return Array.from(idxByVal.entries())
+      .filter(([, idxs]) => idxs.length > 1)
+      .map(([value, idxs]) => ({ value, idxs }));
+  };
+
+  const dedupeRowsKeepFirst = (rows, keys) => {
+    const seenByKey = new Map();
+    for (const k of keys) seenByKey.set(k, new Set());
+
+    const out = [];
+    const removed = [];
+
+    for (let i = 0; i < rows.length; i += 1) {
+      const r = rows[i];
+
+      let isDuplicate = false;
+      for (const k of keys) {
+        const raw = r?.[k];
+        let v = raw === undefined || raw === null ? "" : String(raw).trim();
+        if (!v) continue;
+        if (k === "email") v = v.toLowerCase();
+
+        const seenSet = seenByKey.get(k);
+        if (seenSet?.has(v)) {
+          isDuplicate = true;
+          break;
+        }
+      }
+
+      if (isDuplicate) {
+        removed.push({ index: i, row: r });
+        continue;
+      }
+
+      // mark as seen only when we keep the row
+      for (const k of keys) {
+        const raw = r?.[k];
+        let v = raw === undefined || raw === null ? "" : String(raw).trim();
+        if (!v) continue;
+        if (k === "email") v = v.toLowerCase();
+        seenByKey.get(k)?.add(v);
+      }
+
+      out.push(r);
+    }
+
+    return { rows: out, removed };
+  };
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const formatSeconds = (secs) => {
+    const s = Math.max(0, Math.floor(secs || 0));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const r = s % 60;
+    if (h > 0) return `${h}h ${m}m ${r}s`;
+    if (m > 0) return `${m}m ${r}s`;
+    return `${r}s`;
+  };
+
   const clearUpload = () => {
     setUploadedFile(null);
     setRawRows([]);
@@ -69,8 +202,9 @@ export default function BulkIssuePage() {
     setUploadedFile(file);
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        const XLSX = await loadXLSX();
         const data = e.target.result;
         const workbook = XLSX.read(data, { type: "binary" });
         const sheetName = workbook.SheetNames[0];
@@ -85,7 +219,7 @@ export default function BulkIssuePage() {
         setActiveStep(2);
       } catch (err) {
         console.error("Failed to parse spreadsheet:", err);
-        alert("Failed to read spreadsheet. Please upload a valid Excel file.");
+        toast.error("Failed to read spreadsheet. Please upload a valid Excel file.");
         clearUpload();
       }
     };
@@ -124,7 +258,7 @@ export default function BulkIssuePage() {
     }
 
     if (typeof value === "number") {
-      const parsed = XLSX.SSF?.parse_date_code?.(value);
+      const parsed = xlsxRef.current?.SSF?.parse_date_code?.(value);
       if (parsed?.y && parsed?.m && parsed?.d) {
         const dt = new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d));
         return dt.toISOString().split("T")[0];
@@ -152,7 +286,7 @@ export default function BulkIssuePage() {
         mapped.graduation_date = normalizeGraduationDate(mapped.graduation_date);
       }
 
-      return mapped;
+      return normalizeStudentRow(mapped);
     });
     setMappedRows(nextRows);
     return nextRows;
@@ -189,6 +323,20 @@ export default function BulkIssuePage() {
     return { invalidCount, missingByField, validPercent };
   })();
 
+  const duplicateSummary = (() => {
+    const rows = (mappedRows || []).map(normalizeStudentRow);
+    if (!rows || rows.length === 0) return { emails: [], studentIds: [], totalDupRows: 0 };
+
+    const emails = findDuplicateIndices(rows, "email");
+    const studentIds = findDuplicateIndices(rows, "student_id");
+
+    const dupRowIdx = new Set();
+    for (const d of emails) for (const idx of d.idxs) dupRowIdx.add(idx);
+    for (const d of studentIds) for (const idx of d.idxs) dupRowIdx.add(idx);
+
+    return { emails, studentIds, totalDupRows: dupRowIdx.size };
+  })();
+
   const canGoToStep2 = uploadedFile && rawRows.length > 0;
   const canGoToStep3 =
     canGoToStep2 &&
@@ -205,7 +353,7 @@ export default function BulkIssuePage() {
   const goNext = () => {
     if (activeStep === 1) {
       if (!canGoToStep2) {
-        alert("Please upload your records file.");
+        toast.error("Please upload your records file.");
         return;
       }
       setActiveStep(2);
@@ -214,7 +362,7 @@ export default function BulkIssuePage() {
     if (activeStep === 2) {
       if (!canGoToStep3) {
         const missing = missingRequiredFields.map(fieldLabel);
-        alert(
+        toast.error(
           missing.length > 0
             ? `Please map the required fields before continuing. Missing: ${missing.join(", ")}`
             : "Please map the required fields before continuing.",
@@ -227,7 +375,7 @@ export default function BulkIssuePage() {
     }
     if (activeStep === 3) {
       if (!canGoToStep4) {
-        alert("Please choose a template.");
+        toast.error("Please choose a template.");
         return;
       }
       setActiveStep(4);
@@ -241,23 +389,56 @@ export default function BulkIssuePage() {
 
   const handleIssue = async () => {
     if (!selectedTemplate) {
-      alert("Please choose a template.");
+      toast.error("Please choose a template.");
       return;
     }
     if (!mappedRows || mappedRows.length === 0) {
-      alert("Please upload and map your records.");
+      toast.error("Please upload and map your records.");
       return;
     }
     if (validationSummary.invalidCount > 0) {
-      alert(
+      toast.error(
         "Some records are missing required fields. Please fix the mapping or the file and try again.",
       );
       return;
     }
 
+    const normalizedRows = mappedRows.map(normalizeStudentRow);
+    const dupStudentIds = findDuplicateValues(normalizedRows, "student_id");
+    const dupEmails = findDuplicateValues(normalizedRows, "email");
+    if (dupStudentIds.length > 0 || dupEmails.length > 0) {
+      const parts = [];
+      if (dupStudentIds.length > 0) {
+        parts.push(
+          `Duplicate University ID(s) found in the file: ${dupStudentIds
+            .slice(0, 4)
+            .map((d) => d.value)
+            .join(", ")}${dupStudentIds.length > 4 ? "..." : ""}`,
+        );
+      }
+      if (dupEmails.length > 0) {
+        parts.push(
+          `Duplicate email(s) found in the file: ${dupEmails
+            .slice(0, 4)
+            .map((d) => d.value)
+            .join(", ")}${dupEmails.length > 4 ? "..." : ""}`,
+        );
+      }
+      toast.error(`${parts.join("\n")}\nRemove duplicates in Data Validation to continue.`);
+      return;
+    }
+
     setIssuing(true);
+    setBatchComplete(false);
+    setBatchPaused(false);
+    pauseRef.current = false;
+    cancelRef.current = false;
+    setActivityFeed([]);
+    setBatchStats({ total: normalizedRows.length, processed: 0, success: 0, failed: 0 });
+    batchStartRef.current = Date.now();
+    setBatchOpen(true);
     try {
-      const studentsRes = await studentAPI.bulkCreate(mappedRows);
+      const studentsRes = await studentAPI.bulkCreate(normalizedRows);
       const createdStudents = Array.isArray(studentsRes?.data)
         ? studentsRes.data
         : Array.isArray(studentsRes?.data?.students)
@@ -276,16 +457,107 @@ export default function BulkIssuePage() {
         throw new Error("No student ids returned");
       }
 
-      const issueRes = await certificateAPI.bulkIssue({
-        template_id: selectedTemplate,
-        student_ids: studentIds,
-        date_awarded: dateAwarded,
-      });
+      const studentByEmail = new Map();
+      const studentByStudentId = new Map();
+      for (const s of createdStudents) {
+        const sid = s?.student_id ? String(s.student_id).trim() : "";
+        const em = s?.email ? String(s.email).trim().toLowerCase() : "";
+        if (sid) studentByStudentId.set(sid, s);
+        if (em) studentByEmail.set(em, s);
+      }
 
-      const issued = issueRes?.data;
-      const issuedIds = Array.isArray(issued)
-        ? issued.map((c) => c?.id).filter(Boolean)
-        : [];
+      const issuedIds = [];
+      for (let i = 0; i < normalizedRows.length; i += 1) {
+        if (cancelRef.current) {
+          setActivityFeed((prev) => [
+            { type: "info", label: "Batch canceled", at: Date.now() },
+            ...prev,
+          ]);
+          break;
+        }
+
+        while (pauseRef.current) {
+          await sleep(150);
+          if (cancelRef.current) break;
+        }
+        if (cancelRef.current) break;
+
+        const row = normalizedRows[i];
+        const rowEmail = row?.email ? String(row.email).trim().toLowerCase() : "";
+        const rowSid = row?.student_id ? String(row.student_id).trim() : "";
+        const student =
+          (rowEmail && studentByEmail.get(rowEmail)) ||
+          (rowSid && studentByStudentId.get(rowSid));
+
+        const studentId = student?.id;
+        try {
+          if (!studentId) throw new Error("Student not found after import");
+          const certRes = await certificateAPI.create({
+            student: studentId,
+            template: selectedTemplate,
+            status: "ISSUED",
+            student_name: row?.full_name || student?.full_name || "",
+            degree_type: "BSC",
+            honors: "PASS",
+            program: row?.program || student?.program || "",
+            date_awarded: dateAwarded || row?.graduation_date,
+          });
+
+          const cert = certRes?.data;
+          if (cert?.id) issuedIds.push(cert.id);
+
+          setBatchStats((prev) => ({
+            ...prev,
+            processed: prev.processed + 1,
+            success: prev.success + 1,
+          }));
+
+          setActivityFeed((prev) => [
+            {
+              type: "success",
+              label: `Generated: ${cert?.student_name || row?.full_name || "Student"}`,
+              at: Date.now(),
+            },
+            ...prev,
+          ]);
+
+          if (cert?.id) {
+            try {
+              const pdfRes = await certificateAPI.download(cert.id);
+              const blob = new Blob([pdfRes.data], { type: "application/pdf" });
+              const url = window.URL.createObjectURL(blob);
+              setPreviewPdfUrl((prevUrl) => {
+                if (prevUrl) window.URL.revokeObjectURL(prevUrl);
+                return url;
+              });
+            } catch (e) {
+              setActivityFeed((prev) => [
+                {
+                  type: "warn",
+                  label: `Preview failed: ${cert?.student_name || row?.full_name || "Student"}`,
+                  at: Date.now(),
+                },
+                ...prev,
+              ]);
+            }
+          }
+        } catch (e) {
+          console.error("Failed issuing certificate row", i, e);
+          setBatchStats((prev) => ({
+            ...prev,
+            processed: prev.processed + 1,
+            failed: prev.failed + 1,
+          }));
+          setActivityFeed((prev) => [
+            {
+              type: "error",
+              label: `Failed: ${row?.full_name || "Student"}`,
+              at: Date.now(),
+            },
+            ...prev,
+          ]);
+        }
+      }
 
       if (issuedIds.length > 0) {
         const bundleRes = await certificateAPI.bulkBundle(issuedIds);
@@ -300,17 +572,26 @@ export default function BulkIssuePage() {
         window.URL.revokeObjectURL(url);
       }
 
-      alert("Bulk issuance complete!");
+      setBatchComplete(true);
+
+      toast.success("Bulk issuance complete!");
       navigate("/certificates");
     } catch (err) {
       console.error("Issuance failed:", err);
       const details = err?.response?.data;
-      const message =
+      const rawMessage =
         (typeof details === "string" && details) ||
         details?.error ||
         details?.detail ||
         (details ? JSON.stringify(details) : "");
-      alert(
+
+      const isIntegrity = /IntegrityError/i.test(String(rawMessage || ""));
+      const isUnique = /UNIQUE|unique constraint/i.test(String(rawMessage || ""));
+      const message =
+        isIntegrity || isUnique
+          ? "Student creation failed due to duplicate data (University ID/email already exists or duplicates are in the uploaded file). Please remove duplicates and try again."
+          : rawMessage;
+      toast.error(
         message
           ? `Failed to issue certificates. ${message}`
           : "Failed to issue certificates.",
@@ -319,6 +600,23 @@ export default function BulkIssuePage() {
       setIssuing(false);
     }
   };
+
+  const liveStats = useMemo(() => {
+    const elapsed = (Date.now() - (batchStartRef.current || 0)) / 1000;
+    const processed = batchStats.processed || 0;
+    const total = batchStats.total || 0;
+    const ratePerMin = elapsed > 0 ? (processed / elapsed) * 60 : 0;
+    const remaining = Math.max(0, total - processed);
+    const etaSecs = ratePerMin > 0 ? (remaining / ratePerMin) * 60 : 0;
+    const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+    return {
+      elapsedSecs: elapsed,
+      ratePerMin,
+      remaining,
+      etaSecs,
+      pct,
+    };
+  }, [batchStats]);
 
   if (loading) return <div>Loading...</div>;
 
@@ -355,6 +653,245 @@ export default function BulkIssuePage() {
 
   return (
     <div className="max-w-6xl mx-auto py-8">
+      {batchOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => {
+              if (!issuing) setBatchOpen(false);
+            }}
+          />
+
+          <div className="relative w-full max-w-6xl rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-slate-200 bg-white">
+              <div>
+                <div className="text-xs font-bold tracking-widest text-slate-400 uppercase">
+                  Batch Processing
+                </div>
+                <div className="text-sm font-bold text-slate-900">
+                  {batchComplete
+                    ? "Batch complete"
+                    : batchPaused
+                      ? "Paused"
+                      : issuing
+                        ? "Processing batch..."
+                        : "Ready"}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!issuing) {
+                      setBatchOpen(false);
+                      return;
+                    }
+                    const next = !pauseRef.current;
+                    pauseRef.current = next;
+                    setBatchPaused(next);
+                    setActivityFeed((prev) => [
+                      {
+                        type: "info",
+                        label: next ? "Paused batch" : "Resumed batch",
+                        at: Date.now(),
+                      },
+                      ...prev,
+                    ]);
+                  }}
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  {batchPaused ? "Resume" : "Pause"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!issuing) return;
+                    cancelRef.current = true;
+                    pauseRef.current = false;
+                    setBatchPaused(false);
+                  }}
+                  className="h-9 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                  disabled={!issuing}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!issuing) setBatchOpen(false);
+                  }}
+                  className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  disabled={issuing}
+                  title={issuing ? "Wait for completion or cancel" : "Close"}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-0">
+              <div className="lg:col-span-2 border-b lg:border-b-0 lg:border-r border-slate-200">
+                <div className="p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-xs font-bold tracking-widest text-slate-400 uppercase">
+                            Progress
+                          </div>
+                          <div className="mt-1 text-sm font-semibold text-slate-700">
+                            {batchStats.processed} of {batchStats.total} processed
+                          </div>
+                        </div>
+
+                        <div className="relative h-20 w-20">
+                          <svg viewBox="0 0 36 36" className="h-20 w-20">
+                            <path
+                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                              fill="none"
+                              stroke="#E2E8F0"
+                              strokeWidth="3"
+                            />
+                            <path
+                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                              fill="none"
+                              stroke="#1D4ED8"
+                              strokeWidth="3"
+                              strokeDasharray={`${liveStats.pct}, 100`}
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="text-sm font-extrabold text-slate-900">
+                              {liveStats.pct}%
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 h-2 rounded-full bg-slate-200 overflow-hidden">
+                        <div
+                          className="h-full bg-blue-700"
+                          style={{ width: `${liveStats.pct}%` }}
+                        />
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-3 gap-3">
+                        <div>
+                          <div className="text-[11px] text-slate-500">Success</div>
+                          <div className="text-sm font-extrabold text-emerald-700">
+                            {batchStats.success}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] text-slate-500">Failed</div>
+                          <div className="text-sm font-extrabold text-rose-700">
+                            {batchStats.failed}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] text-slate-500">Rate</div>
+                          <div className="text-sm font-extrabold text-slate-900">
+                            {Math.round(liveStats.ratePerMin || 0)}/min
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                      <div className="text-xs font-bold tracking-widest text-slate-400 uppercase">
+                        ETA Remaining
+                      </div>
+                      <div className="mt-2 text-3xl font-extrabold text-slate-900">
+                        {issuing && batchStats.processed > 0
+                          ? formatSeconds(liveStats.etaSecs)
+                          : "--"}
+                      </div>
+                      <div className="mt-2 text-xs text-slate-500">
+                        Elapsed: {formatSeconds(liveStats.elapsedSecs)}
+                      </div>
+                      <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                        Live Certificate Generation Preview updates after each successful generation.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 rounded-2xl border border-slate-200 bg-white overflow-hidden">
+                    <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+                      <div className="text-xs font-bold tracking-widest text-slate-400 uppercase">
+                        Live Certificate Generation Preview
+                      </div>
+                      <div className="text-[11px] font-bold text-emerald-700">
+                        {issuing ? "LIVE" : batchComplete ? "DONE" : ""}
+                      </div>
+                    </div>
+                    <div className="bg-slate-50 p-4">
+                      {previewPdfUrl ? (
+                        <div className="rounded-xl overflow-hidden border border-slate-200 bg-white">
+                          <iframe
+                            title="Certificate preview"
+                            src={previewPdfUrl}
+                            className="h-105 w-full"
+                          />
+                        </div>
+                      ) : (
+                        <div className="h-105 rounded-xl border border-dashed border-slate-200 bg-white flex items-center justify-center text-sm text-slate-500">
+                          Preview will appear here as certificates are generated.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-bold tracking-widest text-slate-400 uppercase">
+                    Activity Feed
+                  </div>
+                  <div className="text-[11px] font-semibold text-slate-500">
+                    {Math.round(liveStats.ratePerMin || 0)} certs / min
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-2 max-h-170 overflow-auto pr-1">
+                  {activityFeed.length === 0 ? (
+                    <div className="text-sm text-slate-500 rounded-xl border border-slate-200 bg-white p-4">
+                      No activity yet.
+                    </div>
+                  ) : (
+                    activityFeed.slice(0, 50).map((item, idx) => (
+                      <div
+                        key={idx}
+                        className={`rounded-xl border bg-white p-3 text-sm ${
+                          item.type === "success"
+                            ? "border-emerald-200"
+                            : item.type === "error"
+                              ? "border-rose-200"
+                              : item.type === "warn"
+                                ? "border-amber-200"
+                                : "border-slate-200"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="font-semibold text-slate-800">
+                            {item.label}
+                          </div>
+                          <div className="text-[10px] font-bold text-slate-400 whitespace-nowrap">
+                            {new Date(item.at).toLocaleTimeString()}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-start justify-between gap-6 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">
@@ -642,6 +1179,67 @@ export default function BulkIssuePage() {
                           {f}: {validationSummary.missingByField?.[f] || 0}
                         </div>
                       ))}
+                    </div>
+                  </div>
+                )}
+
+                {duplicateSummary.totalDupRows > 0 && (
+                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        Duplicate values detected in your uploaded file. This will cause student creation to fail.
+                        <div className="mt-1 text-xs text-amber-800">
+                          Duplicated rows: {duplicateSummary.totalDupRows}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={issuing}
+                        onClick={() => {
+                          const normalized = mappedRows.map(normalizeStudentRow);
+                          const { rows: deduped, removed } = dedupeRowsKeepFirst(normalized, ["student_id", "email"]);
+                          if (removed.length === 0) {
+                            toast.success("No duplicates found.");
+                            return;
+                          }
+                          setMappedRows(deduped);
+                          toast.success(`Removed ${removed.length} duplicate row(s) (kept first occurrence).`);
+                        }}
+                        className="shrink-0 rounded-lg bg-amber-700 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-50"
+                        title="Remove duplicate rows (keep first)"
+                      >
+                        Remove duplicates
+                      </button>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 gap-3 text-xs">
+                      {duplicateSummary.emails.length > 0 && (
+                        <div>
+                          <div className="font-bold text-amber-900">Duplicate emails</div>
+                          <div className="mt-1 text-amber-900">
+                            {duplicateSummary.emails.slice(0, 4).map((d) => (
+                              <div key={d.value}>
+                                {d.value} (rows {d.idxs.map((x) => x + 1).join(", ")})
+                              </div>
+                            ))}
+                            {duplicateSummary.emails.length > 4 && <div>...</div>}
+                          </div>
+                        </div>
+                      )}
+
+                      {duplicateSummary.studentIds.length > 0 && (
+                        <div>
+                          <div className="font-bold text-amber-900">Duplicate University IDs</div>
+                          <div className="mt-1 text-amber-900">
+                            {duplicateSummary.studentIds.slice(0, 4).map((d) => (
+                              <div key={d.value}>
+                                {d.value} (rows {d.idxs.map((x) => x + 1).join(", ")})
+                              </div>
+                            ))}
+                            {duplicateSummary.studentIds.length > 4 && <div>...</div>}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

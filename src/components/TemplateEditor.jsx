@@ -1,7 +1,24 @@
 /* eslint-disable react/prop-types */
-import { useEffect, useRef, useState } from "react";
-import { Stage, Layer, Text, Image as KonvaImage, Transformer, Rect, Line, Circle, Ellipse } from "react-konva";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useToast } from "./ToastContainer";
+import {
+  Stage,
+  Layer,
+  Text,
+  Image as KonvaImage,
+  Transformer,
+  Rect,
+  Line,
+  Circle,
+  Ellipse,
+  RegularPolygon,
+  Star,
+  Arc,
+  Wedge,
+  Path,
+} from "react-konva";
 import useImage from "use-image";
+import opentype from "opentype.js";
 import {
   AlignCenter,
   AlignJustify,
@@ -65,6 +82,277 @@ function LogoNode({
           y: node.y(),
           width: Math.max(20, node.width() * scaleX),
           height: Math.max(20, node.height() * scaleY),
+        });
+      }}
+    />
+  );
+}
+
+function ShapeSpiralNode({ el, draggable, onSelect, onChange, onDragStart, onDragMove, onDragEnd, buildPoints }) {
+  const w = el.width ?? 260;
+  const h = el.height ?? 260;
+  const turns = Math.max(1, Number(el.turns ?? 4));
+  const pointsPerTurn = Math.max(20, Number(el.pointsPerTurn ?? 80));
+
+  const points = buildPoints(w, h, turns, pointsPerTurn);
+
+  return (
+    <Line
+      id={el.id}
+      x={el.x}
+      y={el.y}
+      points={points}
+      stroke={el.stroke}
+      strokeWidth={el.strokeWidth}
+      opacity={el.opacity ?? 1}
+      rotation={el.rotation || 0}
+      draggable={draggable}
+      hitStrokeWidth={Math.max(10, (el.strokeWidth ?? 2) * 4)}
+      onClick={onSelect}
+      onTap={onSelect}
+      onDragStart={onDragStart}
+      onDragMove={onDragMove}
+      onDragEnd={(e) => {
+        onChange({ x: e.target.x(), y: e.target.y() });
+        onDragEnd?.(e);
+      }}
+      onTransformEnd={(e) => {
+        const node = e.target;
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
+        node.scaleX(1);
+        node.scaleY(1);
+        onChange({
+          x: node.x(),
+          y: node.y(),
+          width: Math.max(40, w * scaleX),
+          height: Math.max(40, h * scaleY),
+          rotation: node.rotation(),
+        });
+      }}
+    />
+  );
+}
+
+function ShapePolygonNode({ el, draggable, onSelect, onChange, onDragStart, onDragMove, onDragEnd }) {
+  const w = el.width ?? 200;
+  const h = el.height ?? 200;
+  const radius = Math.max(10, Math.min(w, h) / 2);
+
+  return (
+    <RegularPolygon
+      id={el.id}
+      x={el.x + w / 2}
+      y={el.y + h / 2}
+      sides={el.sides ?? 6}
+      radius={radius}
+      fill={el.fill}
+      stroke={el.stroke}
+      strokeWidth={el.strokeWidth}
+      opacity={el.opacity ?? 1}
+      rotation={el.rotation || 0}
+      draggable={draggable}
+      onClick={onSelect}
+      onTap={onSelect}
+      onDragStart={onDragStart}
+      onDragMove={onDragMove}
+      onDragEnd={(e) => {
+        const node = e.target;
+        onChange({ x: node.x() - w / 2, y: node.y() - h / 2 });
+        onDragEnd?.(e);
+      }}
+      onTransformEnd={(e) => {
+        const node = e.target;
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
+        node.scaleX(1);
+        node.scaleY(1);
+        onChange({
+          x: node.x() - (w * scaleX) / 2,
+          y: node.y() - (h * scaleY) / 2,
+          width: Math.max(20, w * scaleX),
+          height: Math.max(20, h * scaleY),
+          rotation: node.rotation(),
+        });
+      }}
+    />
+  );
+}
+
+function ShapeStarNode({ el, draggable, onSelect, onChange, onDragStart, onDragMove, onDragEnd }) {
+  const w = el.width ?? 220;
+  const h = el.height ?? 220;
+  const outerRadius = Math.max(10, Math.min(w, h) / 2);
+  const innerRadius = Math.max(5, Math.min(outerRadius - 2, el.innerRadius ?? outerRadius * 0.5));
+
+  return (
+    <Star
+      id={el.id}
+      x={el.x + w / 2}
+      y={el.y + h / 2}
+      numPoints={el.points ?? 5}
+      innerRadius={innerRadius}
+      outerRadius={outerRadius}
+      fill={el.fill}
+      stroke={el.stroke}
+      strokeWidth={el.strokeWidth}
+      opacity={el.opacity ?? 1}
+      rotation={el.rotation || 0}
+      draggable={draggable}
+      onClick={onSelect}
+      onTap={onSelect}
+      onDragStart={onDragStart}
+      onDragMove={onDragMove}
+      onDragEnd={(e) => {
+        const node = e.target;
+        onChange({ x: node.x() - w / 2, y: node.y() - h / 2 });
+        onDragEnd?.(e);
+      }}
+      onTransformEnd={(e) => {
+        const node = e.target;
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
+        node.scaleX(1);
+        node.scaleY(1);
+        onChange({
+          x: node.x() - (w * scaleX) / 2,
+          y: node.y() - (h * scaleY) / 2,
+          width: Math.max(20, w * scaleX),
+          height: Math.max(20, h * scaleY),
+          rotation: node.rotation(),
+        });
+      }}
+    />
+  );
+}
+
+function ShapeArcNode({ el, draggable, onSelect, onChange, onDragStart, onDragMove, onDragEnd }) {
+  const w = el.width ?? 240;
+  const h = el.height ?? 240;
+  const innerRadius = Math.max(5, el.innerRadius ?? 60);
+  const outerRadius = Math.max(innerRadius + 5, el.outerRadius ?? 100);
+
+  return (
+    <Arc
+      id={el.id}
+      x={el.x + w / 2}
+      y={el.y + h / 2}
+      innerRadius={innerRadius}
+      outerRadius={outerRadius}
+      angle={el.angle ?? 220}
+      rotation={el.rotation || 0}
+      fill={el.fill}
+      stroke={el.stroke}
+      strokeWidth={el.strokeWidth}
+      opacity={el.opacity ?? 1}
+      draggable={draggable}
+      onClick={onSelect}
+      onTap={onSelect}
+      onDragStart={onDragStart}
+      onDragMove={onDragMove}
+      onDragEnd={(e) => {
+        const node = e.target;
+        onChange({ x: node.x() - w / 2, y: node.y() - h / 2 });
+        onDragEnd?.(e);
+      }}
+      onTransformEnd={(e) => {
+        const node = e.target;
+        const scale = Math.max(node.scaleX(), node.scaleY());
+        node.scaleX(1);
+        node.scaleY(1);
+        onChange({
+          x: node.x() - w / 2,
+          y: node.y() - h / 2,
+          innerRadius: Math.max(5, innerRadius * scale),
+          outerRadius: Math.max(10, outerRadius * scale),
+          rotation: node.rotation(),
+        });
+      }}
+    />
+  );
+}
+
+function ShapeWedgeNode({ el, draggable, onSelect, onChange, onDragStart, onDragMove, onDragEnd }) {
+  const w = el.width ?? 240;
+  const h = el.height ?? 240;
+  const radius = Math.max(10, el.radius ?? 110);
+
+  return (
+    <Wedge
+      id={el.id}
+      x={el.x + w / 2}
+      y={el.y + h / 2}
+      radius={radius}
+      angle={el.angle ?? 90}
+      rotation={el.rotation || 0}
+      fill={el.fill}
+      stroke={el.stroke}
+      strokeWidth={el.strokeWidth}
+      opacity={el.opacity ?? 1}
+      draggable={draggable}
+      onClick={onSelect}
+      onTap={onSelect}
+      onDragStart={onDragStart}
+      onDragMove={onDragMove}
+      onDragEnd={(e) => {
+        const node = e.target;
+        onChange({ x: node.x() - w / 2, y: node.y() - h / 2 });
+        onDragEnd?.(e);
+      }}
+      onTransformEnd={(e) => {
+        const node = e.target;
+        const scale = Math.max(node.scaleX(), node.scaleY());
+        node.scaleX(1);
+        node.scaleY(1);
+        onChange({
+          x: node.x() - w / 2,
+          y: node.y() - h / 2,
+          radius: Math.max(10, radius * scale),
+          rotation: node.rotation(),
+        });
+      }}
+    />
+  );
+}
+
+function ShapePathNode({ el, draggable, onSelect, onChange, onDragStart, onDragMove, onDragEnd }) {
+  const w = el.width ?? 240;
+  const h = el.height ?? 240;
+
+  return (
+    <Path
+      id={el.id}
+      x={el.x}
+      y={el.y}
+      data={el.data || ""}
+      fill={el.fill}
+      stroke={el.stroke}
+      strokeWidth={el.strokeWidth}
+      opacity={el.opacity ?? 1}
+      rotation={el.rotation || 0}
+      scaleX={(el.scaleX ?? 1) * (w / 240)}
+      scaleY={(el.scaleY ?? 1) * (h / 240)}
+      draggable={draggable}
+      onClick={onSelect}
+      onTap={onSelect}
+      onDragStart={onDragStart}
+      onDragMove={onDragMove}
+      onDragEnd={(e) => {
+        onChange({ x: e.target.x(), y: e.target.y() });
+        onDragEnd?.(e);
+      }}
+      onTransformEnd={(e) => {
+        const node = e.target;
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
+        node.scaleX(1);
+        node.scaleY(1);
+        onChange({
+          x: node.x(),
+          y: node.y(),
+          width: Math.max(20, w * scaleX),
+          height: Math.max(20, h * scaleY),
+          rotation: node.rotation(),
         });
       }}
     />
@@ -370,9 +658,10 @@ const CANVAS_PRESETS = [
 ];
 
 export default function TemplateEditor({ initialData, onSave, onClose }) {
+  const toast = useToast();
   const stageRef = useRef();
   const trRef = useRef();
-  const historyRef = useRef({ past: [], future: [] });
+  const historyRef = useRef({});
   const ignoreHistoryRef = useRef(false);
   const stageWrapRef = useRef(null);
   const canvasShellRef = useRef(null);
@@ -381,7 +670,10 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
   const panRef = useRef({ active: false, x: 0, y: 0, sl: 0, st: 0 });
   const pinchRef = useRef({ dist: null, zoom: null });
   const fileInputRef = useRef(null);
+  const patternInputRef = useRef(null);
   const textAreaRef = useRef(null);
+  const toolBeforeSpaceRef = useRef(null);
+  const altDupRef = useRef({ active: false, fromId: null, toId: null });
 
   const [zoom, setZoom] = useState(0.75);
   const [canvasPresetId, setCanvasPresetId] = useState("a4_landscape");
@@ -399,66 +691,195 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
   const [paperOffset, setPaperOffset] = useState({ x: 0, y: 0 });
   const [cursorDoc, setCursorDoc] = useState(null);
 
-  const [elements, setElements] = useState([
-    { id: "logo", type: "logo", x: 240, y: 40, width: 120, height: 120 },
+  const [openToolGroups, setOpenToolGroups] = useState({
+    background: true,
+    pattern: false,
+    shapes: true,
+    fields: false,
+    assets: false,
+  });
 
-    {
-      id: "title1",
-      type: "text",
-      text: "UNIVERSITY OF EDUCATION, WINNEBA",
-      x: 80,
-      y: 180,
-      width: 430,
-      fontSize: 16,
-      fill: "#1E293B",
-      fontFamily: "Cormorant Garamond",
-      bold: false,
-      italic: false,
-      align: "center",
-      opacity: 1,
+  const [backgroundByPreset, setBackgroundByPreset] = useState({
+    a4_portrait: {
+      kind: "solid",
+      color: "#ffffff",
+      gradient: {
+        type: "linear",
+        angle: 90,
+        stops: [
+          { color: "#ffffff", pos: 0 },
+          { color: "#ffffff", pos: 1 },
+        ],
+      },
+      pattern: { enabled: false, src: "", opacity: 0.18, scale: 1 },
     },
-    {
-      id: "title2",
-      type: "text",
-      text: "Certificate of Graduation",
-      x: 80,
-      y: 220,
-      width: 430,
-      fontSize: 40,
-      fill: "#1E293B",
-      fontFamily: "Cormorant Garamond",
-      bold: false,
-      italic: true,
-      align: "center",
-      opacity: 1,
+    a4_landscape: {
+      kind: "solid",
+      color: "#ffffff",
+      gradient: {
+        type: "linear",
+        angle: 90,
+        stops: [
+          { color: "#ffffff", pos: 0 },
+          { color: "#ffffff", pos: 1 },
+        ],
+      },
+      pattern: { enabled: false, src: "", opacity: 0.18, scale: 1 },
     },
-    {
-      id: "student",
-      type: "text",
-      text: "{student_name}",
-      x: 80,
-      y: 310,
-      width: 430,
-      fontSize: 28,
-      fill: "#1E293B",
-      fontFamily: "Cormorant Garamond",
-      bold: true,
-      italic: false,
-      align: "center",
-      opacity: 1,
-    },
-  ]);
+  });
+
+  const canvasBackground = backgroundByPreset[canvasPresetId] || backgroundByPreset.a4_landscape;
+  const [patternImage] = useImage(canvasBackground?.pattern?.src || null);
+
+  const [elementsByPreset, setElementsByPreset] = useState({
+    a4_portrait: [
+      { id: "logo", type: "logo", x: 240, y: 40, width: 120, height: 120 },
+
+      {
+        id: "title1",
+        type: "text",
+        text: "UNIVERSITY OF EDUCATION, WINNEBA",
+        x: 80,
+        y: 180,
+        width: 430,
+        fontSize: 16,
+        fill: "#1E293B",
+        fontFamily: "Cormorant Garamond",
+        bold: false,
+        italic: false,
+        align: "center",
+        opacity: 1,
+      },
+      {
+        id: "title2",
+        type: "text",
+        text: "Certificate of Graduation",
+        x: 80,
+        y: 220,
+        width: 430,
+        fontSize: 40,
+        fill: "#1E293B",
+        fontFamily: "Cormorant Garamond",
+        bold: false,
+        italic: true,
+        align: "center",
+        opacity: 1,
+      },
+      {
+        id: "student",
+        type: "text",
+        text: "{student_name}",
+        x: 80,
+        y: 310,
+        width: 430,
+        fontSize: 28,
+        fill: "#1E293B",
+        fontFamily: "Cormorant Garamond",
+        bold: true,
+        italic: false,
+        align: "center",
+        opacity: 1,
+      },
+    ],
+    a4_landscape: [
+      { id: "logo", type: "logo", x: 240, y: 40, width: 120, height: 120 },
+
+      {
+        id: "title1",
+        type: "text",
+        text: "UNIVERSITY OF EDUCATION, WINNEBA",
+        x: 80,
+        y: 180,
+        width: 430,
+        fontSize: 16,
+        fill: "#1E293B",
+        fontFamily: "Cormorant Garamond",
+        bold: false,
+        italic: false,
+        align: "center",
+        opacity: 1,
+      },
+      {
+        id: "title2",
+        type: "text",
+        text: "Certificate of Graduation",
+        x: 80,
+        y: 220,
+        width: 430,
+        fontSize: 40,
+        fill: "#1E293B",
+        fontFamily: "Cormorant Garamond",
+        bold: false,
+        italic: true,
+        align: "center",
+        opacity: 1,
+      },
+      {
+        id: "student",
+        type: "text",
+        text: "{student_name}",
+        x: 80,
+        y: 310,
+        width: 430,
+        fontSize: 28,
+        fill: "#1E293B",
+        fontFamily: "Cormorant Garamond",
+        bold: true,
+        italic: false,
+        align: "center",
+        opacity: 1,
+      },
+    ],
+  });
+
+  const elements = elementsByPreset[canvasPresetId] || [];
 
   useEffect(() => {
-    if (initialData?.metadata?.elements) {
+    if (!initialData) return;
+
+    const incomingPresetId = initialData?.metadata?.canvas?.presetId;
+    if (incomingPresetId && incomingPresetId !== canvasPresetId) {
+      setCanvasPresetId(incomingPresetId);
+    }
+
+    const incomingByPreset = initialData?.metadata?.elements_by_preset;
+    const incomingElements = initialData?.metadata?.elements;
+    const targetPresetId = incomingPresetId || canvasPresetId;
+
+    if (incomingByPreset || incomingElements) {
       ignoreHistoryRef.current = true;
-      setElements(initialData.metadata.elements);
-      historyRef.current = { past: [], future: [] };
+
+      if (incomingByPreset && typeof incomingByPreset === "object") {
+        setElementsByPreset((prev) => ({
+          ...prev,
+          ...incomingByPreset,
+        }));
+      } else if (incomingElements) {
+        setElementsByPreset((prev) => ({
+          ...prev,
+          [targetPresetId]: incomingElements,
+        }));
+      }
+
+      historyRef.current = {
+        ...historyRef.current,
+        [targetPresetId]: { past: [], future: [] },
+      };
       setHistoryMeta({ canUndo: false, canRedo: false });
       ignoreHistoryRef.current = false;
     }
+
     if (initialData?.name) {
       setTemplateTitle(initialData.name);
+    }
+
+    const incomingBgByPreset = initialData?.metadata?.background_by_preset;
+    const incomingBg = initialData?.metadata?.canvas?.background;
+    if (incomingBgByPreset && typeof incomingBgByPreset === "object") {
+      setBackgroundByPreset((prev) => ({ ...prev, ...incomingBgByPreset }));
+    } else if (incomingBg && typeof incomingBg === "object") {
+      const target = incomingPresetId || canvasPresetId;
+      setBackgroundByPreset((prev) => ({ ...prev, [target]: { ...prev[target], ...incomingBg } }));
     }
   }, [initialData]);
 
@@ -471,6 +892,68 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
   const isEditingText = !!textEditor;
   const canUndo = historyMeta.canUndo;
   const canRedo = historyMeta.canRedo;
+
+  const outlineFontUrl =
+    initialData?.metadata?.outline_font_url || "/fonts/Inter-Regular.ttf";
+
+  const replaceElement = (id, nextEl) => {
+    applyElementsUpdate((prev) => prev.map((el) => (el.id === id ? nextEl : el)));
+  };
+
+  const generateSpiralPoints = (w, h, turns, pointsPerTurn) => {
+    const cx = w / 2;
+    const cy = h / 2;
+    const maxR = Math.max(10, Math.min(w, h) / 2);
+    const totalPoints = Math.max(50, Math.floor(turns * pointsPerTurn));
+    const pts = [];
+
+    for (let i = 0; i < totalPoints; i++) {
+      const t = i / (totalPoints - 1);
+      const angle = t * turns * Math.PI * 2;
+      const r = t * maxR;
+      pts.push(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+    }
+
+    return pts;
+  };
+
+  const outlineSelectedText = async () => {
+    if (!selectedElement || selectedElement.type !== "text") return;
+
+    try {
+      const font = await opentype.load(outlineFontUrl);
+      const size = selectedElement.fontSize || 24;
+      const text = String(selectedElement.text || "");
+      const x = selectedElement.x ?? 0;
+      const y = (selectedElement.y ?? 0) + size;
+
+      const path = font.getPath(text, x, y, size);
+      const bbox = path.getBoundingBox();
+      const data = path.toPathData(2);
+      const width = Math.max(20, Math.round(bbox.x2 - bbox.x1));
+      const height = Math.max(20, Math.round(bbox.y2 - bbox.y1));
+
+      replaceElement(selectedElement.id, {
+        id: selectedElement.id,
+        type: "shape_path",
+        x: Math.round(bbox.x1),
+        y: Math.round(bbox.y1),
+        width,
+        height,
+        data,
+        fill: selectedElement.fill || "#1E293B",
+        stroke: "transparent",
+        strokeWidth: 0,
+        opacity: selectedElement.opacity ?? 1,
+        rotation: selectedElement.rotation || 0,
+      });
+
+      toast.success("Text outlined");
+    } catch (e) {
+      console.error("Outline text failed:", e);
+      toast.error("Failed to outline text (font missing/unreachable)");
+    }
+  };
 
   function measurePaperOffset() {
     const shell = canvasShellRef.current;
@@ -498,29 +981,38 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
   }
 
   function applyElementsUpdate(updater) {
-    setElements((prev) => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      if (ignoreHistoryRef.current) return next;
-      historyRef.current.past.push(cloneElements(prev));
-      if (historyRef.current.past.length > 100) historyRef.current.past.shift();
-      historyRef.current.future = [];
-      return next;
+    setElementsByPreset((prev) => {
+      const currentElements = prev[canvasPresetId] || [];
+      const next = typeof updater === "function" ? updater(currentElements) : updater;
+      if (ignoreHistoryRef.current) return { ...prev, [canvasPresetId]: next };
+      
+      // Update history for current preset only
+      const presetHistory = historyRef.current[canvasPresetId] || { past: [], future: [] };
+      presetHistory.past.push(cloneElements(currentElements));
+      if (presetHistory.past.length > 100) presetHistory.past.shift();
+      presetHistory.future = [];
+      historyRef.current = { ...historyRef.current, [canvasPresetId]: presetHistory };
+      
+      return { ...prev, [canvasPresetId]: next };
     });
     setHistoryMeta({ canUndo: true, canRedo: false });
   }
 
   function undo() {
-    if (!historyRef.current.past.length) return;
+    const presetHistory = historyRef.current[canvasPresetId] || { past: [], future: [] };
+    if (!presetHistory.past.length) return;
     ignoreHistoryRef.current = true;
-    setElements((current) => {
-      historyRef.current.future.push(cloneElements(current));
-      const prev = historyRef.current.past.pop();
-      return prev || current;
+    setElementsByPreset((prev) => {
+      const currentElements = prev[canvasPresetId] || [];
+      presetHistory.future.push(cloneElements(currentElements));
+      const previousElements = presetHistory.past.pop();
+      historyRef.current = { ...historyRef.current, [canvasPresetId]: presetHistory };
+      return { ...prev, [canvasPresetId]: previousElements || currentElements };
     });
     setSelectedId(null);
     setHistoryMeta({
-      canUndo: historyRef.current.past.length > 0,
-      canRedo: historyRef.current.future.length > 0,
+      canUndo: presetHistory.past.length > 0,
+      canRedo: presetHistory.future.length > 0,
     });
     setTimeout(() => {
       ignoreHistoryRef.current = false;
@@ -528,17 +1020,20 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
   }
 
   function redo() {
-    if (!historyRef.current.future.length) return;
+    const presetHistory = historyRef.current[canvasPresetId] || { past: [], future: [] };
+    if (!presetHistory.future.length) return;
     ignoreHistoryRef.current = true;
-    setElements((current) => {
-      historyRef.current.past.push(cloneElements(current));
-      const next = historyRef.current.future.pop();
-      return next || current;
+    setElementsByPreset((prev) => {
+      const currentElements = prev[canvasPresetId] || [];
+      presetHistory.past.push(cloneElements(currentElements));
+      const nextElements = presetHistory.future.pop();
+      historyRef.current = { ...historyRef.current, [canvasPresetId]: presetHistory };
+      return { ...prev, [canvasPresetId]: nextElements || currentElements };
     });
     setSelectedId(null);
     setHistoryMeta({
-      canUndo: historyRef.current.past.length > 0,
-      canRedo: historyRef.current.future.length > 0,
+      canUndo: presetHistory.past.length > 0,
+      canRedo: presetHistory.future.length > 0,
     });
     setTimeout(() => {
       ignoreHistoryRef.current = false;
@@ -721,6 +1216,174 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
         },
       ]);
       setSelectedId(id);
+      return;
+    }
+
+    if (kind === "polygon") {
+      const width = 220;
+      const height = 220;
+      const x = atPoint?.x ?? Math.round((canvasWidth - width) / 2);
+      const y = atPoint?.y ?? Math.round((canvasHeight - height) / 2);
+
+      applyElementsUpdate((prev) => [
+        ...prev,
+        {
+          id,
+          type: "shape_polygon",
+          x,
+          y,
+          width,
+          height,
+          sides: 6,
+          fill: "#FFFFFF",
+          stroke: baseStroke,
+          strokeWidth: 2,
+          opacity: 1,
+          rotation: 0,
+        },
+      ]);
+      setSelectedId(id);
+      return;
+    }
+
+    if (kind === "star") {
+      const width = 240;
+      const height = 240;
+      const x = atPoint?.x ?? Math.round((canvasWidth - width) / 2);
+      const y = atPoint?.y ?? Math.round((canvasHeight - height) / 2);
+
+      applyElementsUpdate((prev) => [
+        ...prev,
+        {
+          id,
+          type: "shape_star",
+          x,
+          y,
+          width,
+          height,
+          points: 5,
+          innerRadius: 60,
+          fill: "#FFFFFF",
+          stroke: baseStroke,
+          strokeWidth: 2,
+          opacity: 1,
+          rotation: 0,
+        },
+      ]);
+      setSelectedId(id);
+      return;
+    }
+
+    if (kind === "arc") {
+      const width = 260;
+      const height = 260;
+      const x = atPoint?.x ?? Math.round((canvasWidth - width) / 2);
+      const y = atPoint?.y ?? Math.round((canvasHeight - height) / 2);
+
+      applyElementsUpdate((prev) => [
+        ...prev,
+        {
+          id,
+          type: "shape_arc",
+          x,
+          y,
+          width,
+          height,
+          innerRadius: 60,
+          outerRadius: 110,
+          angle: 220,
+          fill: "#FFFFFF",
+          stroke: baseStroke,
+          strokeWidth: 2,
+          opacity: 1,
+          rotation: 0,
+        },
+      ]);
+      setSelectedId(id);
+      return;
+    }
+
+    if (kind === "pie") {
+      const width = 260;
+      const height = 260;
+      const x = atPoint?.x ?? Math.round((canvasWidth - width) / 2);
+      const y = atPoint?.y ?? Math.round((canvasHeight - height) / 2);
+
+      applyElementsUpdate((prev) => [
+        ...prev,
+        {
+          id,
+          type: "shape_wedge",
+          x,
+          y,
+          width,
+          height,
+          radius: 110,
+          angle: 90,
+          fill: "#FFFFFF",
+          stroke: baseStroke,
+          strokeWidth: 2,
+          opacity: 1,
+          rotation: 0,
+        },
+      ]);
+      setSelectedId(id);
+      return;
+    }
+
+    if (kind === "spiral") {
+      const width = 260;
+      const height = 260;
+      const x = atPoint?.x ?? Math.round((canvasWidth - width) / 2);
+      const y = atPoint?.y ?? Math.round((canvasHeight - height) / 2);
+
+      applyElementsUpdate((prev) => [
+        ...prev,
+        {
+          id,
+          type: "shape_spiral",
+          x,
+          y,
+          width,
+          height,
+          turns: 4,
+          pointsPerTurn: 80,
+          stroke: baseStroke,
+          strokeWidth: 2,
+          opacity: 1,
+          rotation: 0,
+        },
+      ]);
+      setSelectedId(id);
+      return;
+    }
+
+    if (kind === "path") {
+      const width = 260;
+      const height = 200;
+      const x = atPoint?.x ?? Math.round((canvasWidth - width) / 2);
+      const y = atPoint?.y ?? Math.round((canvasHeight - height) / 2);
+      const data = "M10 80 C 40 10, 65 10, 95 80 S 150 150, 180 80";
+
+      applyElementsUpdate((prev) => [
+        ...prev,
+        {
+          id,
+          type: "shape_path",
+          x,
+          y,
+          width,
+          height,
+          data,
+          fill: "transparent",
+          stroke: baseStroke,
+          strokeWidth: 2,
+          opacity: 1,
+          rotation: 0,
+        },
+      ]);
+      setSelectedId(id);
+      return;
     }
   }
 
@@ -790,11 +1453,107 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
     setSnapLines({ vertical: [], horizontal: [] });
   }
 
+  function isValidCssColor(value) {
+    if (!value) return false;
+    const s = new Option().style;
+    s.color = "";
+    s.color = String(value).trim();
+    return !!s.color;
+  }
+
+  function setBackgroundPatch(patch) {
+    setBackgroundByPreset((prev) => {
+      const current = prev[canvasPresetId] || prev.a4_landscape;
+      return { ...prev, [canvasPresetId]: { ...current, ...patch } };
+    });
+  }
+
+  function setGradientPatch(patch) {
+    setBackgroundByPreset((prev) => {
+      const current = prev[canvasPresetId] || prev.a4_landscape;
+      const nextGradient = { ...(current.gradient || {}), ...patch };
+      return { ...prev, [canvasPresetId]: { ...current, gradient: nextGradient } };
+    });
+  }
+
+  function setPatternPatch(patch) {
+    setBackgroundByPreset((prev) => {
+      const current = prev[canvasPresetId] || prev.a4_landscape;
+      const nextPattern = { ...(current.pattern || {}), ...patch };
+      return { ...prev, [canvasPresetId]: { ...current, pattern: nextPattern } };
+    });
+  }
+
+  function duplicateSelected() {
+    if (!selectedId) return;
+    const el = elements.find((x) => x.id === selectedId);
+    if (!el || el.id === "logo") return;
+    const newId = `${el.id}-copy-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const copy = {
+      ...el,
+      id: newId,
+      x: Math.min(canvasWidth - 1, Math.round((el.x ?? 0) + 12)),
+      y: Math.min(canvasHeight - 1, Math.round((el.y ?? 0) + 12)),
+    };
+    applyElementsUpdate((prev) => [...prev, copy]);
+    setSelectedId(newId);
+  }
+
+  function beginAltDuplicate(el) {
+    if (!el || el.id === "logo") return null;
+    const newId = `${el.id}-altcopy-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const copy = {
+      ...el,
+      id: newId,
+      x: Math.min(canvasWidth - 1, Math.round((el.x ?? 0) + 12)),
+      y: Math.min(canvasHeight - 1, Math.round((el.y ?? 0) + 12)),
+    };
+    altDupRef.current = { active: true, fromId: el.id, toId: newId };
+    applyElementsUpdate((prev) => [...prev, copy]);
+    setSelectedId(newId);
+    return newId;
+  }
+
+  function handleElementDragStart(el, e) {
+    clearSnapLines();
+    if (isPreview || isEditingText || tool !== "select") return;
+    const evt = e?.evt;
+    if (!evt?.altKey) return;
+    if (altDupRef.current.active) return;
+
+    const newId = beginAltDuplicate(el);
+    if (!newId) return;
+
+    try {
+      e?.target?.stopDrag();
+    } catch {
+      // ignore
+    }
+
+    setTimeout(() => {
+      const stage = stageRef.current;
+      if (!stage) return;
+      const node = stage.findOne(`#${newId}`);
+      if (!node) return;
+      try {
+        node.startDrag();
+      } catch {
+        // ignore
+      }
+    }, 0);
+  }
+
   function snapDragMove(el, e) {
     const node = e.target;
     const w = el.width ?? (el.radius ? el.radius * 2 : node.width());
     const h = el.height ?? (el.radius ? el.radius * 2 : node.height());
-    const isCenterAnchored = el.type === "shape_ellipse" || el.type === "shape_circle";
+    const isCenterAnchored =
+      el.type === "shape_ellipse" ||
+      el.type === "shape_circle" ||
+      el.type === "shape_polygon" ||
+      el.type === "shape_star" ||
+      el.type === "shape_arc" ||
+      el.type === "shape_wedge";
     let x = isCenterAnchored ? node.x() - w / 2 : node.x();
     let y = isCenterAnchored ? node.y() - h / 2 : node.y();
 
@@ -865,6 +1624,44 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
 
       const isCmdOrCtrl = e.metaKey || e.ctrlKey;
 
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setSelectedId(null);
+        return;
+      }
+
+      if (!isCmdOrCtrl && String(e.key || "").toLowerCase() === "v") {
+        setTool("select");
+        return;
+      }
+
+      if (!isCmdOrCtrl && e.key === " ") {
+        if (toolBeforeSpaceRef.current == null) {
+          toolBeforeSpaceRef.current = tool;
+        }
+        setTool("pan");
+        e.preventDefault();
+        return;
+      }
+
+      if (isCmdOrCtrl && String(e.key || "").toLowerCase() === "z") {
+        e.preventDefault();
+        undo();
+        return;
+      }
+
+      if (isCmdOrCtrl && String(e.key || "").toLowerCase() === "y") {
+        e.preventDefault();
+        redo();
+        return;
+      }
+
+      if (isCmdOrCtrl && String(e.key || "").toLowerCase() === "d") {
+        e.preventDefault();
+        duplicateSelected();
+        return;
+      }
+
       if (isCmdOrCtrl && (e.key === "+" || e.key === "=")) {
         e.preventDefault();
         setZoom((z) => Math.min(2, Math.round(z * 1.1 * 100) / 100));
@@ -908,8 +1705,21 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
       }
     }
 
+    function onKeyUp(e) {
+      if (isPreview) return;
+      if (e.key !== " ") return;
+      if (toolBeforeSpaceRef.current != null) {
+        setTool(toolBeforeSpaceRef.current);
+        toolBeforeSpaceRef.current = null;
+      }
+    }
+
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
   }, [
     isPreview,
     isEditingText,
@@ -917,6 +1727,7 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
     selectedId,
     elements,
     updateElement,
+    tool,
   ]);
 
   useEffect(() => {
@@ -999,8 +1810,11 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
         presetId: canvasPresetId,
         width: canvasWidth,
         height: canvasHeight,
+        background: canvasBackground,
       },
       elements,
+      elements_by_preset: elementsByPreset,
+      background_by_preset: backgroundByPreset,
     };
 
     if (onSave) {
@@ -1009,7 +1823,7 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
     }
 
     console.log("TEMPLATE:", payload);
-    alert("Exported to console");
+    toast.success("Template exported to console");
   }
 
   return (
@@ -1021,7 +1835,31 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
           <div className="relative">
             <select
               value={canvasPresetId}
-              onChange={(e) => setCanvasPresetId(e.target.value)}
+              onChange={(e) => {
+                const newPresetId = e.target.value;
+                // Save current preset elements and ensure target preset has its own elements
+                setElementsByPreset((prev) => {
+                  const next = {
+                    ...prev,
+                    [canvasPresetId]: elements,
+                  };
+
+                  if (!next[newPresetId]) {
+                    next[newPresetId] = cloneElements(elements);
+                  }
+
+                  return next;
+                });
+
+                setSelectedId(null);
+                setCanvasPresetId(newPresetId);
+
+                const nextHistory = historyRef.current?.[newPresetId] || { past: [], future: [] };
+                setHistoryMeta({
+                  canUndo: nextHistory.past.length > 0,
+                  canRedo: nextHistory.future.length > 0,
+                });
+              }}
               className="h-9 rounded-md bg-slate-50 px-3 pr-8 text-sm text-slate-700"
               disabled={isPreview}
             >
@@ -1042,7 +1880,7 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
                 value={templateTitle}
                 onChange={(e) => setTemplateTitle(e.target.value)}
                 onBlur={() => setEditingTitle(false)}
-                className="h-9 w-[220px] rounded-md border border-slate-200 bg-white px-3 text-sm"
+                className="h-9 w-55 rounded-md border border-slate-200 bg-white px-3 text-sm"
               />
             ) : (
               <button
@@ -1050,7 +1888,7 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
                 onClick={() => setEditingTitle(true)}
                 className="flex items-center gap-2 rounded-md px-2 py-1 text-sm text-slate-800 hover:bg-slate-100"
               >
-                <span className="max-w-[220px] truncate">{templateTitle}</span>
+                <span className="max-w-55 truncate">{templateTitle}</span>
                 <Pencil className="h-4 w-4 text-slate-500" />
               </button>
             )}
@@ -1102,43 +1940,314 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
       </div>
 
       <div className="flex flex-1 overflow-hidden bg-slate-50">
-        <div className="w-72 shrink-0 overflow-y-auto border-r bg-white p-4">
+        <div
+          className="w-72 shrink-0 overflow-y-auto border-r bg-white p-4 [&::-webkit-scrollbar]:hidden"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        >
           <div className="mb-6">
-            <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">BACKGROUND</div>
-            <div className="text-[11px] font-semibold text-slate-700">SOLID COLOR & GRADIENT</div>
-            <div className="mt-3 flex items-center gap-2">
-              <button type="button" className="h-9 w-9 rounded-lg border border-slate-200 bg-white" />
-              <button type="button" className="h-9 w-9 rounded-lg border border-slate-200 bg-slate-900" />
-              <button type="button" className="h-9 w-9 rounded-lg border border-slate-200 bg-slate-500" />
-              <button type="button" className="h-9 w-9 rounded-lg border border-dashed border-slate-300 bg-white text-slate-500">+</button>
-            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setOpenToolGroups((g) => ({
+                  ...g,
+                  background: !g.background,
+                }))
+              }
+              className="flex w-full items-center justify-between"
+              title="Toggle background tools"
+            >
+              <div className="text-[11px] font-semibold tracking-widest text-slate-500">BACKGROUND</div>
+              <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform ${openToolGroups.background ? "rotate-180" : ""}`} />
+            </button>
+
+            {openToolGroups.background && (
+              <>
+                <div className="mt-2 text-[11px] font-semibold text-slate-700">SOLID COLOR & GRADIENT</div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBackgroundPatch({ kind: "solid" })}
+                    disabled={isPreview}
+                    className={`h-9 rounded-lg border px-3 text-xs font-semibold ${canvasBackground?.kind === "solid" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+                    title="Solid color"
+                  >
+                    Solid
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBackgroundPatch({ kind: "gradient" })}
+                    disabled={isPreview}
+                    className={`h-9 rounded-lg border px-3 text-xs font-semibold ${canvasBackground?.kind === "gradient" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+                    title="Gradient"
+                  >
+                    Gradient
+                  </button>
+                </div>
+
+                {canvasBackground?.kind === "solid" && (
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <input
+                      type="color"
+                      value={isValidCssColor(canvasBackground?.color) ? canvasBackground.color : "#ffffff"}
+                      onChange={(e) => setBackgroundPatch({ color: e.target.value })}
+                      disabled={isPreview}
+                      className="h-9 w-full cursor-pointer rounded-lg border border-slate-200 bg-white p-1"
+                      title="Pick a color"
+                    />
+                    <input
+                      value={canvasBackground?.color || ""}
+                      onChange={(e) => setBackgroundPatch({ color: e.target.value })}
+                      onBlur={(e) => {
+                        const v = e.target.value;
+                        if (!v) return;
+                        if (!isValidCssColor(v)) {
+                          toast.error("Invalid color. Use hex/rgb/hsl formats.");
+                          setBackgroundPatch({ color: "#ffffff" });
+                        }
+                      }}
+                      disabled={isPreview}
+                      placeholder="#ffffff / rgb(...) / hsl(...)"
+                      className="col-span-2 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs"
+                    />
+                  </div>
+                )}
+
+                {canvasBackground?.kind === "gradient" && (
+                  <div className="mt-3 space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={canvasBackground?.gradient?.type || "linear"}
+                        onChange={(e) => setGradientPatch({ type: e.target.value })}
+                        disabled={isPreview}
+                        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs"
+                      >
+                        <option value="linear">Linear</option>
+                        <option value="radial">Radial</option>
+                      </select>
+                      <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3">
+                        <div className="text-[11px] text-slate-500">Angle</div>
+                        <input
+                          type="number"
+                          value={Number(canvasBackground?.gradient?.angle ?? 90)}
+                          onChange={(e) => setGradientPatch({ angle: Number(e.target.value) })}
+                          disabled={isPreview || canvasBackground?.gradient?.type !== "linear"}
+                          className="h-7 w-16 rounded-md border border-slate-200 bg-white px-2 text-xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-2">
+                        <div className="text-[11px] font-semibold tracking-widest text-slate-500">COLOR 1</div>
+                        <input
+                          type="color"
+                          value={
+                            isValidCssColor(canvasBackground?.gradient?.stops?.[0]?.color)
+                              ? canvasBackground.gradient.stops[0].color
+                              : "#ffffff"
+                          }
+                          onChange={(e) => {
+                            const next = [...(canvasBackground?.gradient?.stops || [])];
+                            if (!next[0]) next[0] = { color: "#ffffff", pos: 0 };
+                            next[0] = { ...next[0], color: e.target.value, pos: 0 };
+                            setGradientPatch({ stops: next });
+                          }}
+                          disabled={isPreview}
+                          className="h-9 w-full cursor-pointer rounded-lg border border-slate-200 bg-white p-1"
+                        />
+                        <input
+                          value={canvasBackground?.gradient?.stops?.[0]?.color || ""}
+                          onChange={(e) => {
+                            const next = [...(canvasBackground?.gradient?.stops || [])];
+                            if (!next[0]) next[0] = { color: "#ffffff", pos: 0 };
+                            next[0] = { ...next[0], color: e.target.value, pos: 0 };
+                            setGradientPatch({ stops: next });
+                          }}
+                          onBlur={(e) => {
+                            const v = e.target.value;
+                            if (!v) return;
+                            if (!isValidCssColor(v)) {
+                              toast.error("Invalid color. Use hex/rgb/hsl formats.");
+                            }
+                          }}
+                          disabled={isPreview}
+                          placeholder="#ffffff / rgb(...) / hsl(...)"
+                          className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="text-[11px] font-semibold tracking-widest text-slate-500">COLOR 2</div>
+                        <input
+                          type="color"
+                          value={
+                            isValidCssColor(canvasBackground?.gradient?.stops?.[1]?.color)
+                              ? canvasBackground.gradient.stops[1].color
+                              : "#000000"
+                          }
+                          onChange={(e) => {
+                            const next = [...(canvasBackground?.gradient?.stops || [])];
+                            if (!next[1]) next[1] = { color: "#000000", pos: 1 };
+                            next[1] = { ...next[1], color: e.target.value, pos: 1 };
+                            if (!next[0]) next[0] = { color: "#ffffff", pos: 0 };
+                            setGradientPatch({ stops: next });
+                          }}
+                          disabled={isPreview}
+                          className="h-9 w-full cursor-pointer rounded-lg border border-slate-200 bg-white p-1"
+                        />
+                        <input
+                          value={canvasBackground?.gradient?.stops?.[1]?.color || ""}
+                          onChange={(e) => {
+                            const next = [...(canvasBackground?.gradient?.stops || [])];
+                            if (!next[1]) next[1] = { color: "#000000", pos: 1 };
+                            next[1] = { ...next[1], color: e.target.value, pos: 1 };
+                            if (!next[0]) next[0] = { color: "#ffffff", pos: 0 };
+                            setGradientPatch({ stops: next });
+                          }}
+                          onBlur={(e) => {
+                            const v = e.target.value;
+                            if (!v) return;
+                            if (!isValidCssColor(v)) {
+                              toast.error("Invalid color. Use hex/rgb/hsl formats.");
+                            }
+                          }}
+                          disabled={isPreview}
+                          placeholder="#000000 / rgb(...) / hsl(...)"
+                          className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           <div className="mb-6">
-            <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">PATTERN OVERLAYS</div>
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" className="h-10 rounded-lg border border-slate-200 bg-slate-50" />
-              <button type="button" className="h-10 rounded-lg border border-slate-200 bg-white text-xs text-slate-500">None</button>
-            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setOpenToolGroups((g) => ({
+                  ...g,
+                  pattern: !g.pattern,
+                }))
+              }
+              className="flex w-full items-center justify-between"
+              title="Toggle pattern tools"
+            >
+              <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">PATTERN OVERLAYS</div>
+              <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform ${openToolGroups.pattern ? "rotate-180" : ""}`} />
+            </button>
+
+            {openToolGroups.pattern && (
+              <>
+                <input
+                  ref={patternInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      const src = String(reader.result || "");
+                      setPatternPatch({ enabled: true, src });
+                    };
+                    reader.readAsDataURL(file);
+                    e.target.value = "";
+                  }}
+                  disabled={isPreview}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => patternInputRef.current?.click()}
+                    disabled={isPreview}
+                    className="flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Upload
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPatternPatch({ enabled: false, src: "" })}
+                    disabled={isPreview}
+                    className="flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    None
+                  </button>
+                </div>
+
+                {canvasBackground?.pattern?.enabled && (
+                  <div className="mt-3 space-y-3">
+                <div className="text-[11px] font-semibold tracking-widest text-slate-500">OPACITY</div>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={Number(canvasBackground?.pattern?.opacity ?? 0.18)}
+                  onChange={(e) => setPatternPatch({ opacity: Number(e.target.value) })}
+                  disabled={isPreview}
+                  className="w-full"
+                />
+                <div className="text-[11px] font-semibold tracking-widest text-slate-500">SCALE</div>
+                <input
+                  type="range"
+                  min={0.25}
+                  max={3}
+                  step={0.05}
+                  value={Number(canvasBackground?.pattern?.scale ?? 1)}
+                  onChange={(e) => setPatternPatch({ scale: Number(e.target.value) })}
+                  disabled={isPreview}
+                  className="w-full"
+                />
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           <div className="mb-6">
-            <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">SHAPES</div>
-            <input
-              value={shapeQuery}
-              onChange={(e) => setShapeQuery(e.target.value)}
-              placeholder="Search shapes"
-              className="mb-3 h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
-              disabled={isPreview}
-            />
+            <button
+              type="button"
+              onClick={() =>
+                setOpenToolGroups((g) => ({
+                  ...g,
+                  shapes: !g.shapes,
+                }))
+              }
+              className="flex w-full items-center justify-between"
+              title="Toggle shapes"
+            >
+              <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">SHAPES</div>
+              <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform ${openToolGroups.shapes ? "rotate-180" : ""}`} />
+            </button>
 
-            <div className="grid grid-cols-2 gap-2">
+            {openToolGroups.shapes && (
+              <>
+                <input
+                  value={shapeQuery}
+                  onChange={(e) => setShapeQuery(e.target.value)}
+                  placeholder="Search shapes"
+                  className="mb-3 h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+                  disabled={isPreview}
+                />
+
+                <div className="grid grid-cols-2 gap-2">
               {[
                 { kind: "rect", label: "Rectangle", icon: <Square className="h-4 w-4" />, terms: ["rect", "rectangle", "box"] },
                 { kind: "rounded", label: "Rounded", icon: <Square className="h-4 w-4" />, terms: ["rounded", "round", "rect", "rectangle"] },
                 { kind: "frame", label: "Frame", icon: <Square className="h-4 w-4" />, terms: ["frame", "border", "outline", "box"] },
                 { kind: "ellipse", label: "Ellipse", icon: <CircleIcon className="h-4 w-4" />, terms: ["circle", "ellipse", "oval"] },
-                { kind: "divider", label: "Divider", icon: <div className="h-[2px] w-5 rounded bg-slate-600" />, terms: ["line", "divider", "separator"] },
+                { kind: "polygon", label: "Polygon", icon: <Square className="h-4 w-4" />, terms: ["polygon", "hex", "pentagon", "triangle"] },
+                { kind: "star", label: "Star", icon: <Square className="h-4 w-4" />, terms: ["star"] },
+                { kind: "arc", label: "Arc", icon: <Square className="h-4 w-4" />, terms: ["arc"] },
+                { kind: "pie", label: "Pie", icon: <Square className="h-4 w-4" />, terms: ["pie", "wedge", "slice"] },
+                { kind: "spiral", label: "Spiral", icon: <Square className="h-4 w-4" />, terms: ["spiral", "swirl"] },
+                { kind: "path", label: "Path", icon: <Square className="h-4 w-4" />, terms: ["path", "bezier", "curve"] },
+                { kind: "divider", label: "Divider", icon: <div className="h-0.5 w-5 rounded bg-slate-600" />, terms: ["line", "divider", "separator"] },
               ]
                 .filter((s) => {
                   const q = String(shapeQuery || "").trim().toLowerCase();
@@ -1172,46 +2281,81 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
                     <UploadCloud className="h-4 w-4 text-slate-400" />
                   </div>
                 ))}
-            </div>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="mb-6">
-            <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">DYNAMIC FIELDS</div>
             <button
               type="button"
-              onClick={() => addPlaceholder("student_name")}
-              disabled={isPreview}
-              className="mb-2 flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+              onClick={() =>
+                setOpenToolGroups((g) => ({
+                  ...g,
+                  fields: !g.fields,
+                }))
+              }
+              className="flex w-full items-center justify-between"
+              title="Toggle fields"
             >
-              <span>{"{student_name}"}</span>
-              <ArrowUpRight className="h-4 w-4 text-slate-400" />
+              <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">DYNAMIC FIELDS</div>
+              <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform ${openToolGroups.fields ? "rotate-180" : ""}`} />
             </button>
-            <button
-              type="button"
-              onClick={() => addPlaceholder("major_title")}
-              disabled={isPreview}
-              className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
-            >
-              <span>{"{major_title}"}</span>
-              <ArrowUpRight className="h-4 w-4 text-slate-400" />
-            </button>
+            {openToolGroups.fields && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => addPlaceholder("student_name")}
+                  disabled={isPreview}
+                  className="mb-2 flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <span>{"{student_name}"}</span>
+                  <ArrowUpRight className="h-4 w-4 text-slate-400" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addPlaceholder("major_title")}
+                  disabled={isPreview}
+                  className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <span>{"{major_title}"}</span>
+                  <ArrowUpRight className="h-4 w-4 text-slate-400" />
+                </button>
+              </>
+            )}
           </div>
 
           <div>
-            <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">STATIC ASSETS</div>
-            <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-md border border-slate-200 bg-slate-50" />
-                <div className="text-sm text-slate-800">University Logo</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedId("logo")}
-                className="rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
-              >
-                Select
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setOpenToolGroups((g) => ({
+                  ...g,
+                  assets: !g.assets,
+                }))
+              }
+              className="flex w-full items-center justify-between"
+              title="Toggle assets"
+            >
+              <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">STATIC ASSETS</div>
+              <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform ${openToolGroups.assets ? "rotate-180" : ""}`} />
+            </button>
+
+            {openToolGroups.assets && (
+              <>
+                <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-md border border-slate-200 bg-slate-50" />
+                    <div className="text-sm text-slate-800">University Logo</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId("logo")}
+                    className="rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                  >
+                    Select
+                  </button>
+                </div>
 
             <input
               ref={fileInputRef}
@@ -1226,98 +2370,66 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
               }}
               disabled={isPreview}
             />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isPreview}
-              className="mt-3 flex h-9 w-full items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-            >
-              Upload Image
-            </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isPreview}
+                  className="mt-3 flex h-9 w-full items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Upload Image
+                </button>
+              </>
+            )}
           </div>
         </div>
 
-        <div className="flex flex-1 flex-col items-center justify-center gap-4 overflow-hidden p-4">
-          <div className="flex w-full max-w-[980px] items-center justify-center">
-            <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 shadow-sm">
-              <button
-                type="button"
-                onClick={() => setTool("select")}
-                className={`rounded-md p-2 ${tool === "select" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`}
-                disabled={isPreview}
-                title="Select"
-              >
-                <MousePointer2 className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setTool("pan")}
-                className={`rounded-md p-2 ${tool === "pan" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`}
-                disabled={isPreview}
-                title="Pan"
-              >
-                <Hand className="h-4 w-4" />
-              </button>
-              <div className="mx-1 h-6 w-px bg-slate-200" />
-              <button
-                type="button"
-                onClick={() => setZoom((z) => Math.max(0.4, Math.round((z - 0.05) * 100) / 100))}
-                className="rounded-md p-2 text-slate-700 hover:bg-slate-100"
-              >
-                <ZoomOut className="h-4 w-4" />
-              </button>
-              <div className="min-w-[52px] text-center text-sm text-slate-700">{Math.round(zoom * 100)}%</div>
-              <button
-                type="button"
-                onClick={() => setZoom((z) => Math.min(1.5, Math.round((z + 0.05) * 100) / 100))}
-                className="rounded-md p-2 text-slate-700 hover:bg-slate-100"
-              >
-                <ZoomIn className="h-4 w-4" />
-              </button>
-              <div className="mx-1 h-6 w-px bg-slate-200" />
-              <button
-                type="button"
-                onClick={() => setShowRulers((v) => !v)}
-                className={`flex items-center gap-2 rounded-full px-3 py-2 text-sm ${showRulers ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`}
-              >
-                <Ruler className="h-4 w-4" />
-                Rulers
-              </button>
-            </div>
-          </div>
-
-          <div ref={canvasShellRef} className="relative flex flex-1 w-full overflow-hidden rounded-md bg-slate-100">
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 overflow-hidden">
+          <div ref={canvasShellRef} className="relative flex flex-1 w-full overflow-hidden bg-slate-100">
             {showRulers && (
               <>
                 {/* Corner square */}
-                <div className="absolute left-0 top-0 z-20 h-6 w-6 border-b border-r border-slate-300 bg-slate-100" />
-                
-                {/* Horizontal ruler - simple display only */}
-                <div className="absolute left-6 right-0 top-0 z-10 h-6 border-b border-slate-300 bg-slate-100 overflow-hidden">
-                  <svg className="absolute inset-0 w-full h-full" style={{ overflow: "visible" }}>
+                <div className="absolute left-0 top-0 z-20 h-8 w-8 border-b border-r border-slate-300 bg-slate-100" />
+
+                {/* Horizontal ruler - snapped to editor chrome (below header) */}
+                <div className="absolute left-8 right-0 top-0 z-10 h-8 border-b border-slate-300 bg-slate-100 overflow-hidden">
+                  <svg className="absolute inset-0 h-full w-full" style={{ overflow: "visible" }}>
                     {Array.from({ length: Math.ceil(canvasWidth / 50) + 1 }, (_, i) => i * 50).map((pos) => {
-                      const screenX = paperOffset.x - 24 + pos * zoom;
+                      const screenX = paperOffset.x - 32 + pos * zoom;
                       const isMajor = pos % 100 === 0;
                       return (
                         <g key={pos}>
-                          <line x1={screenX} y1={24} x2={screenX} y2={isMajor ? 12 : 18} stroke="#64748b" strokeWidth={1} />
-                          {isMajor && <text x={screenX + 3} y={10} fontSize={9} fill="#64748b">{pos}</text>}
+                          <line x1={screenX} y1={32} x2={screenX} y2={isMajor ? 14 : 22} stroke="#64748b" strokeWidth={1} />
+                          {isMajor && (
+                            <text x={screenX + 3} y={12} fontSize={10} fill="#64748b">
+                              {pos}
+                            </text>
+                          )}
                         </g>
                       );
                     })}
                   </svg>
                 </div>
-                
-                {/* Vertical ruler - simple display only */}
-                <div className="absolute bottom-0 left-0 top-6 z-10 w-6 border-r border-slate-300 bg-slate-100 overflow-hidden">
-                  <svg className="absolute inset-0 w-full h-full" style={{ overflow: "visible" }}>
+
+                {/* Vertical ruler - snapped to tools pane edge */}
+                <div className="absolute bottom-0 left-0 top-8 z-10 w-8 border-r border-slate-300 bg-slate-100 overflow-hidden">
+                  <svg className="absolute inset-0 h-full w-full" style={{ overflow: "visible" }}>
                     {Array.from({ length: Math.ceil(canvasHeight / 50) + 1 }, (_, i) => i * 50).map((pos) => {
-                      const screenY = paperOffset.y - 24 + pos * zoom;
+                      const screenY = paperOffset.y - 32 + pos * zoom;
                       const isMajor = pos % 100 === 0;
                       return (
                         <g key={pos}>
-                          <line x1={24} y1={screenY} x2={isMajor ? 12 : 18} y2={screenY} stroke="#64748b" strokeWidth={1} />
-                          {isMajor && <text x={3} y={screenY + 3} fontSize={9} fill="#64748b" transform={`rotate(-90, 3, ${screenY + 3})`}>{pos}</text>}
+                          <line x1={32} y1={screenY} x2={isMajor ? 14 : 22} y2={screenY} stroke="#64748b" strokeWidth={1} />
+                          {isMajor && (
+                            <text
+                              x={4}
+                              y={screenY + 4}
+                              fontSize={10}
+                              fill="#64748b"
+                              transform={`rotate(-90, 4, ${screenY + 4})`}
+                            >
+                              {pos}
+                            </text>
+                          )}
                         </g>
                       );
                     })}
@@ -1328,16 +2440,9 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
 
             <div
               ref={canvasViewportRef}
-              className={`absolute inset-0 flex flex-1 w-full items-center justify-center overflow-auto ${showRulers ? "pt-6 pl-6" : ""} ${tool === "pan" ? (isPanning ? "cursor-grabbing" : "cursor-grab") : "cursor-default"}`}
+              className={`absolute inset-0 relative flex flex-1 w-full items-center justify-center overflow-auto ${showRulers ? "pt-8 pl-8" : ""} ${tool === "pan" ? (isPanning ? "cursor-grabbing" : "cursor-grab") : "cursor-default"}`}
               style={{ touchAction: tool === "pan" ? "none" : "auto" }}
               onScroll={() => measurePaperOffset()}
-              onMouseDown={(e) => {
-                if (tool !== "pan" || isPreview) return;
-                const el = canvasViewportRef.current;
-                if (!el) return;
-                panRef.current = { active: true, x: e.clientX, y: e.clientY, sl: el.scrollLeft, st: el.scrollTop };
-                setIsPanning(true);
-              }}
               onMouseMove={(e) => {
                 if (!isPreview) {
                   const shell = canvasShellRef.current;
@@ -1356,25 +2461,9 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
                   }
                 }
 
-                if (tool !== "pan" || isPreview) return;
-                const el = canvasViewportRef.current;
-                if (!el) return;
-                if (!panRef.current.active) return;
-                const dx = e.clientX - panRef.current.x;
-                const dy = e.clientY - panRef.current.y;
-                el.scrollLeft = panRef.current.sl - dx;
-                el.scrollTop = panRef.current.st - dy;
-              }}
-              onMouseUp={() => {
-                if (tool !== "pan" || isPreview) return;
-                panRef.current.active = false;
-                setIsPanning(false);
               }}
               onMouseLeave={() => {
                 setCursorDoc(null);
-                if (tool !== "pan" || isPreview) return;
-                panRef.current.active = false;
-                setIsPanning(false);
               }}
               onTouchStart={(e) => {
                 if (isPreview) return;
@@ -1402,9 +2491,38 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
                 pinchRef.current = { dist: null, zoom: null };
               }}
             >
+              {tool === "pan" && !isPreview && (
+                <div
+                  className="absolute inset-0 z-10"
+                  onMouseDown={(e) => {
+                    const el = canvasViewportRef.current;
+                    if (!el) return;
+                    panRef.current = { active: true, x: e.clientX, y: e.clientY, sl: el.scrollLeft, st: el.scrollTop };
+                    setIsPanning(true);
+                    e.preventDefault();
+                  }}
+                  onMouseMove={(e) => {
+                    const el = canvasViewportRef.current;
+                    if (!el) return;
+                    if (!panRef.current.active) return;
+                    const dx = e.clientX - panRef.current.x;
+                    const dy = e.clientY - panRef.current.y;
+                    el.scrollLeft = panRef.current.sl - dx;
+                    el.scrollTop = panRef.current.st - dy;
+                  }}
+                  onMouseUp={() => {
+                    panRef.current.active = false;
+                    setIsPanning(false);
+                  }}
+                  onMouseLeave={() => {
+                    panRef.current.active = false;
+                    setIsPanning(false);
+                  }}
+                />
+              )}
               <div
                 ref={paperRef}
-                className="relative my-8 rounded-md bg-white shadow-lg"
+                className="relative my-12 rounded-md bg-white shadow-lg"
                 style={{ width: canvasWidth * zoom, height: canvasHeight * zoom }}
               >
               <div
@@ -1449,7 +2567,74 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
                   }}
                 >
                   <Layer>
-                    <Rect id="_background" x={0} y={0} width={canvasWidth} height={canvasHeight} stroke="#e5e7eb" fill="#ffffff" />
+                    <Rect
+                      id="_background"
+                      x={0}
+                      y={0}
+                      width={canvasWidth}
+                      height={canvasHeight}
+                      stroke="#e5e7eb"
+                      fill={canvasBackground?.kind === "solid" ? (canvasBackground?.color || "#ffffff") : undefined}
+                      fillLinearGradientStartPoint={{ x: 0, y: 0 }}
+                      fillLinearGradientEndPoint={(() => {
+                        if (canvasBackground?.kind !== "gradient") return { x: canvasWidth, y: 0 };
+                        if (canvasBackground?.gradient?.type !== "linear") return { x: canvasWidth, y: 0 };
+                        const a = ((Number(canvasBackground?.gradient?.angle ?? 90) - 90) * Math.PI) / 180;
+                        const cx = canvasWidth / 2;
+                        const cy = canvasHeight / 2;
+                        const len = Math.hypot(canvasWidth, canvasHeight) / 2;
+                        return { x: cx + Math.cos(a) * len, y: cy + Math.sin(a) * len };
+                      })()}
+                      fillLinearGradientColorStops={(() => {
+                        if (canvasBackground?.kind !== "gradient") return undefined;
+                        if (canvasBackground?.gradient?.type !== "linear") return undefined;
+                        const stops = canvasBackground?.gradient?.stops || [];
+                        const pairs = stops
+                          .map((s) => [Number(s.pos ?? 0), String(s.color || "#ffffff")])
+                          .filter((p) => Number.isFinite(p[0]) && isValidCssColor(p[1]));
+                        if (pairs.length < 2) return [0, "#ffffff", 1, "#ffffff"];
+                        const flat = [];
+                        for (const [pos, col] of pairs) {
+                          flat.push(Math.min(1, Math.max(0, pos)), col);
+                        }
+                        return flat;
+                      })()}
+                      fillRadialGradientStartPoint={{ x: canvasWidth / 2, y: canvasHeight / 2 }}
+                      fillRadialGradientEndPoint={{ x: canvasWidth / 2, y: canvasHeight / 2 }}
+                      fillRadialGradientStartRadius={0}
+                      fillRadialGradientEndRadius={Math.max(canvasWidth, canvasHeight) / 1.2}
+                      fillRadialGradientColorStops={(() => {
+                        if (canvasBackground?.kind !== "gradient") return undefined;
+                        if (canvasBackground?.gradient?.type !== "radial") return undefined;
+                        const stops = canvasBackground?.gradient?.stops || [];
+                        const pairs = stops
+                          .map((s) => [Number(s.pos ?? 0), String(s.color || "#ffffff")])
+                          .filter((p) => Number.isFinite(p[0]) && isValidCssColor(p[1]));
+                        if (pairs.length < 2) return [0, "#ffffff", 1, "#ffffff"];
+                        const flat = [];
+                        for (const [pos, col] of pairs) {
+                          flat.push(Math.min(1, Math.max(0, pos)), col);
+                        }
+                        return flat;
+                      })()}
+                    />
+
+                    {!!canvasBackground?.pattern?.enabled && !!patternImage && (
+                      <Rect
+                        x={0}
+                        y={0}
+                        width={canvasWidth}
+                        height={canvasHeight}
+                        listening={false}
+                        opacity={Number(canvasBackground?.pattern?.opacity ?? 0.18)}
+                        fillPatternImage={patternImage}
+                        fillPatternRepeat="repeat"
+                        fillPatternScale={{
+                          x: Number(canvasBackground?.pattern?.scale ?? 1),
+                          y: Number(canvasBackground?.pattern?.scale ?? 1),
+                        }}
+                      />
+                    )}
 
                     {/* Snap lines (temporary, shown while dragging) */}
                     {snapLines.vertical.map((x, i) => (
@@ -1486,7 +2671,7 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
                             draggable={!isPreview && !isEditingText && tool === "select"}
                             onSelect={() => tool === "select" && !isPreview && !isEditingText && setSelectedId(el.id)}
                             onChange={(patch) => updateElement(el.id, patch)}
-                            onDragStart={() => clearSnapLines()}
+                            onDragStart={(e) => handleElementDragStart(el, e)}
                             onDragMove={(e) => snapDragMove(el, e)}
                             onDragEnd={() => clearSnapLines()}
                           />
@@ -1502,7 +2687,7 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
                             onSelect={() => tool === "select" && !isPreview && !isEditingText && setSelectedId(el.id)}
                             onChange={(patch) => updateElement(el.id, patch)}
                             onDblClick={() => !isPreview && startTextEditing(el)}
-                            onDragStart={() => clearSnapLines()}
+                            onDragStart={(e) => handleElementDragStart(el, e)}
                             onDragMove={(e) => snapDragMove(el, e)}
                             onDragEnd={() => clearSnapLines()}
                           />
@@ -1517,7 +2702,7 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
                             draggable={!isPreview && !isEditingText && tool === "select"}
                             onSelect={() => tool === "select" && !isPreview && !isEditingText && setSelectedId(el.id)}
                             onChange={(patch) => updateElement(el.id, patch)}
-                            onDragStart={() => clearSnapLines()}
+                            onDragStart={(e) => handleElementDragStart(el, e)}
                             onDragMove={(e) => snapDragMove(el, e)}
                             onDragEnd={() => clearSnapLines()}
                           />
@@ -1532,7 +2717,7 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
                             draggable={!isPreview && !isEditingText && tool === "select"}
                             onSelect={() => tool === "select" && !isPreview && !isEditingText && setSelectedId(el.id)}
                             onChange={(patch) => updateElement(el.id, patch)}
-                            onDragStart={() => clearSnapLines()}
+                            onDragStart={(e) => handleElementDragStart(el, e)}
                             onDragMove={(e) => snapDragMove(el, e)}
                             onDragEnd={() => clearSnapLines()}
                           />
@@ -1547,7 +2732,7 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
                             draggable={!isPreview && !isEditingText && tool === "select"}
                             onSelect={() => tool === "select" && !isPreview && !isEditingText && setSelectedId(el.id)}
                             onChange={(patch) => updateElement(el.id, patch)}
-                            onDragStart={() => clearSnapLines()}
+                            onDragStart={(e) => handleElementDragStart(el, e)}
                             onDragMove={(e) => snapDragMove(el, e)}
                             onDragEnd={() => clearSnapLines()}
                           />
@@ -1562,7 +2747,98 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
                             draggable={!isPreview && !isEditingText && tool === "select"}
                             onSelect={() => tool === "select" && !isPreview && !isEditingText && setSelectedId(el.id)}
                             onChange={(patch) => updateElement(el.id, patch)}
-                            onDragStart={() => clearSnapLines()}
+                            onDragStart={(e) => handleElementDragStart(el, e)}
+                            onDragMove={(e) => snapDragMove(el, e)}
+                            onDragEnd={() => clearSnapLines()}
+                          />
+                        );
+                      }
+
+                      if (el.type === "shape_polygon") {
+                        return (
+                          <ShapePolygonNode
+                            key={el.id}
+                            el={el}
+                            draggable={!isPreview && !isEditingText && tool === "select"}
+                            onSelect={() => tool === "select" && !isPreview && !isEditingText && setSelectedId(el.id)}
+                            onChange={(patch) => updateElement(el.id, patch)}
+                            onDragStart={(e) => handleElementDragStart(el, e)}
+                            onDragMove={(e) => snapDragMove(el, e)}
+                            onDragEnd={() => clearSnapLines()}
+                          />
+                        );
+                      }
+
+                      if (el.type === "shape_star") {
+                        return (
+                          <ShapeStarNode
+                            key={el.id}
+                            el={el}
+                            draggable={!isPreview && !isEditingText && tool === "select"}
+                            onSelect={() => tool === "select" && !isPreview && !isEditingText && setSelectedId(el.id)}
+                            onChange={(patch) => updateElement(el.id, patch)}
+                            onDragStart={(e) => handleElementDragStart(el, e)}
+                            onDragMove={(e) => snapDragMove(el, e)}
+                            onDragEnd={() => clearSnapLines()}
+                          />
+                        );
+                      }
+
+                      if (el.type === "shape_arc") {
+                        return (
+                          <ShapeArcNode
+                            key={el.id}
+                            el={el}
+                            draggable={!isPreview && !isEditingText && tool === "select"}
+                            onSelect={() => tool === "select" && !isPreview && !isEditingText && setSelectedId(el.id)}
+                            onChange={(patch) => updateElement(el.id, patch)}
+                            onDragStart={(e) => handleElementDragStart(el, e)}
+                            onDragMove={(e) => snapDragMove(el, e)}
+                            onDragEnd={() => clearSnapLines()}
+                          />
+                        );
+                      }
+
+                      if (el.type === "shape_wedge") {
+                        return (
+                          <ShapeWedgeNode
+                            key={el.id}
+                            el={el}
+                            draggable={!isPreview && !isEditingText && tool === "select"}
+                            onSelect={() => tool === "select" && !isPreview && !isEditingText && setSelectedId(el.id)}
+                            onChange={(patch) => updateElement(el.id, patch)}
+                            onDragStart={(e) => handleElementDragStart(el, e)}
+                            onDragMove={(e) => snapDragMove(el, e)}
+                            onDragEnd={() => clearSnapLines()}
+                          />
+                        );
+                      }
+
+                      if (el.type === "shape_path") {
+                        return (
+                          <ShapePathNode
+                            key={el.id}
+                            el={el}
+                            draggable={!isPreview && !isEditingText && tool === "select"}
+                            onSelect={() => tool === "select" && !isPreview && !isEditingText && setSelectedId(el.id)}
+                            onChange={(patch) => updateElement(el.id, patch)}
+                            onDragStart={(e) => handleElementDragStart(el, e)}
+                            onDragMove={(e) => snapDragMove(el, e)}
+                            onDragEnd={() => clearSnapLines()}
+                          />
+                        );
+                      }
+
+                      if (el.type === "shape_spiral") {
+                        return (
+                          <ShapeSpiralNode
+                            key={el.id}
+                            el={el}
+                            buildPoints={generateSpiralPoints}
+                            draggable={!isPreview && !isEditingText && tool === "select"}
+                            onSelect={() => tool === "select" && !isPreview && !isEditingText && setSelectedId(el.id)}
+                            onChange={(patch) => updateElement(el.id, patch)}
+                            onDragStart={(e) => handleElementDragStart(el, e)}
                             onDragMove={(e) => snapDragMove(el, e)}
                             onDragEnd={() => clearSnapLines()}
                           />
@@ -1639,31 +2915,87 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
                 )}
               </div>
             </div>
+            </div>
+          </div>
 
-            {!isPreview && (
-              <div className="pointer-events-auto absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+          {!isPreview && (
+            <div className="flex w-full max-w-245 items-center justify-center">
+              <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setTool("select")}
+                  className={`rounded-md p-2 ${tool === "select" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`}
+                  disabled={isPreview}
+                  title="Select (V)"
+                >
+                  <MousePointer2 className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTool("pan")}
+                  className={`rounded-md p-2 ${tool === "pan" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`}
+                  disabled={isPreview}
+                  title="Pan (Space)"
+                >
+                  <Hand className="h-4 w-4" />
+                </button>
+
+                <div className="mx-1 h-6 w-px bg-slate-200" />
+
+                <button
+                  type="button"
+                  onClick={() => setZoom((z) => Math.max(0.2, Math.round((z / 1.08) * 100) / 100))}
+                  className="rounded-md p-2 text-slate-700 hover:bg-slate-100"
+                  title="Zoom out (Ctrl+-)"
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </button>
+                <div className="min-w-13 text-center text-sm text-slate-700" title="Zoom">
+                  {Math.round(zoom * 100)}%
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setZoom((z) => Math.min(2, Math.round((z * 1.08) * 100) / 100))}
+                  className="rounded-md p-2 text-slate-700 hover:bg-slate-100"
+                  title="Zoom in (Ctrl++)"
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </button>
+
+                <div className="mx-1 h-6 w-px bg-slate-200" />
+
+                <button
+                  type="button"
+                  onClick={() => setShowRulers((v) => !v)}
+                  className={`rounded-md p-2 ${showRulers ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`}
+                  title="Toggle rulers"
+                >
+                  <Ruler className="h-4 w-4" />
+                </button>
+
+                <div className="mx-1 h-6 w-px bg-slate-200" />
+
                 <button
                   type="button"
                   onClick={undo}
                   disabled={!canUndo}
-                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                  className="rounded-md p-2 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                  title="Undo (Ctrl+Z)"
                 >
                   <Undo2 className="h-4 w-4" />
-                  UNDO
                 </button>
                 <button
                   type="button"
                   onClick={redo}
                   disabled={!canRedo}
-                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                  className="rounded-md p-2 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                  title="Redo (Ctrl+Y)"
                 >
                   <Redo2 className="h-4 w-4" />
-                  REDO
                 </button>
               </div>
-            )}
             </div>
-          </div>
+          )}
         </div>
 
         <div className="w-80 shrink-0 overflow-y-auto border-l bg-white p-4">
@@ -1734,6 +3066,139 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
                   </button>
                 </div>
               )}
+
+              {selectedElement.type === "shape_polygon" && (
+                <div className="mb-4">
+                  <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">SIDES</div>
+                  <input
+                    type="range"
+                    min={3}
+                    max={12}
+                    value={selectedElement.sides ?? 6}
+                    onChange={(e) => updateElement(selectedElement.id, { sides: Number(e.target.value) })}
+                    className="w-full"
+                  />
+                  <div className="mt-1 text-xs text-slate-600">{selectedElement.sides ?? 6}</div>
+                </div>
+              )}
+
+              {selectedElement.type === "shape_star" && (
+                <div className="mb-4">
+                  <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">STAR</div>
+                  <label className="mb-2 block text-sm text-slate-700">
+                    Points: {selectedElement.points ?? 5}
+                  </label>
+                  <input
+                    type="range"
+                    min={3}
+                    max={12}
+                    value={selectedElement.points ?? 5}
+                    onChange={(e) => updateElement(selectedElement.id, { points: Number(e.target.value) })}
+                    className="mb-3 w-full"
+                  />
+                  <label className="mb-2 block text-sm text-slate-700">
+                    Inner Radius: {selectedElement.innerRadius ?? 60}
+                  </label>
+                  <input
+                    type="range"
+                    min={5}
+                    max={200}
+                    value={selectedElement.innerRadius ?? 60}
+                    onChange={(e) => updateElement(selectedElement.id, { innerRadius: Number(e.target.value) })}
+                    className="w-full"
+                  />
+                </div>
+              )}
+
+              {(selectedElement.type === "shape_arc" || selectedElement.type === "shape_wedge") && (
+                <div className="mb-4">
+                  <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">ANGLE</div>
+                  <input
+                    type="range"
+                    min={5}
+                    max={360}
+                    value={selectedElement.angle ?? 90}
+                    onChange={(e) => updateElement(selectedElement.id, { angle: Number(e.target.value) })}
+                    className="w-full"
+                  />
+                  <div className="mt-1 text-xs text-slate-600">{selectedElement.angle ?? 90}°</div>
+                </div>
+              )}
+
+              {selectedElement.type === "shape_arc" && (
+                <div className="mb-4">
+                  <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">RADII</div>
+                  <label className="mb-2 block text-sm text-slate-700">Inner: {selectedElement.innerRadius ?? 60}</label>
+                  <input
+                    type="range"
+                    min={5}
+                    max={300}
+                    value={selectedElement.innerRadius ?? 60}
+                    onChange={(e) => updateElement(selectedElement.id, { innerRadius: Number(e.target.value) })}
+                    className="mb-3 w-full"
+                  />
+                  <label className="mb-2 block text-sm text-slate-700">Outer: {selectedElement.outerRadius ?? 110}</label>
+                  <input
+                    type="range"
+                    min={10}
+                    max={350}
+                    value={selectedElement.outerRadius ?? 110}
+                    onChange={(e) => updateElement(selectedElement.id, { outerRadius: Number(e.target.value) })}
+                    className="w-full"
+                  />
+                </div>
+              )}
+
+              {selectedElement.type === "shape_wedge" && (
+                <div className="mb-4">
+                  <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">RADIUS</div>
+                  <input
+                    type="range"
+                    min={10}
+                    max={400}
+                    value={selectedElement.radius ?? 110}
+                    onChange={(e) => updateElement(selectedElement.id, { radius: Number(e.target.value) })}
+                    className="w-full"
+                  />
+                  <div className="mt-1 text-xs text-slate-600">{selectedElement.radius ?? 110}</div>
+                </div>
+              )}
+
+              {selectedElement.type === "shape_spiral" && (
+                <div className="mb-4">
+                  <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">SPIRAL</div>
+                  <label className="mb-2 block text-sm text-slate-700">Turns: {selectedElement.turns ?? 4}</label>
+                  <input
+                    type="range"
+                    min={1}
+                    max={12}
+                    value={selectedElement.turns ?? 4}
+                    onChange={(e) => updateElement(selectedElement.id, { turns: Number(e.target.value) })}
+                    className="mb-3 w-full"
+                  />
+                  <label className="mb-2 block text-sm text-slate-700">Smoothness: {selectedElement.pointsPerTurn ?? 80}</label>
+                  <input
+                    type="range"
+                    min={20}
+                    max={200}
+                    value={selectedElement.pointsPerTurn ?? 80}
+                    onChange={(e) => updateElement(selectedElement.id, { pointsPerTurn: Number(e.target.value) })}
+                    className="w-full"
+                  />
+                </div>
+              )}
+
+              {selectedElement.type === "shape_path" && (
+                <div className="mb-4">
+                  <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">SVG PATH</div>
+                  <textarea
+                    value={selectedElement.data ?? ""}
+                    onChange={(e) => updateElement(selectedElement.id, { data: e.target.value })}
+                    className="h-24 w-full resize-none rounded-md border border-slate-200 bg-white px-3 py-2 text-xs"
+                  />
+                  <div className="mt-2 text-xs text-slate-500">Paste an SVG path `d` string.</div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1753,7 +3218,12 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
               {(selectedElement.type === "shape_rect" ||
                 selectedElement.type === "shape_roundrect" ||
                 selectedElement.type === "shape_frame" ||
-                selectedElement.type === "shape_ellipse") && (
+                selectedElement.type === "shape_ellipse" ||
+                selectedElement.type === "shape_polygon" ||
+                selectedElement.type === "shape_star" ||
+                selectedElement.type === "shape_arc" ||
+                selectedElement.type === "shape_wedge" ||
+                selectedElement.type === "shape_path") && (
                 <div className="mb-4">
                   <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">FILL</div>
                   <label className="mb-2 flex items-center gap-2 text-sm text-slate-700">
@@ -1868,6 +3338,16 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
           )}
 
           {selectedElement?.type === "text" && (
+            <button
+              type="button"
+              onClick={outlineSelectedText}
+              className="mb-4 flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+            >
+              Outline Text
+            </button>
+          )}
+
+          {selectedElement?.type === "text" && (
             <>
               <div className="mb-4">
                 <div className="mb-2 text-[11px] font-semibold tracking-widest text-slate-500">TYPOGRAPHY</div>
@@ -1969,21 +3449,6 @@ export default function TemplateEditor({ initialData, onSave, onClose }) {
               </div>
             </>
           )}
-        </div>
-      </div>
-
-      <div className="flex h-9 items-center justify-between border-t border-slate-200 bg-white px-4 text-[11px] text-slate-500">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            <span>AUTO-SAVED</span>
-          </div>
-          <div className="text-slate-300">|</div>
-          <div className="uppercase text-slate-400">{activePreset.id.replaceAll("_", " ")}</div>
-        </div>
-        <div className="flex items-center gap-4">
-          <div>PRESS [ESC] TO DESELECT</div>
-          <div>SHORTCUTS</div>
         </div>
       </div>
     </div>

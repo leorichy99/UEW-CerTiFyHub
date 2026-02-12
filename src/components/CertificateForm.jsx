@@ -1,9 +1,11 @@
 import React, { useState } from "react";
+import { useToast } from "./ToastContainer";
 import { Upload, FileText } from "lucide-react";
 import { DEGREE_TYPES, HONORS_TYPES } from "../utils/constants";
 import { certificateAPI, templateAPI } from "../services/api";
 
 export default function CertificateForm({ onSuccess }) {
+  const toast = useToast();
   const [formData, setFormData] = useState({
     student_name: "",
     degree_type: "BSC",
@@ -87,7 +89,7 @@ export default function CertificateForm({ onSuccess }) {
         link.remove();
       }
 
-      alert("Certificate created successfully!");
+      toast.success("Certificate created successfully!");
     } catch (err) {
       console.error("Error creating certificate:", err);
       setError(err.response?.data?.message || "Failed to create certificate");

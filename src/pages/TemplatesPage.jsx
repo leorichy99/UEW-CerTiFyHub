@@ -1,9 +1,12 @@
-import { useMemo, useState, useEffect } from "react";
+import React, { Suspense, lazy, useMemo, useState, useEffect } from "react";
+import { useToast } from "../components/ToastContainer";
 import { templateAPI } from "../services/api";
-import TemplateEditor from "../components/TemplateEditor";
 import { Layout as LayoutIcon, Plus, Search, UploadCloud } from "lucide-react";
 
+const TemplateEditor = lazy(() => import("../components/TemplateEditor"));
+
 export default function TemplatesPage() {
+  const toast = useToast();
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [showEditor, setShowEditor] = useState(false);
@@ -82,7 +85,7 @@ export default function TemplatesPage() {
       fetchTemplates();
     } catch (error) {
       console.error("Failed to save template:", error);
-      alert("Failed to save template");
+      toast.error("Failed to save template");
     }
   };
 
@@ -166,14 +169,16 @@ export default function TemplatesPage() {
 
         {showEditor ? (
           <div className="fixed inset-0 z-50 bg-slate-100">
-            <TemplateEditor
-              initialData={selectedTemplate}
-              onSave={handleSaveTemplate}
-              onClose={() => {
-                setShowEditor(false);
-                setSelectedTemplate(null);
-              }}
-            />
+            <Suspense fallback={<div className="p-6 text-sm text-slate-600">Loading editor...</div>}>
+              <TemplateEditor
+                initialData={selectedTemplate}
+                onSave={handleSaveTemplate}
+                onClose={() => {
+                  setShowEditor(false);
+                  setSelectedTemplate(null);
+                }}
+              />
+            </Suspense>
           </div>
         ) : (
           <>

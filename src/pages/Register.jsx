@@ -1,19 +1,19 @@
 /* eslint-disable react/no-unescaped-entities */
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
 import {
   User,
-  Mail,
   Lock,
   Send,
   ShieldCheck,
-  GraduationCap,
-  Infinity,
+  Shield,
+  LayoutGrid,
   Zap,
   Briefcase,
   AtSign,
 } from "lucide-react";
+import uewLogo from "../assets/uew-logo.svg";
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -49,235 +49,226 @@ export default function Register() {
     setFormData({ ...formData, role: role.toUpperCase() });
   };
 
-  const features = [
-    {
-      icon: Infinity,
-      title: "Lifelong Access",
-      desc: "Your academic achievements stored securely and accessible to you forever.",
-    },
-    {
-      icon: ShieldCheck,
-      title: "Verified Credentials",
-      desc: "Blockchain-verified certificates that are tamper-proof and instantly validatable.",
-    },
-    {
-      icon: Zap,
-      title: "Global Portability",
-      desc: "Share your success with employers and institutions worldwide in seconds.",
-    },
-  ];
+  const features = useMemo(
+    () => [
+      {
+        icon: Shield,
+        title: "Secure Certificate Issuance",
+        desc: "Cryptographically protected academic credentials with tamper-resistance.",
+      },
+      {
+        icon: Zap,
+        title: "Instant Verification",
+        desc: "Employers can verify authenticity in seconds with a shareable code.",
+      },
+      {
+        icon: LayoutGrid,
+        title: "Centralized Management",
+        desc: "Create templates, issue in bulk, and manage certificates in one hub.",
+      },
+    ],
+    [],
+  );
+
+  const [activeFeature, setActiveFeature] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setActiveFeature((p) => (p + 1) % features.length);
+    }, 4500);
+    return () => window.clearInterval(id);
+  }, [features.length]);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-white">
-      {/* Left Section - Branding */}
-      <div className="hidden lg:flex w-[45%] h-full bg-[#003366] text-white p-12 xl:p-16 flex-col justify-between relative overflow-hidden">
-        {/* Decorative background elements */}
-        <div className="absolute top-[-10%] right-[-10%] w-80 h-80 bg-blue-400/10 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-[-10%] left-[-10%] w-80 h-80 bg-blue-500/10 rounded-full blur-3xl"></div>
+    <div className="min-h-screen w-screen bg-white">
+      <div className="min-h-screen grid grid-cols-1 lg:grid-cols-[3fr_2fr]">
+        <div className="hidden lg:block relative overflow-hidden">
+          <div className="absolute inset-0 bg-[url('/uew_bg.jpg')] bg-cover bg-center" />
+          <div className="absolute inset-0 bg-linear-to-br from-[#E6232B]/70 to-[#242476]/75" />
+          <div className="absolute inset-0 bg-slate-950/25" />
 
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-12 xl:mb-20">
-            <div className="bg-white/10 p-3 rounded-2xl backdrop-blur-md">
-              <GraduationCap size={32} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-4xl font-bold tracking-tight">
-                UEW CertifyHub
-              </h1>
-              <p className="text-blue-200 text-[10px] font-medium uppercase tracking-widest">
-                Official Certificate Issuance System
-              </p>
-            </div>
-          </div>
-
-          {/* <h2 className="text-4xl xl:text-6xl font-bold leading-tight mb-10 xl:mb-16">
-            Join the Digital Academic Revolution.
-          </h2> */}
-
-          <div className="space-y-8 xl:space-y-12">
-            {features.map((f, i) => (
-              <div key={i} className="flex gap-5 items-start max-w-md group">
-                <div className="bg-white/10 p-3 rounded-2xl group-hover:bg-white/20 transition-colors shrink-0">
-                  <f.icon size={22} className="text-blue-300" />
+          <div className="relative h-full flex items-center justify-center p-10">
+            <div className="w-full max-w-xl">
+              <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md px-10 py-10">
+                <div className="text-3xl font-extrabold tracking-tight text-white">
+                  UEW CerTiFyHub
                 </div>
-                <div>
-                  <h3 className="font-bold text-xl mb-1">{f.title}</h3>
-                  <p className="text-blue-200/70 text-sm xl:text-base leading-relaxed">
-                    {f.desc}
-                  </p>
+                <div className="mt-2 text-sm text-white/80">Create your account</div>
+
+                <div className="mt-8">
+                  <div className="flex items-start gap-4">
+                    <div className="h-11 w-11 rounded-2xl bg-white/10 flex items-center justify-center">
+                      {(() => {
+                        const Icon = features[activeFeature].icon;
+                        return <Icon size={20} className="text-white" />;
+                      })()}
+                    </div>
+                    <div>
+                      <div className="text-lg font-bold text-white">
+                        {features[activeFeature].title}
+                      </div>
+                      <div className="mt-1 text-sm text-white/80 leading-relaxed">
+                        {features[activeFeature].desc}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 flex items-center gap-2">
+                    {features.map((_, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setActiveFeature(idx)}
+                        className={`h-2.5 rounded-full transition-all ${
+                          idx === activeFeature ? "w-10 bg-white" : "w-2.5 bg-white/35 hover:bg-white/60"
+                        }`}
+                        aria-label={`Feature ${idx + 1}`}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
-            ))}
+
+              <div className="mt-6 text-[10px] text-white/50 text-center">
+                © {new Date().getFullYear()} University of Education, Winneba. Powered by UEW ICT Services.
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="relative z-10 text-[10px] text-blue-200/50">
-          © {new Date().getFullYear()} University of Education, Winneba. Powered
-          by UEW ICT Services.
-        </div>
-      </div>
+        <div className="flex items-center justify-center p-6 lg:p-10 bg-white">
+          <div className="w-full max-w-md">
+            <div className="flex items-center justify-center">
+              <img src={uewLogo} alt="UEW" className="h-12 w-12" />
+            </div>
 
-      {/* Right Section - Registration Form */}
-      <div className="w-full lg:w-[55%] h-full flex flex-col items-center justify-center p-6 lg:p-10 xl:p-12 bg-gray-50/30 overflow-hidden">
-        <div className="w-full max-w-md">
-          <div className="mb-6 xl:mb-8 text-center lg:text-left">
-            <h2 className="text-4xl font-black text-gray-900 mb-2">
-              Request Access
-            </h2>
-            <p className="text-gray-500 font-medium">
-              Fill in your details to apply for a CertifyHub account.
-            </p>
-          </div>
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm p-8">
+              <div className="text-xl font-bold text-slate-900">Sign up</div>
+              <div className="mt-1 text-sm text-slate-500">Request access to CerTiFyHub.</div>
 
-          <form onSubmit={handleSubmit} className="space-y-3 xl:space-y-4">
-            {/* Role Selector */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">
-                I am a...
-              </label>
-              <div className="bg-gray-100 p-1 rounded-2xl flex mb-4">
-                {["Student", "Employer", "Admin"].map((role) => (
-                  <button
-                    key={role}
-                    type="button"
-                    onClick={() => handleRoleChange(role)}
-                    className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                      formData.role === role.toUpperCase()
-                        ? "bg-white text-blue-900 shadow-sm"
-                        : "text-gray-500 hover:text-gray-700"
-                    }`}
-                  >
-                    {role}
-                  </button>
-                ))}
+              {error && (
+                <div className="mt-4 bg-red-50 border border-red-100 text-red-600 p-3 rounded-xl text-sm flex items-center gap-2">
+                  <ShieldCheck size={16} />
+                  {error}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-600">I am a...</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {["Student", "Employer", "Admin"].map((role) => {
+                      const active = formData.role === role.toUpperCase();
+                      return (
+                        <button
+                          key={role}
+                          type="button"
+                          onClick={() => handleRoleChange(role)}
+                          className={`h-9 rounded-lg text-xs font-semibold border transition ${
+                            active
+                              ? "bg-blue-700 text-white border-blue-700"
+                              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                          }`}
+                        >
+                          {role}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-600">Full name</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <User size={16} className="text-slate-400" />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="John Doe"
+                      className="w-full h-10 pl-10 pr-3 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      value={formData.full_name}
+                      onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-600">Username</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Briefcase size={16} className="text-slate-400" />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Username"
+                      className="w-full h-10 pl-10 pr-3 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      value={formData.username}
+                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-600">Email</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <AtSign size={16} className="text-slate-400" />
+                    </div>
+                    <input
+                      type="email"
+                      placeholder="name@uew.edu.gh"
+                      className="w-full h-10 pl-10 pr-3 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-600">Password</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Lock size={16} className="text-slate-400" />
+                    </div>
+                    <input
+                      type="password"
+                      placeholder="Create password"
+                      className="w-full h-10 pl-10 pr-3 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      value={formData.password}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          password: e.target.value,
+                          password_confirm: e.target.value,
+                        })
+                      }
+                      required
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full h-10 rounded-lg bg-[#1E1B7A] hover:bg-[#171468] text-white text-sm font-semibold flex items-center justify-center gap-2"
+                >
+                  Submit
+                  <Send size={16} />
+                </button>
+              </form>
+
+              <div className="mt-6 text-center text-[11px] text-slate-400">
+                Powered by Directorate of ICT Services, UEW
               </div>
             </div>
 
-            {error && (
-              <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded-xl text-xs flex items-center gap-2 animate-shake">
-                <ShieldCheck size={14} />
-                {error}
-              </div>
-            )}
-
-            {/* Form Fields */}
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-gray-600 ml-1">
-                  Full Name
-                </label>
-                <div className="relative group">
-                  <User
-                    size={16}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#003366] transition-colors"
-                  />
-                  <input
-                    type="text"
-                    placeholder="John Doe"
-                    className="w-full pl-11 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-[#003366] outline-none transition-all placeholder:text-gray-300 font-medium text-sm"
-                    value={formData.full_name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, full_name: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-gray-600 ml-1">
-                  User Name
-                </label>
-                <div className="relative group">
-                  <Briefcase
-                    size={16}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#003366] transition-colors"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Username"
-                    className="w-full pl-11 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-[#003366] outline-none transition-all placeholder:text-gray-300 font-medium text-sm"
-                    value={formData.username}
-                    onChange={(e) =>
-                      setFormData({ ...formData, username: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-gray-600 ml-1">
-                  Institutional Email
-                </label>
-                <div className="relative group">
-                  <AtSign
-                    size={16}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#003366] transition-colors"
-                  />
-                  <input
-                    type="email"
-                    placeholder="name@uew.edu.gh"
-                    className="w-full pl-11 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-[#003366] outline-none transition-all placeholder:text-gray-300 font-medium text-sm"
-                    value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-gray-600 ml-1">
-                  Create Password
-                </label>
-                <div className="relative group">
-                  <Lock
-                    size={16}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#003366] transition-colors"
-                  />
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    className="w-full pl-11 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-[#003366] outline-none transition-all placeholder:text-gray-300 font-medium text-sm"
-                    value={formData.password}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        password: e.target.value,
-                        password_confirm: e.target.value,
-                      })
-                    }
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-
-            <button className="w-full bg-[#003366] text-white py-3.5 rounded-2xl font-bold hover:bg-[#002244] transition-all shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2 group mt-4">
-              Submit Request
-              <Send
-                size={18}
-                className="group-hover:translate-x-1 group-hover:-translate-y-0.5 transition-transform"
-              />
-            </button>
-          </form>
-
-          <p className="mt-6 xl:mt-8 text-center text-gray-500 text-sm font-medium">
-            Already have access?{" "}
-            <Link
-              to="/login"
-              className="text-[#003366] font-extrabold hover:underline flex items-center justify-center gap-1"
-            >
-              <Lock size={12} className="mb-0.5" /> Back to Login
-            </Link>
-          </p>
-
-          <div className="mt-6 xl:mt-6 pt-6 border-t border-gray-100 flex flex-col items-center">
-            <div className="flex items-center gap-2 text-[10px] font-black tracking-widest text-gray-400 uppercase">
-              <ShieldCheck size={14} className="text-amber-500" />
-              UEW Digital Infrastructure
+            <div className="mt-6 text-center text-sm text-slate-500">
+              Already have an account?{" "}
+              <Link to="/login" className="font-semibold text-blue-700 hover:underline">
+                Log in
+              </Link>
             </div>
           </div>
         </div>

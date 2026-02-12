@@ -1,8 +1,10 @@
 import React from "react";
+import { useToast } from "./ToastContainer";
 import { Download, X } from "lucide-react";
 import { certificateAPI } from "../services/api";
 
 export default function CertificatePreview({ certificate, onClose }) {
+  const toast = useToast();
   const handleDownload = async () => {
     try {
       const response = await certificateAPI.download(certificate.id);
@@ -21,7 +23,7 @@ export default function CertificatePreview({ certificate, onClose }) {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Error downloading certificate:", err);
-      alert("Failed to download certificate");
+      toast.error("Failed to download certificate");
     }
   };
 
