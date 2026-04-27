@@ -8,36 +8,38 @@ import {
   useNavigate,
   useLocation,
 } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+
+import {
+  Loader2
+} from "lucide-react"
+
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { NotificationProvider } from "./context/NotificationContext";
 import { ToastProvider } from "./components/ToastContainer";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
-import {
-  AnalyticsFallback,
-  AuthPageFallback,
-  BulkIssueFallback,
-  CertificatesFallback,
-  DashboardFallback,
-  StudentsFallback,
-  TemplatesFallback,
-} from "./components/RouteFallbacks";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const Login = lazy(() => import("./pages/Login"));
-const Register = lazy(() => import("./pages/Register"));
 const VerificationPage = lazy(() => import("./pages/VerificationPage"));
+const SetupAccountPage = lazy(() => import("./pages/SetupAccountPage"));
+const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
+const VerifyResetPage = lazy(() => import("./pages/VerifyResetPage"));
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const CertificatesPage = lazy(() => import("./pages/CertificatesPage"));
 const StudentsPage = lazy(() => import("./pages/StudentsPage"));
 const TemplatesPage = lazy(() => import("./pages/TemplatesPage"));
-const BulkIssuePage = lazy(() => import("./pages/BulkIssuePage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
-const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
 const CertificateForm = lazy(() => import("./components/CertificateForm"));
-const SuperAdminUsersPage = lazy(() => import("./pages/SuperAdminUsersPage"));
+const AccountManagementPage = lazy(() => import("./pages/AccountManagementPage"));
+const AuthorisationLettersPage = lazy(() => import("./pages/AuthorisationLettersPage"));
+const SuperAdminCertificatesPage = lazy(() => import("./pages/SuperAdminCertificatesPage"));
 const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
 const SystemSettings = lazy(() => import("./pages/SystemSettings"));
 const AuditLogs = lazy(() => import("./pages/AuditLogs"));
 const GlobalAnalytics = lazy(() => import("./pages/GlobalAnalytics"));
+const SuperAdminTemplatesPage = lazy(() => import("./pages/SuperAdminTemplatesPage"));
+const TemplateEditorPage = lazy(() => import("./pages/TemplateEditorPage"));
 
 function DashboardLayout({ children }) {
   return <Layout>{children}</Layout>;
@@ -48,8 +50,13 @@ function CertificateFormWrapper() {
   return <CertificateForm onSuccess={() => navigate("/certificates")} />;
 }
 
+function CertificateFormWrapperWithRefresh({ onCertificateCreated }) {
+  return <CertificateForm onSuccess={onCertificateCreated} />;
+}
+
 function HomeRedirect() {
   const { user } = useAuth();
+  
   if (user?.profile?.role === "SUPER_ADMIN") {
     return <Navigate to="/admin/dashboard" replace />;
   } else if (user?.profile?.role === "ADMIN" || user?.is_superuser) {
@@ -59,21 +66,14 @@ function HomeRedirect() {
 }
 
 function PageTransition({ children }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-    >
-      {children}
-    </motion.div>
-  );
+  return <div>{children}</div>;
 }
 
 function RouteShell({ children, fallback }) {
   return (
-    <Suspense fallback={fallback || <div className="p-6 text-sm text-slate-600">Loading...</div>}>
+    <Suspense fallback={fallback || <div className="flex items-center justify-center h-32">
+      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+    </div>}>
       {children}
     </Suspense>
   );
@@ -83,217 +83,329 @@ function AnimatedRoutes() {
   const location = useLocation();
 
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
-        <Route
-          path="/login"
-          element={
-            <PageTransition>
-              <RouteShell fallback={<AuthPageFallback />}>
-                <Login />
+    <Routes location={location} key={location.pathname}>
+      <Route
+        path="/login"
+        element={
+          <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+            <Login />
+          </RouteShell>
+        }
+      />
+      <Route
+        path="/setup-account/:token"
+        element={
+          <RouteShell fallback={<div className="min-h-[60vh] flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          </div>}>
+            <SetupAccountPage />
+          </RouteShell>
+        }
+      />
+      <Route
+        path="/verify"
+        element={
+          <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+            <VerificationPage />
+          </RouteShell>
+        }
+      />
+      <Route
+        path="/forgot-password"
+        element={
+          <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+            <ForgotPasswordPage />
+          </RouteShell>
+        }
+      />
+      <Route
+        path="/forgot-password/verify"
+        element={
+          <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+            <VerifyResetPage />
+          </RouteShell>
+        }
+      />
+      <Route
+        path="/forgot-password/reset"
+        element={
+          <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+            <ResetPasswordPage />
+          </RouteShell>
+        }
+      />
+      <Route
+        path="/verify/:id"
+        element={
+          <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+            <VerificationPage />
+          </RouteShell>
+        }
+      />
+      {/* Legacy activation route — redirect to login */}
+      <Route path="/activate-admin/:token" element={<Navigate to="/login" replace />} />
+
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <HomeRedirect />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute roles={["ADMIN", "SUPER_ADMIN"]}>
+            <DashboardLayout>
+              <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+                <DashboardPage />
               </RouteShell>
-            </PageTransition>
-          }
-        />
-        <Route
-          path="/register"
-          element={
-            <PageTransition>
-              <RouteShell fallback={<AuthPageFallback />}>
-                <Register />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/create-certificate"
+        element={
+          <ProtectedRoute roles={["ADMIN", "SUPER_ADMIN"]} requiredPermission="certificates.issue">
+            <DashboardLayout>
+              <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+                <CertificateFormWrapper />
               </RouteShell>
-            </PageTransition>
-          }
-        />
-        <Route
-          path="/verify"
-          element={
-            <PageTransition>
-              <RouteShell fallback={<AuthPageFallback />}>
-                <VerificationPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/certificates"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+                <CertificatesPage />
               </RouteShell>
-            </PageTransition>
-          }
-        />
-        <Route
-          path="/verify/:id"
-          element={
-            <PageTransition>
-              <RouteShell fallback={<AuthPageFallback />}>
-                <VerificationPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/certificates/create"
+        element={
+          <ProtectedRoute requiredPermission="certificates.issue">
+            <DashboardLayout>
+              <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+                <CertificateFormWrapper />
               </RouteShell>
-            </PageTransition>
-          }
-        />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <HomeRedirect />
-            </ProtectedRoute>
-          }
-        />
+      <Route
+        path="/students"
+        element={
+          <ProtectedRoute requiredPermission="students.view">
+            <DashboardLayout>
+              <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+                <StudentsPage />
+              </RouteShell>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute roles={["ADMIN"]}>
-              <DashboardLayout>
-                <RouteShell fallback={<DashboardFallback />}>
-                  <DashboardPage />
-                </RouteShell>
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+      <Route
+        path="/templates"
+        element={
+          <ProtectedRoute requiredPermission="templates.manage">
+            <DashboardLayout>
+              <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+                <TemplatesPage />
+              </RouteShell>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
-        <Route
-          path="/analytics"
-          element={
-            <ProtectedRoute roles={["ADMIN"]}>
-              <DashboardLayout>
-                <RouteShell fallback={<AnalyticsFallback />}>
-                  <AnalyticsPage />
-                </RouteShell>
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+      <Route
+        path="/templates/new"
+        element={
+          <ProtectedRoute requiredPermission="templates.manage">
+            <RouteShell fallback={<div className="p-6 text-center text-sm text-slate-600">Loading editor...</div>}>
+              <TemplateEditorPage />
+            </RouteShell>
+          </ProtectedRoute>
+        }
+      />
 
-        <Route
-          path="/certificates"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <RouteShell fallback={<CertificatesFallback />}>
-                  <CertificatesPage />
-                </RouteShell>
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+      <Route
+        path="/templates/:id/edit"
+        element={
+          <ProtectedRoute requiredPermission="templates.manage">
+            <RouteShell fallback={<div className="p-6 text-center text-sm text-slate-600">Loading editor...</div>}>
+              <TemplateEditorPage />
+            </RouteShell>
+          </ProtectedRoute>
+        }
+      />
 
-        <Route
-          path="/certificates/create"
-          element={
-            <ProtectedRoute roles={["ADMIN"]}>
-              <DashboardLayout>
-                <RouteShell fallback={<CertificatesFallback />}>
-                  <CertificateFormWrapper />
-                </RouteShell>
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+      {/* New provisioning pages */}
+      <Route
+        path="/admin/accounts"
+        element={
+          <ProtectedRoute roles={["SUPER_ADMIN"]}>
+            <DashboardLayout>
+              <RouteShell fallback={<div className="min-h-[60vh] flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              </div>}>
+                <AccountManagementPage />
+              </RouteShell>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
-        <Route
-          path="/certificates/bulk"
-          element={
-            <ProtectedRoute roles={["ADMIN"]}>
-              <DashboardLayout>
-                <RouteShell fallback={<BulkIssueFallback />}>
-                  <BulkIssuePage />
-                </RouteShell>
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+      <Route
+        path="/admin/authorisations"
+        element={
+          <ProtectedRoute roles={["SUPER_ADMIN"]}>
+            <DashboardLayout>
+              <RouteShell fallback={<div className="min-h-[60vh] flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              </div>}>
+                <AuthorisationLettersPage />
+              </RouteShell>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
-        <Route
-          path="/students"
-          element={
-            <ProtectedRoute roles={["ADMIN"]}>
-              <DashboardLayout>
-                <RouteShell fallback={<StudentsFallback />}>
-                  <StudentsPage />
-                </RouteShell>
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+      {/* Legacy routes — redirect to new equivalents */}
+      <Route path="/admin/users" element={<Navigate to="/admin/accounts" replace />} />
 
-        <Route
-          path="/templates"
-          element={
-            <ProtectedRoute roles={["ADMIN"]}>
-              <DashboardLayout>
-                <RouteShell fallback={<TemplatesFallback />}>
-                  <TemplatesPage />
-                </RouteShell>
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+      <Route
+        path="/admin/certificates"
+        element={
+          <ProtectedRoute roles={["SUPER_ADMIN"]}>
+            <DashboardLayout>
+              <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+                <SuperAdminCertificatesPage />
+              </RouteShell>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
-        <Route
-          path="/admin/users"
-          element={
-            <ProtectedRoute roles={["SUPER_ADMIN"]}>
-              <DashboardLayout>
-                <RouteShell fallback={<StudentsFallback />}>
-                  <SuperAdminUsersPage />
-                </RouteShell>
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+      <Route
+        path="/admin/dashboard"
+        element={
+          <ProtectedRoute roles={["SUPER_ADMIN"]}>
+            <DashboardLayout>
+              <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+                <SuperAdminDashboard />
+              </RouteShell>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
-        <Route
-          path="/admin/dashboard"
-          element={
-            <ProtectedRoute roles={["SUPER_ADMIN"]}>
-              <DashboardLayout>
-                <RouteShell fallback={<DashboardFallback />}>
-                  <SuperAdminDashboard />
-                </RouteShell>
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+      <Route
+        path="/admin/settings"
+        element={
+          <ProtectedRoute roles={["SUPER_ADMIN"]}>
+            <DashboardLayout>
+              <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+                <SystemSettings />
+              </RouteShell>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
-        <Route
-          path="/admin/settings"
-          element={
-            <ProtectedRoute roles={["SUPER_ADMIN"]}>
-              <DashboardLayout>
-                <RouteShell fallback={<DashboardFallback />}>
-                  <SystemSettings />
-                </RouteShell>
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+      <Route
+        path="/admin/audit"
+        element={
+          <ProtectedRoute roles={["SUPER_ADMIN"]}>
+            <DashboardLayout>
+              <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+                <AuditLogs />
+              </RouteShell>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
-        <Route
-          path="/admin/audit"
-          element={
-            <ProtectedRoute roles={["SUPER_ADMIN"]}>
-              <DashboardLayout>
-                <RouteShell fallback={<DashboardFallback />}>
-                  <AuditLogs />
-                </RouteShell>
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+      <Route path="/admin/invitations" element={<Navigate to="/admin/accounts" replace />} />
 
-        <Route
-          path="/admin/analytics"
-          element={
-            <ProtectedRoute roles={["SUPER_ADMIN"]}>
-              <DashboardLayout>
-                <RouteShell fallback={<AnalyticsFallback />}>
-                  <GlobalAnalytics />
-                </RouteShell>
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+      <Route
+        path="/admin/templates"
+        element={
+          <ProtectedRoute roles={["SUPER_ADMIN"]}>
+            <DashboardLayout>
+              <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+                <SuperAdminTemplatesPage />
+              </RouteShell>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/analytics"
+        element={
+          <ProtectedRoute roles={["SUPER_ADMIN"]}>
+            <DashboardLayout>
+              <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+                <GlobalAnalytics />
+              </RouteShell>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </AnimatePresence>
   );
 }
 
@@ -302,7 +414,11 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
-          <AnimatedRoutes />
+          <NotificationProvider>
+            <ErrorBoundary>
+              <AnimatedRoutes />
+            </ErrorBoundary>
+          </NotificationProvider>
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>

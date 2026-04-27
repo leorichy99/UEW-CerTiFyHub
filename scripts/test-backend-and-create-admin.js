@@ -2,7 +2,7 @@
 
 import https from 'node:https';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = 'http://20.8.1.203:8000/api';
 
 const SUPER_ADMIN = {
   username: 'sadmin@uew.edu.gh',  // Backend expects 'username' field

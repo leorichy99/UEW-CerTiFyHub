@@ -1,0 +1,5 @@
+{
+  "BASE_URL": "http:/20.8.0.151:8000",
+  "API_BASE": "http:/20.8.0.151:8000/api",
+  "FRONTEND_URL": "http://localhost:5173"
+}

@@ -38,7 +38,7 @@ export default function Pagination({
         <select
           value={itemsPerPage}
           onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
-          className="px-2 py-1 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+          className="rounded-lg border border-brand-dark bg-brand-dark px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
         >
           <option value={10}>10</option>
           <option value={20}>20</option>
@@ -52,7 +52,7 @@ export default function Pagination({
         <button
           onClick={handlePrev}
           disabled={currentPage === 1}
-          className="p-2 rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 hover:text-slate-900"
+          className="rounded-lg p-2 text-slate-600 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-10px_rgba(37,99,235,0.45)] disabled:cursor-not-allowed disabled:opacity-45"
         >
           <ChevronLeft size={16} />
         </button>
@@ -61,7 +61,7 @@ export default function Pagination({
           <>
             <button
               onClick={() => onPageChange(1)}
-              className="px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 hover:bg-slate-100 hover:text-slate-900"
+              className="rounded-lg bg-brand-dark px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-10px_rgba(37,99,235,0.45)]"
             >
               1
             </button>
@@ -75,10 +75,10 @@ export default function Pagination({
           <button
             key={page}
             onClick={() => onPageChange(page)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-200 ${
               page === currentPage
-                ? "bg-blue-600 text-white shadow-sm"
-                : "hover:bg-slate-100 hover:text-slate-900"
+                ? "bg-(--color-brand-dark) text-white shadow-[0_10px_24px_-10px_rgba(37,99,235,0.45)]"
+                : "text-slate-600 shadow-sm hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-10px_rgba(37,99,235,0.45)]"
             }`}
           >
             {page}
@@ -92,7 +92,7 @@ export default function Pagination({
             )}
             <button
               onClick={() => onPageChange(totalPages)}
-              className="px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 hover:bg-slate-100 hover:text-slate-900"
+              className="rounded-lg active:bg-(--color-brand-dark) px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-10px_rgba(37,99,235,0.45)]"
             >
               {totalPages}
             </button>
@@ -102,7 +102,7 @@ export default function Pagination({
         <button
           onClick={handleNext}
           disabled={currentPage === totalPages}
-          className="p-2 rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 hover:text-slate-900"
+          className="rounded-lg p-2 text-slate-600 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-10px_rgba(37,99,235,0.45)] disabled:cursor-not-allowed disabled:opacity-45"
         >
           <ChevronRight size={16} />
         </button>

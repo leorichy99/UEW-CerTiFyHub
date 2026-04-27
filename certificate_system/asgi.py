@@ -1,16 +1,24 @@
 """
 ASGI config for certificate_system project.
 
-It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/6.0/howto/deployment/asgi/
+Routes HTTP to Django and WebSocket to Channels consumers.
 """
 
 import os
 
-from django.core.asgi import get_asgi_application
-
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'certificate_system.settings')
 
-application = get_asgi_application()
+from django.core.asgi import get_asgi_application
+
+django_asgi_app = get_asgi_application()
+
+from channels.routing import ProtocolTypeRouter, URLRouter
+from notifications.middleware import JWTAuthMiddleware
+from notifications.routing import websocket_urlpatterns
+
+application = ProtocolTypeRouter({
+    "http": django_asgi_app,
+    "websocket": JWTAuthMiddleware(
+        URLRouter(websocket_urlpatterns)
+    ),
+})

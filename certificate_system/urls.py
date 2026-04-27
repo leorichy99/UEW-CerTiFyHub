@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from core.urls import admin_urlpatterns
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -11,6 +12,8 @@ urlpatterns = [
     path('api/students/', include('students.urls')),
     path('api/verify/', include('verification.urls')),
     path('api/analytics/', include('analytics.urls')),
+    path('api/notifications/', include('notifications.urls')),
+    path('api/users/', include(admin_urlpatterns)),
 ]
 
 if settings.DEBUG:

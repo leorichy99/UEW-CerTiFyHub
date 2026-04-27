@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useToast } from "./ToastContainer";
-import { Upload, FileText } from "lucide-react";
+import { FileText } from "lucide-react";
 import { DEGREE_TYPES, HONORS_TYPES } from "../utils/constants";
 import { certificateAPI, templateAPI } from "../services/api";
 
@@ -12,6 +12,7 @@ export default function CertificateForm({ onSuccess }) {
     honors: "SECOND_UPPER",
     program: "",
     template: "",
+    paper_size: "A4",
     date_awarded: new Date().toISOString().split("T")[0],
   });
 
@@ -100,7 +101,7 @@ export default function CertificateForm({ onSuccess }) {
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-8">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+      <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
         Create New Certificate
       </h2>
 
@@ -114,7 +115,7 @@ export default function CertificateForm({ onSuccess }) {
         <div className="grid md:grid-cols-2 gap-6">
           {/* Student Name */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
               Student Name *
             </label>
             <input
@@ -124,13 +125,13 @@ export default function CertificateForm({ onSuccess }) {
               onChange={handleInputChange}
               required
               placeholder="e.g., BISMARK KOFI OWUSU SARFO"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm transition"
             />
           </div>
 
           {/* Degree Type */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
               Degree Type *
             </label>
             <select
@@ -138,7 +139,7 @@ export default function CertificateForm({ onSuccess }) {
               value={formData.degree_type}
               onChange={handleInputChange}
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm transition"
             >
               {DEGREE_TYPES.map((type) => (
                 <option key={type.value} value={type.value}>
@@ -150,7 +151,7 @@ export default function CertificateForm({ onSuccess }) {
 
           {/* Honours */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
               Honours Classification *
             </label>
             <select
@@ -158,7 +159,7 @@ export default function CertificateForm({ onSuccess }) {
               value={formData.honors}
               onChange={handleInputChange}
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm transition"
             >
               {HONORS_TYPES.map((honor) => (
                 <option key={honor.value} value={honor.value}>
@@ -170,14 +171,14 @@ export default function CertificateForm({ onSuccess }) {
 
           {/* Template Selection */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
               Certificate Template (Optional)
             </label>
             <select
               name="template"
               value={formData.template}
               onChange={handleInputChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm transition"
             >
               <option value="">Default Classic Layout</option>
               {templates.map((t) => (
@@ -188,9 +189,26 @@ export default function CertificateForm({ onSuccess }) {
             </select>
           </div>
 
+          {/* Paper Size */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Paper Size
+            </label>
+            <select
+              name="paper_size"
+              value={formData.paper_size}
+              onChange={handleInputChange}
+              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm transition"
+            >
+              <option value="A4">A4 (210 × 297 mm)</option>
+              <option value="LETTER">Letter (8.5 × 11 in)</option>
+              <option value="A3">A3 (297 × 420 mm)</option>
+            </select>
+          </div>
+
           {/* Program */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
               Program of Study *
             </label>
             <input
@@ -200,7 +218,7 @@ export default function CertificateForm({ onSuccess }) {
               onChange={handleInputChange}
               required
               placeholder="e.g., Accounting Education"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm transition"
             />
           </div>
         </div>
@@ -208,7 +226,7 @@ export default function CertificateForm({ onSuccess }) {
         <button
           type="submit"
           disabled={loading}
-          className="mt-8 mx-auto bg-indigo-600 text-white py-4 px-2 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:bg-gray-400 flex items-center justify-center gap-2"
+          className="mt-8 mx-auto bg-blue-600 text-white py-4 px-2 rounded-lg font-semibold hover:bg-blue-700 transition disabled:bg-slate-400 flex items-center justify-center gap-2"
         >
           {loading ? (
             <>

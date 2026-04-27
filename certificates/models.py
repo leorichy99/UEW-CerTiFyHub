@@ -40,6 +40,13 @@ class Certificate(models.Model):
     vc_signature = models.ImageField(upload_to='signatures/', null=True, blank=True)
     registrar_signature = models.ImageField(upload_to='signatures/', null=True, blank=True)
     
+    PAPER_SIZE_CHOICES = [
+        ('A4', 'A4 (210 × 297 mm)'),
+        ('LETTER', 'Letter (8.5 × 11 in)'),
+        ('A3', 'A3 (297 × 420 mm)'),
+    ]
+
+    paper_size = models.CharField(max_length=10, choices=PAPER_SIZE_CHOICES, default='A4', blank=True)
     certificate_number = models.CharField(max_length=50, unique=True, blank=True)
     generated_date = models.DateTimeField(auto_now_add=True)
     pdf_file = models.FileField(upload_to='certificates/', null=True, blank=True)

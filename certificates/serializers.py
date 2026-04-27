@@ -12,7 +12,7 @@ class CertificateSerializer(serializers.ModelSerializer):
             'student_name', 'degree_type', 'degree_type_display',
             'honors', 'honors_display', 'program', 'date_awarded',
             'university_logo', 'vc_signature', 'registrar_signature',
-            'certificate_number', 'generated_date', 'pdf_file'
+            'paper_size', 'certificate_number', 'generated_date', 'pdf_file'
         ]
         read_only_fields = ['id', 'certificate_number', 'generated_date', 'pdf_file']
     

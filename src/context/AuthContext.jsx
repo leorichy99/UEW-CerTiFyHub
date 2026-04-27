@@ -5,7 +5,7 @@ import { authAPI } from "../services/api";
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null); // { username, email, profile: { role, ... } }
+  const [user, setUser] = useState(null); // { username, email, profile: { role, permissions, ... } }
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,13 +37,31 @@ export const AuthProvider = ({ children }) => {
 
     // Fetch user details immediately after login
     const userResponse = await authAPI.me();
-    setUser(userResponse.data);
-    return userResponse.data;
+    const userData = userResponse.data;
+    setUser(userData);
+    return userData;
   };
 
-  const register = async (formData) => {
-    return await authAPI.register(formData);
+  const refreshUser = async () => {
+    try {
+      const { data } = await authAPI.me();
+      setUser(data);
+      return data;
+    } catch {
+      return null;
+    }
   };
+
+  const hasPermission = (permKey) => {
+    if (!user) return false;
+    const profile = user.profile;
+    if (!profile) return false;
+    // Super Admins bypass all permission checks
+    if (profile.role === 'SUPER_ADMIN') return true;
+    return !!profile.permissions?.[permKey];
+  };
+
+  const isSuperAdmin = user?.profile?.role === 'SUPER_ADMIN';
 
   const logout = () => {
     localStorage.removeItem("accessToken");
@@ -57,7 +75,9 @@ export const AuthProvider = ({ children }) => {
         user,
         login,
         logout,
-        register,
+        refreshUser,
+        hasPermission,
+        isSuperAdmin,
         loading,
         isAuthenticated: !!user,
       }}
