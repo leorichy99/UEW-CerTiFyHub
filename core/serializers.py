@@ -38,7 +38,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 class AuthorisationReferenceSerializer(serializers.ModelSerializer):
     logged_by_name = serializers.SerializerMethodField()
-    provisioned_account_email = serializers.SerializerMethodField()
+    linked_account_email = serializers.SerializerMethodField()
 
     class Meta:
         model = AuthorisationReference
@@ -46,13 +46,13 @@ class AuthorisationReferenceSerializer(serializers.ModelSerializer):
             'id', 'reference_number', 'requester_name', 'requester_staff_id',
             'authorising_head_name', 'authorising_head_title',
             'authorising_head_department', 'approval_date', 'intake_date',
-            'scanned_letter', 'provisioning_status', 'provisioned_account',
-            'provisioned_account_email', 'logged_by_name', 'notes',
+            'scanned_letter', 'purpose', 'status', 'linked_account',
+            'linked_account_email', 'logged_by_name', 'notes',
             'created_at', 'updated_at',
         ]
         read_only_fields = [
             'id', 'intake_date', 'logged_by_name', 'created_at', 'updated_at',
-            'provisioned_account', 'provisioned_account_email',
+            'linked_account', 'linked_account_email',
         ]
 
     def get_logged_by_name(self, obj):
@@ -60,9 +60,9 @@ class AuthorisationReferenceSerializer(serializers.ModelSerializer):
             return obj.logged_by.get_full_name() or obj.logged_by.username
         return ''
 
-    def get_provisioned_account_email(self, obj):
-        if obj.provisioned_account:
-            return obj.provisioned_account.email
+    def get_linked_account_email(self, obj):
+        if obj.linked_account:
+            return obj.linked_account.email
         return None
 
 
@@ -73,7 +73,7 @@ class AuthorisationReferenceCreateSerializer(serializers.ModelSerializer):
             'reference_number', 'requester_name', 'requester_staff_id',
             'authorising_head_name', 'authorising_head_title',
             'authorising_head_department', 'approval_date',
-            'scanned_letter', 'notes',
+            'scanned_letter', 'purpose', 'notes',
         ]
 
     def validate_reference_number(self, value):
@@ -121,9 +121,13 @@ class AccountProvisionSerializer(serializers.Serializer):
     def validate_letter_reference_number(self, value):
         try:
             ref = AuthorisationReference.objects.get(reference_number=value)
-            if ref.provisioning_status != 'pending':
+            if ref.status != 'pending':
                 raise serializers.ValidationError(
-                    f"This reference has already been used (status: {ref.provisioning_status})."
+                    f"This reference has already been used (status: {ref.status})."
+                )
+            if ref.purpose != 'provision':
+                raise serializers.ValidationError(
+                    f"This reference is for '{ref.get_purpose_display()}', not account provisioning."
                 )
         except AuthorisationReference.DoesNotExist:
             raise serializers.ValidationError(
@@ -176,6 +180,7 @@ class AccountDetailSerializer(serializers.ModelSerializer):
     first_login_completed = serializers.SerializerMethodField()
     credential_status = serializers.SerializerMethodField()
     letter_reference_number = serializers.SerializerMethodField()
+    authorisation_references = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -184,7 +189,7 @@ class AccountDetailSerializer(serializers.ModelSerializer):
             'staff_id', 'department', 'account_type', 'access_duration',
             'access_end_date', 'permissions', 'permission_history',
             'is_legacy', 'first_login_completed', 'credential_status',
-            'letter_reference_number',
+            'letter_reference_number', 'authorisation_references',
         ]
 
     def _profile(self, obj):
@@ -243,6 +248,10 @@ class AccountDetailSerializer(serializers.ModelSerializer):
         if p and p.letter_reference:
             return p.letter_reference.reference_number
         return None
+
+    def get_authorisation_references(self, obj):
+        refs = obj.authorisation_references.all()
+        return AuthorisationReferenceSerializer(refs, many=True).data if refs.exists() else []
 
 
 class PermissionUpdateSerializer(serializers.Serializer):

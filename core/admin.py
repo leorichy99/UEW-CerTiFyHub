@@ -7,8 +7,8 @@ from .models import (
 
 @admin.register(AuthorisationReference)
 class AuthorisationReferenceAdmin(admin.ModelAdmin):
-    list_display = ('reference_number', 'requester_name', 'requester_staff_id', 'provisioning_status', 'approval_date', 'logged_by')
-    list_filter = ('provisioning_status',)
+    list_display = ('reference_number', 'requester_name', 'requester_staff_id', 'purpose', 'status', 'approval_date', 'logged_by')
+    list_filter = ('status', 'purpose')
     search_fields = ('reference_number', 'requester_name', 'requester_staff_id')
     readonly_fields = ('intake_date', 'created_at', 'updated_at')
 

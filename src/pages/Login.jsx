@@ -132,10 +132,6 @@ export default function Login() {
                   )}
                 </button>
               </form>
-
-              <div className="mt-6 text-center text-xs text-slate-500">
-                Powered by Directorate of ICT Services, UEW
-              </div>
             </div>
 
             

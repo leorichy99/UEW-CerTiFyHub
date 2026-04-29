@@ -43,7 +43,7 @@ export default function SetupAccountPage() {
     setError("");
 
     try {
-      await authAPI.setupAccount({ token, password });
+      await authAPI.setupAccount({ token, password, password_confirm: confirmPassword });
       setStep("success");
     } catch (err) {
       const detail = err?.response?.data?.detail || err?.response?.data?.password?.[0] || "Setup failed. The link may have expired.";

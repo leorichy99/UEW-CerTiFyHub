@@ -1,0 +1,736 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+import { accountAPI, authorisationAPI } from "../services/api";
+import {
+  Loader2, ChevronDown, X, Award, BookOpen,
+  ShieldCheck, BarChart3, Settings, Plus, Minus,
+  AlertTriangle, CheckCircle, Search, FileText, Info,
+} from "lucide-react";
+
+// ── Category metadata ────────────────────────────────────────────────────
+const CATEGORY_META = {
+  certificate_management: { icon: Award, color: "text-blue-600 bg-blue-50", description: "Create, view, revoke, and download certificates" },
+  student_records: { icon: BookOpen, color: "text-emerald-600 bg-emerald-50", description: "Access and manage student information" },
+  verification: { icon: ShieldCheck, color: "text-violet-600 bg-violet-50", description: "Verify certificate authenticity and view logs" },
+  reporting_audit: { icon: BarChart3, color: "text-amber-600 bg-amber-50", description: "Access reports and export data" },
+  system_configuration: { icon: Settings, color: "text-slate-600 bg-slate-100", description: "Manage certificate templates and system config" },
+};
+
+// ── Human-readable permission labels & descriptions ──────────────────────
+const PERMISSION_INFO = {
+  "certificates.issue": { label: "Issue Certificates", desc: "Create and issue new certificates to students or recipients. High privilege." },
+  "certificates.revoke": { label: "Revoke Certificates", desc: "Mark issued certificates as revoked. Requires explicit justification in the authorisation letter." },
+  "certificates.edit_drafts": { label: "Edit Certificate Drafts", desc: "Modify certificate records in draft state before issuance." },
+  "certificates.view_all": { label: "View All Certificates", desc: "Read-only access to the full certificate registry." },
+  "certificates.download": { label: "Download Certificates", desc: "Export certificate records or PDFs." },
+  "students.view": { label: "View Student Records", desc: "Read-only access to student data linked to certificates." },
+  "students.edit": { label: "Edit Student Records", desc: "Modify student data. High privilege. Confirm letter scope before enabling." },
+  "students.import": { label: "Import Student Data", desc: "Bulk import student records from an external file. Very high privilege. Must be explicitly stated in the letter scope." },
+  "verification.verify": { label: "Verify Certificates", desc: "Access the internal verification interface to confirm certificate authenticity." },
+  "verification.view_logs": { label: "View Verification Logs", desc: "See the history of all verification requests and their outcomes." },
+  "reports.view": { label: "View Reports", desc: "Access pre-built system reports including issuance summaries and statistics." },
+  "reports.export": { label: "Export Reports", desc: "Download report data. Confirm letter scope before enabling." },
+  "templates.manage": { label: "Manage Templates", desc: "Create or edit certificate templates." },
+};
+
+// Only show these 5 categories (exclude user_account_management)
+const VISIBLE_CATEGORY_IDS = [
+  "certificate_management",
+  "student_records",
+  "verification",
+  "reporting_audit",
+  "system_configuration",
+];
+
+// ── Collapsible permission category accordion ────────────────────────────
+function PermissionAccordion({ cat, currentPerms, originalPerms, onToggle, isOpen, onToggleOpen }) {
+  const contentRef = useRef(null);
+  const meta = CATEGORY_META[cat.id] || { icon: Settings, color: "text-slate-600 bg-slate-50", description: "" };
+  const Icon = meta.icon;
+  const enabledCount = cat.permissions?.filter((k) => currentPerms[k]).length || 0;
+  const totalCount = cat.permissions?.length || 0;
+
+  if (totalCount === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+      <button
+        type="button"
+        onClick={onToggleOpen}
+        aria-expanded={isOpen}
+        className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
+      >
+        <span className={`flex items-center justify-center h-9 w-9 rounded-lg shrink-0 ${meta.color}`}>
+          <Icon size={17} />
+        </span>
+        <div className="flex-1 text-left min-w-0">
+          <span className="text-sm font-semibold text-slate-800">{cat.label}</span>
+          <span className="ml-2 text-xs text-slate-400 tabular-nums">{enabledCount}/{totalCount} enabled</span>
+        </div>
+        <ChevronDown
+          size={16}
+          className={`text-slate-400 shrink-0 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`}
+        />
+      </button>
+      <div
+        className="transition-all duration-300 ease-in-out overflow-hidden"
+        style={{
+          maxHeight: isOpen ? `${contentRef.current?.scrollHeight || 600}px` : "0px",
+          opacity: isOpen ? 1 : 0,
+        }}
+      >
+        <div ref={contentRef} className="px-4 pb-3 pt-1.5 border-t border-slate-100 bg-slate-50/30">
+          {meta.description && (
+            <p className="text-[11px] text-slate-400 pb-2">{meta.description}</p>
+          )}
+          <div className="space-y-0.5">
+            {cat.permissions?.map((pKey) => {
+              const info = PERMISSION_INFO[pKey] || { label: pKey, desc: "" };
+              const isEnabled = !!currentPerms[pKey];
+              const wasChanged = currentPerms[pKey] !== originalPerms[pKey];
+              return (
+                <div
+                  key={pKey}
+                  className={`flex items-start gap-3 py-2.5 px-3 rounded-lg transition-colors group ${wasChanged ? "bg-amber-50/60 ring-1 ring-amber-200/60" : "hover:bg-white"}`}
+                >
+                  <div className="flex-1 min-w-0 pt-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">
+                        {info.label}
+                      </span>
+                      {wasChanged && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">
+                          Changed
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11.5px] text-slate-400 leading-snug mt-0.5">{info.desc}</p>
+                  </div>
+                  {/* Toggle switch */}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isEnabled}
+                    aria-label={`${info.label}, currently ${isEnabled ? "enabled" : "disabled"}`}
+                    onClick={() => onToggle(pKey, !isEnabled)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 mt-1 ${isEnabled ? "bg-blue-600" : "bg-slate-300"}`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ease-in-out ${isEnabled ? "translate-x-5" : "translate-x-0"}`}
+                    />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Normalise names for comparison ───────────────────────────────────────
+function normaliseName(name) {
+  return (name || "").toLowerCase().replace(/[^a-z]/g, "").trim();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════
+export default function PermissionEditorDrawer({ open, account, permConstants, onClose, onSaved }) {
+  // ── Core permission state ──────────────────────────────────────────────
+  const [originalPerms, setOriginalPerms] = useState({});
+  const [currentPerms, setCurrentPerms] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // ── Accordion open state ───────────────────────────────────────────────
+  const [openCategories, setOpenCategories] = useState(new Set());
+
+  // ── Authorisation reference ────────────────────────────────────────────
+  const [refSearch, setRefSearch] = useState("");
+  const [refResults, setRefResults] = useState([]);
+  const [refSearching, setRefSearching] = useState(false);
+  const [selectedRef, setSelectedRef] = useState(null);
+  const [refError, setRefError] = useState("");
+  const [nameMismatchAck, setNameMismatchAck] = useState(false);
+  const [provisioningNotes, setProvisioningNotes] = useState("");
+
+  // ── Confirmation flow ──────────────────────────────────────────────────
+  const [showConfirmPanel, setShowConfirmPanel] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  // ── Refs ────────────────────────────────────────────────────────────────
+  const drawerRef = useRef(null);
+  const refSearchTimeout = useRef(null);
+
+  // ── Visible categories (exclude SA-only) ───────────────────────────────
+  const visibleCategories = (permConstants?.categories || []).filter(
+    (c) => VISIBLE_CATEGORY_IDS.includes(c.id) && c.permissions?.length > 0
+  );
+
+  // ── Compute changes ────────────────────────────────────────────────────
+  const added = [];
+  const removed = [];
+  for (const key of Object.keys(currentPerms)) {
+    if (currentPerms[key] !== originalPerms[key]) {
+      if (currentPerms[key]) added.push(key);
+      else removed.push(key);
+    }
+  }
+  const hasChanges = added.length > 0 || removed.length > 0;
+  const allOff = Object.values(currentPerms).every((v) => !v);
+
+  // ── Name match logic ───────────────────────────────────────────────────
+  const accountName = account?.full_name || "";
+  const refName = selectedRef?.requester_name || "";
+  const nameMatch = normaliseName(accountName) === normaliseName(refName);
+  const nameCheckNeeded = selectedRef && !nameMatch;
+
+  // ── Save button state ──────────────────────────────────────────────────
+  const isRefValid = selectedRef && !refError;
+  const nameSatisfied = !nameCheckNeeded || nameMismatchAck;
+  const canSave = hasChanges && !allOff && isRefValid && nameSatisfied;
+
+  let saveTooltip = "";
+  if (!hasChanges) saveTooltip = "No changes have been made to the permissions.";
+  else if (!isRefValid) saveTooltip = "A valid authorisation reference is required before saving.";
+  else if (allOff) saveTooltip = "At least one permission must remain enabled.";
+
+  // ── Load fresh data when drawer opens ──────────────────────────────────
+  useEffect(() => {
+    if (!open || !account) return;
+    setLoading(true);
+    setError("");
+    setShowConfirmPanel(false);
+    setShowCancelConfirm(false);
+    setSelectedRef(null);
+    setRefSearch("");
+    setRefResults([]);
+    setRefError("");
+    setNameMismatchAck(false);
+    setProvisioningNotes("");
+    setOpenCategories(new Set());
+
+    accountAPI.getOne(account.id)
+      .then(({ data }) => {
+        const perms = data.permissions || {};
+        setOriginalPerms({ ...perms });
+        setCurrentPerms({ ...perms });
+      })
+      .catch(() => setError("Failed to load current permissions. Please close and try again."))
+      .finally(() => setLoading(false));
+  }, [open, account]);
+
+  // ── Stable ref for handleClose (avoids stale closure in keydown) ────────
+  const handleCloseRef = useRef(null);
+
+  // ── Focus trap ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        handleCloseRef.current?.();
+      }
+      if (e.key === "Tab" && drawerRef.current) {
+        const focusable = drawerRef.current.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
+
+  // ── Reference search ───────────────────────────────────────────────────
+  const searchReferences = useCallback((query) => {
+    if (!query || query.length < 2) { setRefResults([]); return; }
+    setRefSearching(true);
+    authorisationAPI.getAll({ search: query, purpose: "permission_change" })
+      .then(({ data }) => {
+        const list = Array.isArray(data) ? data : data.results || [];
+        setRefResults(list);
+      })
+      .catch(() => setRefResults([]))
+      .finally(() => setRefSearching(false));
+  }, []);
+
+  const handleRefSearchChange = (value) => {
+    setRefSearch(value);
+    setSelectedRef(null);
+    setRefError("");
+    setNameMismatchAck(false);
+    clearTimeout(refSearchTimeout.current);
+    refSearchTimeout.current = setTimeout(() => searchReferences(value), 350);
+  };
+
+  const selectReference = (ref) => {
+    setRefResults([]);
+    setRefSearch(ref.reference_number);
+    // Validate status
+    const allowedStatuses = ["pending"];
+    if (!allowedStatuses.includes(ref.status)) {
+      setRefError(`This reference cannot be used (status: ${ref.status}). Select a different reference.`);
+      setSelectedRef(null);
+      return;
+    }
+    setRefError("");
+    setSelectedRef(ref);
+    setNameMismatchAck(false);
+  };
+
+  // ── Permission toggle ──────────────────────────────────────────────────
+  const togglePerm = (key, val) => {
+    setCurrentPerms((prev) => ({ ...prev, [key]: val }));
+  };
+
+  // ── Close with unsaved changes check ───────────────────────────────────
+  const handleClose = () => {
+    if (hasChanges) {
+      setShowCancelConfirm(true);
+    } else {
+      resetAndClose();
+    }
+  };
+  handleCloseRef.current = handleClose;
+
+  const resetAndClose = () => {
+    setShowCancelConfirm(false);
+    setShowConfirmPanel(false);
+    onClose();
+  };
+
+  // ── Save ───────────────────────────────────────────────────────────────
+  const handleSave = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      const changedPerms = {};
+      for (const key of Object.keys(currentPerms)) {
+        if (currentPerms[key] !== originalPerms[key]) {
+          changedPerms[key] = currentPerms[key];
+        }
+      }
+      await accountAPI.updatePermissions(account.id, {
+        permissions: changedPerms,
+        letter_reference_number: selectedRef.reference_number,
+        reason: provisioningNotes,
+      });
+      onSaved({
+        fullName: accountName,
+        added: added.length,
+        removed: removed.length,
+        reference: selectedRef.reference_number,
+      });
+      resetAndClose();
+    } catch (err) {
+      const serverError = err?.response?.data;
+      if (serverError?.error?.includes?.("modified by another")) {
+        setError("This account's permissions were modified by another administrator while you had this drawer open. The drawer will now reload with the current permission state. Your changes have not been lost — review them against the updated state and save again.");
+        // Reload server state but keep user's intended changes
+        try {
+          const { data } = await accountAPI.getOne(account.id);
+          const freshPerms = data.permissions || {};
+          setOriginalPerms({ ...freshPerms });
+          // Re-apply the user's intended changes on top of fresh state
+          setCurrentPerms((prev) => {
+            const merged = { ...freshPerms };
+            for (const k of Object.keys(prev)) {
+              if (prev[k] !== originalPerms[k]) {
+                merged[k] = prev[k];
+              }
+            }
+            return merged;
+          });
+        } catch { /* keep showing the error */ }
+      } else {
+        setError("Changes could not be saved. Please try again. If this problem persists, contact the system administrator.");
+      }
+      setShowConfirmPanel(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Format account type ────────────────────────────────────────────────
+  const accountTypeLabel = account?.account_type === "EXTERNAL_COLLABORATOR" ? "External Collaborator" : "Staff";
+
+  // ── Render ─────────────────────────────────────────────────────────────
+  return (
+    <div
+      className={`fixed inset-0 z-50 transition-opacity duration-300 ${open ? "pointer-events-auto" : "pointer-events-none"}`}
+      aria-modal="true"
+      role="dialog"
+      aria-label="Edit Permissions"
+    >
+      {/* Backdrop — does NOT close on click per spec */}
+      <div className={`absolute inset-0 bg-black/50 backdrop-blur-[2px] transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`} />
+
+      {/* Drawer panel */}
+      <div
+        ref={drawerRef}
+        className={`absolute top-0 right-0 h-full w-full max-w-xl bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}
+      >
+        {/* ── FIXED HEADER ──────────────────────────────────────────────── */}
+        <div className="shrink-0 border-b border-slate-200 px-6 py-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Edit Permissions</h2>
+              {account && (
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  {accountName}
+                  <span className="mx-1.5 text-slate-300">·</span>
+                  {account.email}
+                  <span className="mx-1.5 text-slate-300">·</span>
+                  {accountTypeLabel}
+                  {account.department && (
+                    <>
+                      <span className="mx-1.5 text-slate-300">·</span>
+                      {account.department}
+                    </>
+                  )}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={handleClose}
+              className="p-2 -mr-2 -mt-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* ── SCROLLABLE BODY ───────────────────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+              <span className="ml-3 text-sm text-slate-500">Loading permissions…</span>
+            </div>
+          ) : (
+            <div className="px-6 py-5 space-y-6">
+              {/* ─ Section 1: Permission Accordions ─────────────────────── */}
+              <div className="space-y-2.5">
+                {visibleCategories.map((cat) => (
+                  <PermissionAccordion
+                    key={cat.id}
+                    cat={cat}
+                    currentPerms={currentPerms}
+                    originalPerms={originalPerms}
+                    onToggle={togglePerm}
+                    isOpen={openCategories.has(cat.id)}
+                    onToggleOpen={() =>
+                      setOpenCategories((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(cat.id)) next.delete(cat.id);
+                        else next.add(cat.id);
+                        return next;
+                      })
+                    }
+                  />
+                ))}
+              </div>
+
+              {/* ─ Section 2: Session Changes Summary ──────────────────── */}
+              {hasChanges && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3" role="status" aria-live="polite">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Changes in this session</h4>
+                  {added.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">Adding</p>
+                      {added.map((k) => (
+                        <div key={k} className="flex items-center gap-2 pl-1">
+                          <Plus size={13} className="text-emerald-500 shrink-0" />
+                          <span className="text-sm text-slate-700">{PERMISSION_INFO[k]?.label || k}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {removed.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold text-red-500 uppercase tracking-wider">Removing</p>
+                      {removed.map((k) => (
+                        <div key={k} className="flex items-center gap-2 pl-1">
+                          <Minus size={13} className="text-red-400 shrink-0" />
+                          <span className="text-sm text-slate-700">{PERMISSION_INFO[k]?.label || k}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ─ Section 3: Authorisation Reference ──────────────────── */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Authorisation Reference</h4>
+
+                {/* Search field */}
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search size={15} className="text-slate-400" />
+                  </div>
+                  <input
+                    type="text"
+                    value={refSearch}
+                    onChange={(e) => handleRefSearchChange(e.target.value)}
+                    placeholder="Search by reference number, e.g. CERT-2025-AB1234"
+                    className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition"
+                  />
+                  {refSearching && (
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                      <Loader2 size={14} className="animate-spin text-slate-400" />
+                    </div>
+                  )}
+                  {/* Dropdown results */}
+                  {refResults.length > 0 && !selectedRef && (
+                    <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                      {refResults.map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => selectReference(r)}
+                          className="w-full text-left px-4 py-2.5 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0"
+                        >
+                          <span className="text-sm font-medium text-slate-800">{r.reference_number}</span>
+                          <span className="ml-2 text-xs text-slate-400">{r.requester_name}</span>
+                          <span className={`ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${r.status === "pending" ? "bg-green-50 text-green-600" : "bg-slate-100 text-slate-500"}`}>
+                            {r.status}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Reference error */}
+                {refError && (
+                  <div className="flex items-start gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg p-3 text-sm" role="alert">
+                    <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+                    <span>{refError}</span>
+                  </div>
+                )}
+
+                {/* Reference confirmation block */}
+                {selectedRef && !refError && (
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle size={15} className="text-green-500 shrink-0" />
+                      <span className="text-sm font-semibold text-slate-800">{selectedRef.reference_number}</span>
+                      <span className="text-[10px] font-medium bg-green-50 text-green-600 px-1.5 py-0.5 rounded-full">Confirmed</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px]">
+                      <div>
+                        <span className="text-slate-400">Authorised for</span>
+                        <p className="text-slate-700 font-medium">{selectedRef.requester_name}</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Approved by</span>
+                        <p className="text-slate-700 font-medium">{selectedRef.authorising_head_name}{selectedRef.authorising_head_title ? `, ${selectedRef.authorising_head_title}` : ""}</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Date approved</span>
+                        <p className="text-slate-700 font-medium">{selectedRef.approval_date}</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Status</span>
+                        <p className="text-slate-700 font-medium capitalize">{selectedRef.status}</p>
+                      </div>
+                      {selectedRef.notes && (
+                        <div className="col-span-2">
+                          <span className="text-slate-400">Scope noted</span>
+                          <p className="text-slate-700">{selectedRef.notes}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Name match check */}
+                    {nameMatch && (
+                      <div className="flex items-center gap-2 text-green-600 text-xs bg-green-50 rounded-lg px-3 py-2">
+                        <CheckCircle size={13} className="shrink-0" />
+                        <span>Name match confirmed.</span>
+                      </div>
+                    )}
+                    {nameCheckNeeded && (
+                      <div className="space-y-2">
+                        <div className="flex items-start gap-2 text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs" role="alert">
+                          <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-medium">Name mismatch detected.</p>
+                            <p className="mt-0.5">
+                              The reference is authorised for <strong>{refName}</strong> but this account belongs to <strong>{accountName}</strong>.
+                              If these refer to the same person, check the box below to acknowledge. This acknowledgement will be logged.
+                            </p>
+                          </div>
+                        </div>
+                        <label className="flex items-start gap-2.5 px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={nameMismatchAck}
+                            onChange={(e) => setNameMismatchAck(e.target.checked)}
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 mt-0.5 shrink-0"
+                          />
+                          <span className="text-xs text-slate-700 leading-snug">
+                            I confirm that <strong>{accountName}</strong> and <strong>{refName}</strong> refer to the same person.
+                          </span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Provisioning notes — only visible after reference confirmed */}
+                {selectedRef && !refError && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-600">
+                      Provisioning Notes <span className="text-slate-400 font-normal">(optional, max 300 characters)</span>
+                    </label>
+                    <textarea
+                      value={provisioningNotes}
+                      onChange={(e) => setProvisioningNotes(e.target.value.slice(0, 300))}
+                      maxLength={300}
+                      rows={2}
+                      placeholder="e.g. Expanding access for Semester 2 certificate processing. Written letter to follow confirmation from Prof. Sarpong."
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none transition"
+                    />
+                    <p className="text-[11px] text-slate-400">
+                      Add any context about this permission change not captured in the letter scope. This note will be stored against the account record and included in the audit log.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── INLINE CONFIRMATION PANEL ──────────────────────────────────── */}
+        {showConfirmPanel && (
+          <div className="shrink-0 border-t-2 border-blue-200 bg-blue-50/50 px-6 py-5 space-y-4 max-h-[50vh] overflow-y-auto" role="alert">
+            <h4 className="text-sm font-bold text-slate-800">
+              You are about to make the following permission changes<br />
+              to <span className="text-blue-700">{accountName}</span>'s account:
+            </h4>
+            {added.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">Adding</p>
+                {added.map((k) => (
+                  <div key={k} className="flex items-center gap-2 pl-1 text-sm text-slate-700">
+                    <Plus size={13} className="text-emerald-500 shrink-0" />
+                    {PERMISSION_INFO[k]?.label || k}
+                  </div>
+                ))}
+              </div>
+            )}
+            {removed.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-[11px] font-semibold text-red-500 uppercase tracking-wider">Removing</p>
+                {removed.map((k) => (
+                  <div key={k} className="flex items-center gap-2 pl-1 text-sm text-slate-700">
+                    <Minus size={13} className="text-red-400 shrink-0" />
+                    {PERMISSION_INFO[k]?.label || k}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="text-xs text-slate-500 space-y-0.5 pt-1 border-t border-blue-200">
+              <p><span className="text-slate-400">Authorisation reference:</span> <strong className="text-slate-700">{selectedRef?.reference_number}</strong></p>
+              <p><span className="text-slate-400">Approved by:</span> <strong className="text-slate-700">{selectedRef?.authorising_head_name}</strong>
+                {selectedRef?.approval_date && <span className="text-slate-400 ml-1">· {selectedRef.approval_date}</span>}
+              </p>
+            </div>
+            <p className="text-xs text-slate-500 italic">This action will be logged under your Super Admin account.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmPanel(false)}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-white transition-colors"
+              >
+                Go Back
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:bg-blue-400 transition-colors"
+              >
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {saving ? "Saving…" : "Confirm Changes"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── CANCEL CONFIRMATION INLINE ─────────────────────────────────── */}
+        {showCancelConfirm && (
+          <div className="shrink-0 border-t-2 border-amber-200 bg-amber-50/50 px-6 py-4 space-y-3" role="alert">
+            <p className="text-sm text-slate-700 font-medium">
+              You have unsaved changes. Closing this drawer will discard them. Are you sure?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-white transition-colors"
+              >
+                Keep Editing
+              </button>
+              <button
+                onClick={resetAndClose}
+                className="flex-1 px-4 py-2.5 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+              >
+                Discard Changes
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── FIXED FOOTER ──────────────────────────────────────────────── */}
+        {!showConfirmPanel && !showCancelConfirm && (
+          <div className="shrink-0 border-t border-slate-200 px-6 py-4 bg-white space-y-3">
+            {/* Error message */}
+            {error && (
+              <div className="flex items-start gap-2 text-red-700 bg-red-50 border border-red-200 rounded-lg p-3 text-sm" role="alert">
+                <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Zero-permission warning */}
+            {allOff && hasChanges && (
+              <div className="flex items-start gap-2 text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs" role="alert">
+                <Info size={14} className="shrink-0 mt-0.5" />
+                <span>An account must have at least one permission enabled. To remove all access from this account, use <strong>Deactivate Account</strong> instead.</span>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleClose}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => setShowConfirmPanel(true)}
+                disabled={!canSave}
+                title={saveTooltip}
+                className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+              >
+                Save Permissions
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

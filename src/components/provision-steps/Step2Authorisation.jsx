@@ -9,7 +9,7 @@ const WARN_CLS = "text-xs text-amber-600 flex items-center gap-1";
 
 const STATUS_STYLES = {
   pending: { label: "Unprovisioned", cls: "bg-green-100 text-green-700" },
-  provisioned: { label: "Already Provisioned", cls: "bg-red-100 text-red-700" },
+  used: { label: "Already Used", cls: "bg-red-100 text-red-700" },
   cancelled: { label: "Cancelled", cls: "bg-red-100 text-red-700" },
 };
 
@@ -60,7 +60,7 @@ export default function Step2Authorisation({
   // Validity
   useEffect(() => {
     const refSelected = !!selectedRef;
-    const statusOk = selectedRef?.provisioning_status === "pending";
+    const statusOk = selectedRef?.status === "pending";
     const nameOk = nameMatch === "match" || (nameMatch === "mismatch" && mismatchAck);
     onValidityChange(refSelected && statusOk && nameOk);
   }, [selectedRef, nameMatch, mismatchAck, onValidityChange]);
@@ -140,7 +140,7 @@ export default function Step2Authorisation({
               <div className="px-4 py-3 text-sm text-slate-400">No matching references found.</div>
             ) : (
               filtered.map((ref) => {
-                const st = STATUS_STYLES[ref.provisioning_status] || STATUS_STYLES.pending;
+                const st = STATUS_STYLES[ref.status] || STATUS_STYLES.pending;
                 return (
                   <button
                     key={ref.id}
@@ -178,10 +178,10 @@ export default function Step2Authorisation({
             <div className="flex items-center gap-2">
               <span
                 className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
-                  STATUS_STYLES[selectedRef.provisioning_status]?.cls
+                  STATUS_STYLES[selectedRef.status]?.cls
                 }`}
               >
-                {STATUS_STYLES[selectedRef.provisioning_status]?.label}
+                {STATUS_STYLES[selectedRef.status]?.label}
               </span>
               <button
                 type="button"
@@ -210,15 +210,15 @@ export default function Step2Authorisation({
           </div>
 
           {/* Blocking status */}
-          {selectedRef.provisioning_status !== "pending" && (
+          {selectedRef.status !== "pending" && (
             <div className="px-5 py-3 bg-red-50 border-t border-red-200 flex items-center gap-2 text-sm text-red-700">
               <XCircle size={15} />
-              This reference has already been {selectedRef.provisioning_status}. It cannot be used for a new account.
+              This reference has already been {selectedRef.status}. It cannot be used for a new account.
             </div>
           )}
 
           {/* Name match */}
-          {selectedRef.provisioning_status === "pending" && nameMatch && (
+          {selectedRef.status === "pending" && nameMatch && (
             <div className={`px-5 py-3 border-t ${nameMatch === "match" ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
               {nameMatch === "match" ? (
                 <p className={OK_CLS}>

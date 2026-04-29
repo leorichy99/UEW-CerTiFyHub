@@ -10,15 +10,15 @@ import {
 
 const STATUS_BADGE = {
   pending: { className: "bg-amber-100 text-amber-700", icon: Clock, label: "Pending" },
-  provisioned: { className: "bg-green-100 text-green-700", icon: CheckCircle, label: "Provisioned" },
-  rejected: { className: "bg-red-100 text-red-700", icon: AlertTriangle, label: "Rejected" },
+  used: { className: "bg-green-100 text-green-700", icon: CheckCircle, label: "Used" },
+  cancelled: { className: "bg-red-100 text-red-700", icon: AlertTriangle, label: "Cancelled" },
 };
 
 const CURRENT_YEAR = new Date().getFullYear();
 const REF_PREFIX = `CERT-${CURRENT_YEAR}-`;
 
 const INITIAL_FORM = {
-  staff_id_suffix: "", requester_name: "", requester_staff_id: "",
+  purpose: "provision", staff_id_suffix: "", requester_name: "", requester_staff_id: "",
   authorising_head_name: "", authorising_head_title: "", authorising_head_department: "",
   approval_date: "", notes: "", scanned_letter: null,
 };
@@ -65,6 +65,7 @@ export default function AuthorisationLettersPage() {
     try {
       const payload = {
         reference_number: `${REF_PREFIX}${form.staff_id_suffix}`,
+        purpose: form.purpose,
         requester_name: form.requester_name,
         requester_staff_id: form.requester_staff_id,
         authorising_head_name: form.authorising_head_name,
@@ -111,6 +112,20 @@ export default function AuthorisationLettersPage() {
           {formError && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{formError}</div>
           )}
+
+          {/* Purpose */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Purpose</label>
+            <select
+              required
+              value={form.purpose}
+              onChange={(e) => setForm((f) => ({ ...f, purpose: e.target.value }))}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none bg-white"
+            >
+              <option value="provision">Account Provisioning</option>
+              <option value="permission_change">Permission Change</option>
+            </select>
+          </div>
 
           {/* Reference Number — auto-prefix */}
           <div>
@@ -266,6 +281,7 @@ export default function AuthorisationLettersPage() {
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="text-left px-4 py-3 font-semibold text-slate-600">Reference</th>
+                <th className="text-left px-4 py-3 font-semibold text-slate-600">Purpose</th>
                 <th className="text-left px-4 py-3 font-semibold text-slate-600">Requester</th>
                 <th className="text-left px-4 py-3 font-semibold text-slate-600">Staff ID</th>
                 <th className="text-left px-4 py-3 font-semibold text-slate-600">Approval Date</th>
@@ -276,11 +292,12 @@ export default function AuthorisationLettersPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {letters.map((letter) => {
-                const badge = STATUS_BADGE[letter.provisioning_status] || STATUS_BADGE.pending;
+                const badge = STATUS_BADGE[letter.status] || STATUS_BADGE.pending;
                 const BadgeIcon = badge.icon;
                 return (
                   <tr key={letter.id} className="hover:bg-slate-50/50">
                     <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-800">{letter.reference_number}</td>
+                    <td className="px-4 py-3 text-xs text-slate-600 capitalize">{letter.purpose === "permission_change" ? "Permission Change" : "Provisioning"}</td>
                     <td className="px-4 py-3 text-slate-700">{letter.requester_name}</td>
                     <td className="px-4 py-3 text-slate-600">{letter.requester_staff_id}</td>
                     <td className="px-4 py-3 text-slate-600">{letter.approval_date}</td>

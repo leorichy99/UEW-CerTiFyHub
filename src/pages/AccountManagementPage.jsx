@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { accountAPI, authorisationAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import ProvisionWizard from "../components/ProvisionWizard";
+import PermissionEditorDrawer from "../components/PermissionEditorDrawer";
 import {
-  Loader2, Search, Plus, Shield, ShieldOff, Lock, Unlock,
-  RefreshCw, ChevronDown, ChevronUp, UserCheck, AlertTriangle,
-  Mail, CheckCircle, XCircle, Clock,
+  Loader2, Shield, ShieldOff, Unlock, UserCheck, AlertTriangle,
+  Mail, CheckCircle,
 } from "lucide-react";
 
 const STATUS_BADGE = {
@@ -26,7 +26,6 @@ export default function AccountManagementPage() {
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [expandedId, setExpandedId] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
   const [error, setError] = useState("");
 
@@ -35,10 +34,9 @@ export default function AccountManagementPage() {
   const [authorisations, setAuthorisations] = useState([]);
   const [successBanner, setSuccessBanner] = useState(null);
 
-  // Permission editor
+  // Permission editor drawer
   const [permConstants, setPermConstants] = useState(null);
-  const [editingPerms, setEditingPerms] = useState(null); // { accountId, permissions }
-  const [savingPerms, setSavingPerms] = useState(false);
+  const [editingAccount, setEditingAccount] = useState(null);
 
   const fetchAccounts = useCallback(async () => {
     try {
@@ -58,7 +56,7 @@ export default function AccountManagementPage() {
   useEffect(() => {
     // Load permission constants + available authorisations for provision form
     accountAPI.getPermissionConstants().then(({ data }) => setPermConstants(data)).catch(() => {});
-    authorisationAPI.getAll({ provisioning_status: "pending" }).then(({ data }) => {
+    authorisationAPI.getAll({ status: "pending", purpose: "provision" }).then(({ data }) => {
       setAuthorisations(Array.isArray(data) ? data : data.results || []);
     }).catch(() => {});
   }, []);
@@ -82,28 +80,19 @@ export default function AccountManagementPage() {
       : `Account provisioned for ${result.fullName} but credential email failed to deliver. Go to the account record and select Resend Credentials.`;
     setSuccessBanner(banner);
     await fetchAccounts();
-    authorisationAPI.getAll({ provisioning_status: "pending" }).then(({ data }) => {
+    authorisationAPI.getAll({ status: "pending", purpose: "provision" }).then(({ data }) => {
       setAuthorisations(Array.isArray(data) ? data : data.results || []);
     }).catch(() => {});
     setTimeout(() => setSuccessBanner(null), 15000);
   };
 
-  const openPermEditor = (account) => {
-    setEditingPerms({ accountId: account.id, permissions: { ...account.permissions } });
-  };
-
-  const savePerms = async () => {
-    if (!editingPerms) return;
-    setSavingPerms(true);
-    try {
-      await accountAPI.updatePermissions(editingPerms.accountId, { permissions: editingPerms.permissions });
-      setEditingPerms(null);
-      await fetchAccounts();
-    } catch (err) {
-      setError(err?.response?.data?.detail || "Failed to update permissions.");
-    } finally {
-      setSavingPerms(false);
-    }
+  const handlePermsSaved = async (result) => {
+    setEditingAccount(null);
+    await fetchAccounts();
+    setSuccessBanner(
+      `Permissions updated for ${result.fullName}. ${result.added} permission(s) added, ${result.removed} permission(s) removed. Reference: ${result.reference}.`
+    );
+    setTimeout(() => setSuccessBanner(null), 15000);
   };
 
   if (!isSuperAdmin) {
@@ -175,7 +164,6 @@ export default function AccountManagementPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {accounts.map((acc) => {
-                const isExpanded = expandedId === acc.id;
                 const isActionLoading = actionLoading === acc.id;
                 const accountStatus = !acc.is_active ? "deactivated" : "active";
 
@@ -227,7 +215,7 @@ export default function AccountManagementPage() {
                           <Mail size={15} />
                         </button>
                         <button title="Edit Permissions"
-                          onClick={() => openPermEditor(acc)}
+                          onClick={() => setEditingAccount(acc)}
                           className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 transition-colors">
                           <Shield size={15} />
                         </button>
@@ -241,46 +229,14 @@ export default function AccountManagementPage() {
         </div>
       )}
 
-      {/* Permission Editor Modal */}
-      {editingPerms && permConstants && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6 space-y-4">
-            <h3 className="text-lg font-bold text-slate-800">Edit Permissions</h3>
-            {permConstants.categories?.map((cat) => (
-              <div key={cat.id} className="space-y-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{cat.label}</h4>
-                {cat.permissions?.map((pKey) => (
-                  <label key={pKey} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-slate-50 cursor-pointer">
-                    <span className="text-sm text-slate-700">{permConstants.grantable?.[pKey] || pKey}</span>
-                    <input
-                      type="checkbox"
-                      checked={!!editingPerms.permissions[pKey]}
-                      onChange={(e) => {
-                        setEditingPerms((prev) => ({
-                          ...prev,
-                          permissions: { ...prev.permissions, [pKey]: e.target.checked },
-                        }));
-                      }}
-                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                    />
-                  </label>
-                ))}
-              </div>
-            ))}
-            <div className="flex justify-end gap-3 pt-3 border-t border-slate-200">
-              <button onClick={() => setEditingPerms(null)}
-                className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">
-                Cancel
-              </button>
-              <button onClick={savePerms} disabled={savingPerms}
-                className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:bg-slate-300 transition-colors">
-                {savingPerms && <Loader2 className="h-4 w-4 animate-spin" />}
-                {savingPerms ? "Saving..." : "Save Permissions"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Permission Editor Drawer */}
+      <PermissionEditorDrawer
+        open={!!editingAccount}
+        account={editingAccount}
+        permConstants={permConstants}
+        onClose={() => setEditingAccount(null)}
+        onSaved={handlePermsSaved}
+      />
     </div>
   );
 }

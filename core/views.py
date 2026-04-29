@@ -197,10 +197,13 @@ class AuthorisationReferenceListCreateView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
-        qs = AuthorisationReference.objects.select_related('logged_by', 'provisioned_account').all()
+        qs = AuthorisationReference.objects.select_related('logged_by', 'linked_account').all()
         status_filter = request.query_params.get('status')
         if status_filter:
-            qs = qs.filter(provisioning_status=status_filter)
+            qs = qs.filter(status=status_filter)
+        purpose_filter = request.query_params.get('purpose')
+        if purpose_filter:
+            qs = qs.filter(purpose=purpose_filter)
         search = request.query_params.get('search', '').strip()
         if search:
             qs = qs.filter(
@@ -237,7 +240,7 @@ class AuthorisationReferenceDetailView(APIView):
     def get(self, request, pk):
         try:
             ref = AuthorisationReference.objects.select_related(
-                'logged_by', 'provisioned_account'
+                'logged_by', 'linked_account'
             ).get(pk=pk)
         except AuthorisationReference.DoesNotExist:
             return Response({'error': 'Reference not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -250,16 +253,16 @@ class AuthorisationReferenceDetailView(APIView):
         except AuthorisationReference.DoesNotExist:
             return Response({'error': 'Reference not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        if ref.provisioning_status != 'pending':
+        if ref.status != 'pending':
             return Response(
-                {'error': f'Cannot modify reference with status "{ref.provisioning_status}".'},
+                {'error': f'Cannot modify reference with status "{ref.status}".'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        new_status = request.data.get('provisioning_status')
+        new_status = request.data.get('status', request.data.get('provisioning_status'))
         if new_status == 'cancelled':
-            ref.provisioning_status = 'cancelled'
-            ref.save(update_fields=['provisioning_status'])
+            ref.status = 'cancelled'
+            ref.save(update_fields=['status'])
             log_audit(
                 request=request, user=request.user,
                 action='Authorisation reference cancelled',
@@ -356,10 +359,10 @@ class AccountListCreateView(APIView):
         }]
         profile.save()
 
-        # Mark authorisation reference as provisioned
-        ref.provisioning_status = 'provisioned'
-        ref.provisioned_account = user
-        ref.save(update_fields=['provisioning_status', 'provisioned_account'])
+        # Mark authorisation reference as used
+        ref.status = 'used'
+        ref.linked_account = user
+        ref.save(update_fields=['status', 'linked_account'])
 
         # Generate and send credential
         raw_token = credential_service.generate_credential(user)
@@ -462,6 +465,18 @@ class AccountPermissionUpdateView(APIView):
         profile.permission_history = history
         profile.save(update_fields=['permissions', 'permission_history'])
 
+        # Mark the authorisation reference as used and link it to this account
+        ref_number = data.get('letter_reference_number', '')
+        if ref_number:
+            try:
+                ref = AuthorisationReference.objects.get(reference_number=ref_number)
+                if ref.status == 'pending':
+                    ref.status = 'used'
+                    ref.linked_account = target_user
+                    ref.save(update_fields=['status', 'linked_account'])
+            except AuthorisationReference.DoesNotExist:
+                pass
+
         log_audit(
             request=request, user=request.user,
             action='Permissions updated',
@@ -469,7 +484,7 @@ class AccountPermissionUpdateView(APIView):
             details=f'Changes: {json.dumps(changes)}',
             status='success', category='permissions',
             event_type='permission.updated',
-            letter_reference=data.get('letter_reference_number', ''),
+            letter_reference=ref_number,
         )
 
         return Response(AccountDetailSerializer(target_user).data)

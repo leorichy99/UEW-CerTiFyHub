@@ -12,9 +12,14 @@ from .permission_constants import build_default_permissions
 # to the physical system access request letter that authorised it.
 
 class AuthorisationReference(models.Model):
-    PROVISIONING_STATUS_CHOICES = [
+    PURPOSE_CHOICES = [
+        ('provision', 'Account Provisioning'),
+        ('permission_change', 'Permission Change'),
+    ]
+
+    STATUS_CHOICES = [
         ('pending', 'Pending'),
-        ('provisioned', 'Provisioned'),
+        ('used', 'Used'),
         ('cancelled', 'Cancelled'),
     ]
 
@@ -33,13 +38,17 @@ class AuthorisationReference(models.Model):
         upload_to='authorisation_letters/', blank=True, null=True,
         help_text="Scanned copy of the approved letter",
     )
-    provisioning_status = models.CharField(
-        max_length=20, choices=PROVISIONING_STATUS_CHOICES, default='pending',
+    purpose = models.CharField(
+        max_length=30, choices=PURPOSE_CHOICES, default='provision',
+        help_text="What this authorisation letter is for",
     )
-    provisioned_account = models.OneToOneField(
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default='pending',
+    )
+    linked_account = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='authorisation_reference',
-        help_text="Linked after account creation",
+        related_name='authorisation_references',
+        help_text="Account this reference was used for",
     )
     logged_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True,
@@ -52,12 +61,13 @@ class AuthorisationReference(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['provisioning_status', '-created_at']),
+            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['purpose']),
             models.Index(fields=['requester_staff_id']),
         ]
 
     def __str__(self):
-        return f"{self.reference_number} — {self.requester_name} ({self.provisioning_status})"
+        return f"{self.reference_number} — {self.requester_name} ({self.status})"
 
 
 # ─── User Profile ───────────────────────────────────────────────────────
