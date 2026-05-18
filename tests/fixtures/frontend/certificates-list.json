@@ -1,0 +1,29 @@
+{
+  "count": 1250,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": "cert-001",
+      "student_name": "John Doe",
+      "degree_type": "BSC",
+      "honors": "SECOND_UPPER",
+      "program": "Computer Science",
+      "date_awarded": "2024-12-15",
+      "status": "ISSUED",
+      "certificate_number": "UEW/2024/ABC12345",
+      "generated_date": "2024-12-15T10:30:00Z"
+    },
+    {
+      "id": "cert-002",
+      "student_name": "Jane Smith",
+      "degree_type": "MSC",
+      "honors": "FIRST",
+      "program": "Data Science",
+      "date_awarded": "2024-12-16",
+      "status": "ISSUED",
+      "certificate_number": "UEW/2024/DEF67890",
+      "generated_date": "2024-12-16T14:45:00Z"
+    }
+  ]
+}

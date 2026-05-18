@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import axios from "../services/api";
+import { useCallback, useRef } from "react";
 import RefreshButton from "../components/ui/RefreshButton";
 import PageHeader from "../components/ui/PageHeader";
 import { useToast } from "../components/ToastContainer";
@@ -26,41 +25,22 @@ import {
   Clock,
 } from "lucide-react";
 import SummaryStatCard from "../components/SummaryStatCard";
+import { useDashboardStats } from "../hooks/dashboard/useDashboardStats.js";
 
 export default function DashboardPage() {
   const toast = useToast();
   const toastRef = useRef(toast);
   toastRef.current = toast;
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const initialLoadDoneRef = useRef(false);
-
-  const fetchStats = useCallback(async ({ silent = false } = {}) => {
-    if (silent) setRefreshing(true);
-    else setLoading(true);
-    try {
-      const response = await axios.get("/analytics/stats/");
-      setData(response.data);
-    } catch (err) {
-      console.error("Failed to fetch stats:", err);
-    } finally {
-      if (silent) setRefreshing(false);
-      else setLoading(false);
-      initialLoadDoneRef.current = true;
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+  
+  // Use new dashboard stats hook
+  const { data, isLoading, isRefreshing, refresh, error } = useDashboardStats();
 
   const handleRefresh = useCallback(async () => {
-    await fetchStats({ silent: true });
+    await refresh();
     toastRef.current.success("Data refreshed");
-  }, [fetchStats]);
+  }, [refresh]);
 
-  if (loading)
+  if (isLoading)
     return (
       <div className="space-y-8 animate-pulse">
         <div className="flex justify-between items-end">
@@ -114,8 +94,10 @@ export default function DashboardPage() {
         </div>
       </div>
     );
-  if (!data)
+  if (error)
     return <div className="p-8 text-center text-red-500">Failed to load data.</div>;
+  if (!data)
+    return <div className="p-8 text-center text-slate-500">No data available.</div>;
 
   const cards = [
     {
@@ -156,7 +138,7 @@ export default function DashboardPage() {
         showSearch={true}
       />
       <div className="flex items-center justify-end">
-        <RefreshButton onClick={handleRefresh} spinning={refreshing} />
+        <RefreshButton onClick={handleRefresh} spinning={isRefreshing} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

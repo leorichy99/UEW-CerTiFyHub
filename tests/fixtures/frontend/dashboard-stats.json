@@ -1,0 +1,46 @@
+{
+  "counts": {
+    "certificates": 1250,
+    "students": 850,
+    "templates": 12,
+    "verification_requests": 0
+  },
+  "timeline": [
+    {
+      "date": "2025-01-01",
+      "count": 45
+    },
+    {
+      "date": "2025-01-02",
+      "count": 52
+    },
+    {
+      "date": "2025-01-03",
+      "count": 38
+    },
+    {
+      "date": "2025-01-04",
+      "count": 61
+    },
+    {
+      "date": "2025-01-05",
+      "count": 55
+    }
+  ],
+  "recent_issuances": [
+    {
+      "id": "cert-001",
+      "student_name": "John Doe",
+      "degree_type": "BSC",
+      "program": "Computer Science",
+      "date_awarded": "2024-12-15"
+    },
+    {
+      "id": "cert-002",
+      "student_name": "Jane Smith",
+      "degree_type": "MSC",
+      "program": "Data Science",
+      "date_awarded": "2024-12-16"
+    }
+  ]
+}

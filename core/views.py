@@ -29,6 +29,7 @@ from .serializers import (
 from .permissions import IsSuperAdmin
 from .permission_constants import build_default_permissions, GRANTABLE_PERMISSIONS
 from . import credential_service
+from .services.account_lifecycle_service import AccountLifecycleService
 from analytics.utils import log_audit
 from notifications.services import notify
 
@@ -288,6 +289,10 @@ class AccountListCreateView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated, IsSuperAdmin]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lifecycle_service = AccountLifecycleService()
+
     def get(self, request):
         qs = User.objects.filter(
             Q(profile__role__in=['ADMIN', 'SUPER_ADMIN']) | Q(is_superuser=True)
@@ -316,57 +321,46 @@ class AccountListCreateView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         data = serializer.validated_data
-        ref = AuthorisationReference.objects.get(reference_number=data['letter_reference_number'])
 
         # Split full name
         name_parts = data['full_name'].split(' ', 1)
         first_name = name_parts[0]
         last_name = name_parts[1] if len(name_parts) > 1 else ''
 
-        # Create user (inactive until first login)
-        username = _derive_username(data['email'])
-        user = User.objects.create_user(
-            username=username,
-            email=data['email'],
-            password=None,  # no usable password yet
-            first_name=first_name,
-            last_name=last_name,
-            is_active=False,
-        )
-
         # Build full permission dict (merge provided with defaults)
         full_perms = build_default_permissions()
         for key, val in data['permissions'].items():
             full_perms[key] = val
 
-        # Update profile
-        profile = user.profile
-        profile.role = 'ADMIN'
-        profile.staff_id = data['staff_id']
-        profile.department = data['department']
-        profile.account_type = data['account_type']
-        profile.access_duration = data['access_duration']
-        profile.access_end_date = data.get('access_end_date')
-        profile.letter_reference = ref
+        # Use AccountLifecycleService for core provisioning
+        profile, credential_token = self.lifecycle_service.provision_account(
+            email=data['email'],
+            username=_derive_username(data['email']),
+            first_name=first_name,
+            last_name=last_name,
+            role='ADMIN',
+            staff_id=data['staff_id'],
+            department=data['department'],
+            account_type=data['account_type'],
+            access_duration=data['access_duration'],
+            access_end_date=data.get('access_end_date'),
+            reference_number=data['letter_reference_number'],
+            logged_by=request.user
+        )
+
+        # Update permissions and history (service handles basic profile, we add permissions)
         profile.permissions = full_perms
-        profile.is_legacy = False
         profile.permission_history = [{
             'date': timezone.now().isoformat(),
             'action': 'initial_grant',
             'permissions_changed': {k: v for k, v in data['permissions'].items() if v},
-            'letter_ref': ref.reference_number,
+            'letter_ref': data['letter_reference_number'],
             'changed_by': request.user.username,
         }]
         profile.save()
 
-        # Mark authorisation reference as used
-        ref.status = 'used'
-        ref.linked_account = user
-        ref.save(update_fields=['status', 'linked_account'])
-
-        # Generate and send credential
-        raw_token = credential_service.generate_credential(user)
-        email_sent = credential_service.send_credential_email(user, raw_token)
+        # Send credential email using existing credential service
+        email_sent = credential_service.send_credential_email(profile.user, credential_token)
 
         # Audit
         log_audit(
@@ -377,7 +371,7 @@ class AccountListCreateView(APIView):
                     f"Permissions: {json.dumps({k: v for k, v in data['permissions'].items() if v})}",
             status='success', category='provisioning',
             event_type='account.created',
-            letter_reference=ref.reference_number,
+            letter_reference=data['letter_reference_number'],
         )
 
         if email_sent:
@@ -388,22 +382,22 @@ class AccountListCreateView(APIView):
                 details=f'One-time setup link sent (expires in 24h)',
                 status='success', category='credentials',
                 event_type='credentials.delivered',
-                letter_reference=ref.reference_number,
+                letter_reference=data['letter_reference_number'],
             )
 
         # Notify
         notify(
             role_target='SUPER_ADMIN',
             title='New Account Provisioned',
-            message=f"{data['full_name']} ({data['email']}) provisioned by {request.user.username}, ref: {ref.reference_number}",
+            message=f"{data['full_name']} ({data['email']}) provisioned by {request.user.username}, ref: {data['letter_reference_number']}",
             notification_type='admin_created',
             priority='success',
-            related_object_id=str(user.id),
+            related_object_id=str(profile.user.id),
             related_object_type='user',
             request=request,
         )
 
-        response_data = AccountDetailSerializer(user).data
+        response_data = AccountDetailSerializer(profile.user).data
         response_data['credential_email_sent'] = email_sent
         if not email_sent:
             response_data['warning'] = 'Account created but credential email failed. Use regenerate credentials.'

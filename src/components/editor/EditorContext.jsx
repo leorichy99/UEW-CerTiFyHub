@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, useState 
 import opentype from "opentype.js";
 import useImage from "use-image";
 import { CANVAS_PRESETS, DEFAULT_BACKGROUND } from "./constants";
+import { useEditorHistory } from "../../hooks/editor/useEditorHistory.js";
 
 const EditorContext = createContext(null);
 
@@ -82,6 +83,10 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
 
   const elements = elementsByPreset[canvasPresetId] || [];
 
+  // ─── History hook integration (must be after elements is defined) ───────
+  const useNewHistory = true; // Feature flag for gradual migration
+  const historyHook = useEditorHistory(elements, {}, canvasPresetId);
+
   // ─── Load initial data ───────────────────────────────────────────
   useEffect(() => {
     if (!initialData) return;
@@ -120,12 +125,18 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
       const affectedPresets = incomingByPreset
         ? Object.keys(incomingByPreset)
         : [targetPresetId];
-      const newHistory = { ...historyRef.current };
-      for (const key of affectedPresets) {
-        newHistory[key] = { past: [], future: [] };
+      
+      if (useNewHistory) {
+        // Hook will reset history when elements change via useEffect
+        // No need to manually manage historyRef
+      } else {
+        const newHistory = { ...historyRef.current };
+        for (const key of affectedPresets) {
+          newHistory[key] = { past: [], future: [] };
+        }
+        historyRef.current = newHistory;
+        setHistoryMeta({ canUndo: false, canRedo: false });
       }
-      historyRef.current = newHistory;
-      setHistoryMeta({ canUndo: false, canRedo: false });
       ignoreHistoryRef.current = false;
     }
 
@@ -160,8 +171,10 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
   const isPreview = mode === "preview";
   const isEditingText = !!textEditor;
   const isPortrait = canvasHeight > canvasWidth;
-  const canUndo = historyMeta.canUndo;
-  const canRedo = historyMeta.canRedo;
+  
+  // Use hook's canUndo/canRedo when new history is active
+  const canUndo = useNewHistory ? historyHook.canUndo : historyMeta.canUndo;
+  const canRedo = useNewHistory ? historyHook.canRedo : historyMeta.canRedo;
 
   const outlineFontUrl =
     initialData?.metadata?.outline_font_url || "/fonts/Inter-Regular.ttf";
@@ -193,17 +206,30 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
     setElementsByPreset((prev) => {
       const currentElements = prev[canvasPresetId] || [];
       const next = typeof updater === "function" ? updater(currentElements) : updater;
-      if (ignoreHistoryRef.current) return { ...prev, [canvasPresetId]: next };
+      
+      if (useNewHistory) {
+        // Use new hook-based history
+        historyHook.push(next);
+      } else {
+        // Old history logic (fallback)
+        if (ignoreHistoryRef.current) return { ...prev, [canvasPresetId]: next };
 
-      const presetHistory = historyRef.current[canvasPresetId] || { past: [], future: [] };
-      presetHistory.past.push(cloneElements(currentElements));
-      if (presetHistory.past.length > 100) presetHistory.past.shift();
-      presetHistory.future = [];
-      historyRef.current = { ...historyRef.current, [canvasPresetId]: presetHistory };
+        const presetHistory = historyRef.current[canvasPresetId] || { past: [], future: [] };
+        presetHistory.past.push(cloneElements(currentElements));
+        if (presetHistory.past.length > 100) presetHistory.past.shift();
+        presetHistory.future = [];
+        historyRef.current = { ...historyRef.current, [canvasPresetId]: presetHistory };
+      }
 
       return { ...prev, [canvasPresetId]: next };
     });
-    setHistoryMeta({ canUndo: true, canRedo: false });
+    
+    // Update history meta based on which history system is active
+    if (useNewHistory) {
+      // Hook manages its own state, no need to set historyMeta here
+    } else {
+      setHistoryMeta({ canUndo: true, canRedo: false });
+    }
   }
 
   function updateElement(id, patch) {
@@ -217,45 +243,79 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
   }
 
   function undo() {
-    const presetHistory = historyRef.current[canvasPresetId] || { past: [], future: [] };
-    if (!presetHistory.past.length) return;
-    ignoreHistoryRef.current = true;
-    setElementsByPreset((prev) => {
-      const currentElements = prev[canvasPresetId] || [];
-      presetHistory.future.push(cloneElements(currentElements));
-      const previousElements = presetHistory.past.pop();
-      historyRef.current = { ...historyRef.current, [canvasPresetId]: presetHistory };
-      return { ...prev, [canvasPresetId]: previousElements || currentElements };
-    });
-    setSelectedId(null);
-    setHistoryMeta({
-      canUndo: presetHistory.past.length > 0,
-      canRedo: presetHistory.future.length > 0,
-    });
-    setTimeout(() => {
-      ignoreHistoryRef.current = false;
-    }, 0);
+    if (useNewHistory) {
+      // Use new hook-based undo
+      const previousElements = historyHook.undo();
+      if (previousElements) {
+        ignoreHistoryRef.current = true;
+        setElementsByPreset((prev) => ({
+          ...prev,
+          [canvasPresetId]: previousElements,
+        }));
+        setSelectedId(null);
+        setTimeout(() => {
+          ignoreHistoryRef.current = false;
+        }, 0);
+      }
+    } else {
+      // Old undo logic (fallback)
+      const presetHistory = historyRef.current[canvasPresetId] || { past: [], future: [] };
+      if (!presetHistory.past.length) return;
+      ignoreHistoryRef.current = true;
+      setElementsByPreset((prev) => {
+        const currentElements = prev[canvasPresetId] || [];
+        presetHistory.future.push(cloneElements(currentElements));
+        const previousElements = presetHistory.past.pop();
+        historyRef.current = { ...historyRef.current, [canvasPresetId]: presetHistory };
+        return { ...prev, [canvasPresetId]: previousElements || currentElements };
+      });
+      setSelectedId(null);
+      setHistoryMeta({
+        canUndo: presetHistory.past.length > 0,
+        canRedo: presetHistory.future.length > 0,
+      });
+      setTimeout(() => {
+        ignoreHistoryRef.current = false;
+      }, 0);
+    }
   }
 
   function redo() {
-    const presetHistory = historyRef.current[canvasPresetId] || { past: [], future: [] };
-    if (!presetHistory.future.length) return;
-    ignoreHistoryRef.current = true;
-    setElementsByPreset((prev) => {
-      const currentElements = prev[canvasPresetId] || [];
-      presetHistory.past.push(cloneElements(currentElements));
-      const nextElements = presetHistory.future.pop();
-      historyRef.current = { ...historyRef.current, [canvasPresetId]: presetHistory };
-      return { ...prev, [canvasPresetId]: nextElements || currentElements };
-    });
-    setSelectedId(null);
-    setHistoryMeta({
-      canUndo: presetHistory.past.length > 0,
-      canRedo: presetHistory.future.length > 0,
-    });
-    setTimeout(() => {
-      ignoreHistoryRef.current = false;
-    }, 0);
+    if (useNewHistory) {
+      // Use new hook-based redo
+      const nextElements = historyHook.redo();
+      if (nextElements) {
+        ignoreHistoryRef.current = true;
+        setElementsByPreset((prev) => ({
+          ...prev,
+          [canvasPresetId]: nextElements,
+        }));
+        setSelectedId(null);
+        setTimeout(() => {
+          ignoreHistoryRef.current = false;
+        }, 0);
+      }
+    } else {
+      // Old redo logic (fallback)
+      const presetHistory = historyRef.current[canvasPresetId] || { past: [], future: [] };
+      if (!presetHistory.future.length) return;
+      ignoreHistoryRef.current = true;
+      setElementsByPreset((prev) => {
+        const currentElements = prev[canvasPresetId] || [];
+        presetHistory.past.push(cloneElements(currentElements));
+        const nextElements = presetHistory.future.pop();
+        historyRef.current = { ...historyRef.current, [canvasPresetId]: presetHistory };
+        return { ...prev, [canvasPresetId]: nextElements || currentElements };
+      });
+      setSelectedId(null);
+      setHistoryMeta({
+        canUndo: presetHistory.past.length > 0,
+        canRedo: presetHistory.future.length > 0,
+      });
+      setTimeout(() => {
+        ignoreHistoryRef.current = false;
+      }, 0);
+    }
   }
 
   // ─── Element operations ──────────────────────────────────────────
@@ -783,11 +843,15 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
     setSelectedId(null);
     setCanvasPresetId(newPresetId);
 
-    const nextHistory = historyRef.current?.[newPresetId] || { past: [], future: [] };
-    setHistoryMeta({
-      canUndo: nextHistory.past.length > 0,
-      canRedo: nextHistory.future.length > 0,
-    });
+    if (useNewHistory) {
+      // Hook manages per-preset history automatically
+    } else {
+      const nextHistory = historyRef.current?.[newPresetId] || { past: [], future: [] };
+      setHistoryMeta({
+        canUndo: nextHistory.past.length > 0,
+        canRedo: nextHistory.future.length > 0,
+      });
+    }
   }
 
   // ─── Effects ─────────────────────────────────────────────────────
