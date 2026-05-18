@@ -27,7 +27,7 @@ class ErrorBoundary extends React.Component {
       return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50">
           <div className="text-center p-8">
-            <h2 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h2>
+            <h2 className="text-2xl font-extrabold text-red-600 mb-4">Something went wrong</h2>
             <p className="text-slate-600 mb-4">An error occurred while rendering the application.</p>
             <details className="text-left bg-white p-4 rounded-lg border border-red-200">
               <summary className="cursor-pointer font-medium text-red-600 mb-2">Error Details</summary>

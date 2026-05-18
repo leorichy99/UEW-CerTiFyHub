@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef } f
 import { useAuth } from './AuthContext';
 import { notificationAPI } from '../services/api';
 import useNotificationSocket from '../hooks/useNotificationSocket';
+import useNotificationSSE from '../hooks/useNotificationSSE';
 
 const NotificationContext = createContext(null);
 
@@ -16,13 +17,16 @@ export const NotificationProvider = ({ children }) => {
   const pageRef = useRef(1);
   const toastRef = useRef(null);
 
+  // Check SSE feature flag
+  const useSSE = import.meta.env.VITE_USE_SSE_NOTIFICATIONS !== 'false';
+
   // Register a toast callback (set by NotificationBell or Layout)
   const registerToast = useCallback((toastFn) => {
     toastRef.current = toastFn;
   }, []);
 
-  // Handle incoming WebSocket message
-  const handleWsMessage = useCallback((msg) => {
+  // Handle incoming message (both WebSocket and SSE)
+  const handleMessage = useCallback((msg) => {
     if (msg.type === 'unread_count') {
       setUnreadCount(msg.count);
     } else if (msg.type === 'notification') {
@@ -46,10 +50,20 @@ export const NotificationProvider = ({ children }) => {
     }
   }, []);
 
-  const { isConnected, sendMessage } = useNotificationSocket({
-    onMessage: handleWsMessage,
-    enabled: isAuthenticated,
+  // WebSocket connection (fallback)
+  const { isConnected: wsConnected, sendMessage } = useNotificationSocket({
+    onMessage: handleMessage,
+    enabled: isAuthenticated && !useSSE,
   });
+
+  // SSE connection (primary when enabled)
+  const { isConnected: sseConnected } = useNotificationSSE({
+    onMessage: handleMessage,
+    enabled: isAuthenticated && useSSE,
+  });
+
+  // Use whichever connection is active
+  const isConnected = useSSE ? sseConnected : wsConnected;
 
   // Fetch notifications from REST API
   const fetchNotifications = useCallback(async (category = 'all', page = 1) => {
@@ -95,12 +109,14 @@ export const NotificationProvider = ({ children }) => {
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       );
       setUnreadCount((prev) => Math.max(0, prev - 1));
-      // Also tell WS consumer
-      sendMessage({ type: 'mark_read', id });
+      // Only use WebSocket sendMessage when SSE is not enabled
+      if (!useSSE && sendMessage) {
+        sendMessage({ type: 'mark_read', id });
+      }
     } catch (err) {
       console.error('Failed to mark notification read:', err);
     }
-  }, [sendMessage]);
+  }, [sendMessage, useSSE]);
 
   // Mark all as read
   const markAllAsRead = useCallback(async () => {

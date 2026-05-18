@@ -598,7 +598,8 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
     const node = stage.findOne("#" + el.id);
 
     const nodeHeight = node ? node.height() * zoom : el.fontSize * zoom * 1.2;
-    const initialWidth = Math.max(100, (el.width || 200) * zoom);
+    const measuredWidth = node ? node.width() : (el.width || 200);
+    const initialWidth = Math.max(40, measuredWidth * zoom);
     const maxW = (canvasWidth - el.x) * zoom;
 
     setSelectedId(el.id);
@@ -626,11 +627,11 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
       applyElementsUpdate((prev) => prev.filter((el) => el.id !== textEditor.id));
       setSelectedId(null);
     } else {
-      const ta = textAreaRef.current;
-      const finalWidth = ta ? ta.scrollWidth / zoom : undefined;
-      const patch = { text: textEditor.value };
-      if (finalWidth && finalWidth > 0) patch.width = Math.round(finalWidth);
-      updateElement(textEditor.id, patch);
+      // Only persist text content; let Konva re-measure width naturally so
+      // the bounding box and positions remain stable across edit sessions.
+      // The width is only persisted when the user explicitly resizes via the
+      // transformer (which sets userResized=true on the element).
+      updateElement(textEditor.id, { text: textEditor.value });
     }
     setTextEditor(null);
   }

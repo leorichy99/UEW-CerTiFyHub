@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "../components/ToastContainer";
-import { confirmDialog } from "../components/ConfirmDialog";
+import { useConfirmDialog } from "../context/ConfirmDialogContext";
 import { studentAPI } from "../services/api";
 import ExcelUploader from "../components/ExcelUploader";
 import Pagination from "../components/Pagination";
 import BulkIssueDialog from "../components/BulkIssueDialog";
 import Modal from "../components/ui/Modal";
+import PageHeader from "../components/ui/PageHeader";
 import { Users, Trash2, Upload, Pencil, X, Search, Filter, CheckSquare, Square, Award } from "lucide-react";
 
 export default React.memo(function StudentsPage() {
+  const confirm = useConfirmDialog();
   const toast = useToast();
   const [students, setStudents] = useState([]);
   const [totalItems, setTotalItems] = useState(0);
@@ -152,53 +154,53 @@ export default React.memo(function StudentsPage() {
     setSelectAll(!selectAll);
   };
 
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     const count = selectedStudents.size;
     const selectedIds = Array.from(selectedStudents);
 
-    confirmDialog({
+    const confirmed = await confirm({
       title: 'Delete Students',
       message: `Are you sure you want to delete ${count} student${count > 1 ? 's' : ''}? This action cannot be undone.`,
       confirmLabel: 'Delete',
       variant: 'danger',
-      onConfirm: async () => {
-        // Optimistic update
-        const snapshot = students;
-        setStudents(prev => prev.filter(s => !selectedStudents.has(s.id)));
-        setSelectedStudents(new Set());
-        setSelectAll(false);
-
-        try {
-          const results = await Promise.all(
-            selectedIds.map(async (id) => {
-              try {
-                await studentAPI.delete(id);
-                return { success: true, id };
-              } catch (error) {
-                return { success: false, id, error };
-              }
-            })
-          );
-
-          const successful = results.filter(r => r.success);
-          const failed = results.filter(r => !r.success);
-
-          if (successful.length > 0) {
-            toast.success(`Successfully deleted ${successful.length} student${successful.length > 1 ? 's' : ''}!`);
-          }
-
-          if (failed.length > 0) {
-            // Rollback and re-fetch on partial failure
-            toast.error(`Failed to delete ${failed.length} student${failed.length > 1 ? 's' : ''}.`);
-            fetchStudents();
-          }
-        } catch (error) {
-          // Full rollback
-          setStudents(snapshot);
-          toast.error("Failed to delete students. Please try again.");
-        }
-      }
     });
+    if (!confirmed) return;
+
+    // Optimistic update
+    const snapshot = students;
+    setStudents(prev => prev.filter(s => !selectedStudents.has(s.id)));
+    setSelectedStudents(new Set());
+    setSelectAll(false);
+
+    try {
+      const results = await Promise.all(
+        selectedIds.map(async (id) => {
+          try {
+            await studentAPI.delete(id);
+            return { success: true, id };
+          } catch (error) {
+            return { success: false, id, error };
+          }
+        })
+      );
+
+      const successful = results.filter(r => r.success);
+      const failed = results.filter(r => !r.success);
+
+      if (successful.length > 0) {
+        toast.success(`Successfully deleted ${successful.length} student${successful.length > 1 ? 's' : ''}!`);
+      }
+
+      if (failed.length > 0) {
+        // Rollback and re-fetch on partial failure
+        toast.error(`Failed to delete ${failed.length} student${failed.length > 1 ? 's' : ''}.`);
+        fetchStudents();
+      }
+    } catch (error) {
+      // Full rollback
+      setStudents(snapshot);
+      toast.error("Failed to delete students. Please try again.");
+    }
   };
 
   const handleBulkImport = async (mappedData) => {
@@ -218,38 +220,38 @@ export default React.memo(function StudentsPage() {
     // Find the student to get their name for the dialog
     const student = students.find(s => s.id === id);
     const studentName = student?.full_name || 'this student';
-    
-    confirmDialog({
+
+    const confirmed = await confirm({
       title: 'Delete Student',
       message: `Are you sure you want to delete ${studentName}? This action cannot be undone.`,
       confirmLabel: 'Delete',
       variant: 'danger',
-      onConfirm: async () => {
-        // Optimistic update - remove from UI immediately
-        const originalStudents = [...students];
-        setStudents(students.filter(s => s.id !== id));
-        toast.success("Student deleted successfully");
-        
-        try {
-          await studentAPI.delete(id);
-        } catch (error) {
-          console.error("Delete failed:", error);
-          
-          // Rollback the optimistic update
-          setStudents(originalStudents);
-          
-          if (error.response?.status === 404) {
-            toast.error("Student not found. They may have been already deleted.");
-          } else if (error.response?.status === 403) {
-            toast.error("You don't have permission to delete students.");
-          } else if (error.response?.status === 500) {
-            toast.error("Server error. Please try again later.");
-          } else {
-            toast.error(`Failed to delete student: ${error.message || 'Unknown error'}`);
-          }
-        }
-      }
     });
+    if (!confirmed) return;
+
+    // Optimistic update - remove from UI immediately
+    const originalStudents = [...students];
+    setStudents(students.filter(s => s.id !== id));
+    toast.success("Student deleted successfully");
+
+    try {
+      await studentAPI.delete(id);
+    } catch (error) {
+      console.error("Delete failed:", error);
+
+      // Rollback the optimistic update
+      setStudents(originalStudents);
+
+      if (error.response?.status === 404) {
+        toast.error("Student not found. They may have been already deleted.");
+      } else if (error.response?.status === 403) {
+        toast.error("You don't have permission to delete students.");
+      } else if (error.response?.status === 500) {
+        toast.error("Server error. Please try again later.");
+      } else {
+        toast.error(`Failed to delete student: ${error.message || 'Unknown error'}`);
+      }
+    }
   };
 
   const openEditModal = (student) => {
@@ -312,6 +314,12 @@ export default React.memo(function StudentsPage() {
 
   return (
     <div>
+      <PageHeader
+        title="Student Management"
+        description="View and manage student records"
+        showSearch={false}
+      />
+
       {/* Action bar — visible when students are selected */}
       {selectedStudents.size > 0 && (
         <div className="flex items-center gap-3 mb-6">
@@ -529,14 +537,14 @@ export default React.memo(function StudentsPage() {
                 <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
                   <button
                     onClick={() => openEditModal(student)}
-                    className="rounded-lg p-2 text-blue-600 shadow-[0_10px_24px_-18px_rgba(37,99,235,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-50 hover:text-blue-800 hover:shadow-[0_16px_28px_-16px_rgba(37,99,235,0.35)]"
+                    className="rounded-lg p-2 text-blue-600 shadow-sm transition-colors duration-200 hover:bg-blue-50 hover:text-blue-800"
                     aria-label={`Edit ${student.full_name}`}
                   >
                     <Pencil size={18} />
                   </button>
                   <button
                     onClick={() => handleDelete(student.id)}
-                    className="rounded-lg p-2 text-red-600 shadow-[0_10px_24px_-18px_rgba(220,38,38,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-red-50 hover:text-red-800 hover:shadow-[0_16px_28px_-16px_rgba(220,38,38,0.35)]"
+                    className="rounded-lg p-2 text-red-600 shadow-sm transition-colors duration-200 hover:bg-red-50 hover:text-red-800"
                     aria-label={`Delete ${student.full_name}`}
                   >
                     <Trash2 size={18} />

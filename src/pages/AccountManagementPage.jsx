@@ -3,6 +3,7 @@ import { accountAPI, authorisationAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import ProvisionWizard from "../components/ProvisionWizard";
 import PermissionEditorDrawer from "../components/PermissionEditorDrawer";
+import PageHeader from "../components/ui/PageHeader";
 import {
   Loader2, Shield, ShieldOff, Unlock, UserCheck, AlertTriangle,
   Mail, CheckCircle,
@@ -101,6 +102,12 @@ export default function AccountManagementPage() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Account Management"
+        description="Provision and manage admin accounts"
+        showSearch={false}
+      />
+
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 flex items-center gap-2">
           <AlertTriangle size={16} /> {error}
@@ -204,16 +211,20 @@ export default function AccountManagementPage() {
                             <UserCheck size={15} />
                           </button>
                         )}
-                        <button title="Unlock" disabled={isActionLoading}
-                          onClick={() => handleAction(accountAPI.unlock, acc.id)}
-                          className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-30">
-                          <Unlock size={15} />
-                        </button>
-                        <button title="Regenerate Credential" disabled={isActionLoading}
-                          onClick={() => handleAction(accountAPI.regenerateCredential, acc.id)}
-                          className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-30">
-                          <Mail size={15} />
-                        </button>
+                        {acc.is_locked && (
+                          <button title="Unlock" disabled={isActionLoading}
+                            onClick={() => handleAction(accountAPI.unlock, acc.id)}
+                            className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-30">
+                            <Unlock size={15} />
+                          </button>
+                        )}
+                        {!acc.first_login_completed && (
+                          <button title="Regenerate Credential" disabled={isActionLoading}
+                            onClick={() => handleAction(accountAPI.regenerateCredential, acc.id)}
+                            className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-30">
+                            <Mail size={15} />
+                          </button>
+                        )}
                         <button title="Edit Permissions"
                           onClick={() => setEditingAccount(acc)}
                           className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 transition-colors">

@@ -43,7 +43,7 @@ export default function Drawer({ open, onClose, title, wide = false, children })
     <div className="fixed inset-0 z-50 h-screen">
       {/* Backdrop */}
       <div
-        className={`absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-300 ${
+        className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${
           animate ? "opacity-100" : "opacity-0"
         }`}
         onClick={onClose}

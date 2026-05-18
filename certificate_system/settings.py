@@ -107,6 +107,11 @@ else:
         },
     }
 
+# SSE Configuration — Feature flags for SSE migration
+USE_SSE_NOTIFICATIONS = config('USE_SSE_NOTIFICATIONS', default=True, cast=bool)
+USE_SSE_AUDIT_LOGS = config('USE_SSE_AUDIT_LOGS', default=True, cast=bool)
+SSE_AUDIT_LOG_LIMIT = config('SSE_AUDIT_LOG_LIMIT', default=50, cast=int)
+
 # Celery Configuration
 CELERY_BROKER_URL = _redis_url if _redis_url else 'memory://'
 CELERY_RESULT_BACKEND = _redis_url or 'cache+memory://'

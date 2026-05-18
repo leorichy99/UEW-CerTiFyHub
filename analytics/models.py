@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 
 class AuditLog(models.Model):
@@ -57,3 +59,60 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"[{self.category}] {self.username}: {self.action} ({self.timestamp})"
+
+
+@receiver(post_save, sender=AuditLog)
+def audit_log_created(sender, instance, created, **kwargs):
+    """
+    Signal handler to push new audit logs to SSE channel when created.
+    """
+    if not created:
+        return
+    
+    from django.conf import settings
+    use_sse = getattr(settings, 'USE_SSE_AUDIT_LOGS', True)
+    
+    if not use_sse:
+        return
+    
+    try:
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        import json
+        
+        channel_layer = get_channel_layer()
+        
+        # Prepare audit log data
+        audit_data = {
+            'id': instance.id,
+            'user': instance.username,
+            'action': instance.action,
+            'target': instance.target,
+            'status': instance.status,
+            'category': instance.category,
+            'timestamp': instance.timestamp.isoformat(),
+            'ip_address': str(instance.ip_address) if instance.ip_address else None,
+            'details': instance.details,
+        }
+        
+        # Push to audit_logs channel
+        async_to_sync(channel_layer.group_send)(
+            'audit_logs',
+            {
+                'type': 'audit_log.message',
+                'data': audit_data,
+            }
+        )
+        
+        # Also push to super admin role channel
+        async_to_sync(channel_layer.group_send)(
+            'notifications_role_SUPER_ADMIN',
+            {
+                'type': 'audit_log.message',
+                'data': audit_data,
+            }
+        )
+    except Exception as e:
+        import logging
+        logger = logging.getLogger('analytics')
+        logger.warning(f'Failed to push audit log to SSE: {e}')

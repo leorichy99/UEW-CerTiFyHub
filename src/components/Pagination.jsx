@@ -38,7 +38,7 @@ export default function Pagination({
         <select
           value={itemsPerPage}
           onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
-          className="rounded-lg border border-brand-dark bg-brand-dark px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
+          className="rounded-lg border border-(--color-brand-dark) bg-(--color-brand-dark) px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition-colors duration-200 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
         >
           <option value={10}>10</option>
           <option value={20}>20</option>
@@ -52,7 +52,7 @@ export default function Pagination({
         <button
           onClick={handlePrev}
           disabled={currentPage === 1}
-          className="rounded-lg p-2 text-slate-600 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-10px_rgba(37,99,235,0.45)] disabled:cursor-not-allowed disabled:opacity-45"
+          className="rounded-lg p-2 text-slate-600 shadow-sm transition-colors duration-200 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
         >
           <ChevronLeft size={16} />
         </button>
@@ -61,7 +61,7 @@ export default function Pagination({
           <>
             <button
               onClick={() => onPageChange(1)}
-              className="rounded-lg bg-brand-dark px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-10px_rgba(37,99,235,0.45)]"
+              className="rounded-lg bg-(--color-brand-dark) px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors duration-200 hover:bg-(--color-brand-light)"
             >
               1
             </button>
@@ -77,8 +77,8 @@ export default function Pagination({
             onClick={() => onPageChange(page)}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-200 ${
               page === currentPage
-                ? "bg-(--color-brand-dark) text-white shadow-[0_10px_24px_-10px_rgba(37,99,235,0.45)]"
-                : "text-slate-600 shadow-sm hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-10px_rgba(37,99,235,0.45)]"
+                ? "bg-(--color-brand-dark) text-white shadow-lg"
+                : "text-slate-600 shadow-sm transition-colors duration-200 hover:bg-slate-50"
             }`}
           >
             {page}
@@ -92,7 +92,7 @@ export default function Pagination({
             )}
             <button
               onClick={() => onPageChange(totalPages)}
-              className="rounded-lg active:bg-(--color-brand-dark) px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-10px_rgba(37,99,235,0.45)]"
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition-colors duration-200 hover:bg-slate-50 active:bg-(--color-brand-dark) active:text-white"
             >
               {totalPages}
             </button>
@@ -102,7 +102,7 @@ export default function Pagination({
         <button
           onClick={handleNext}
           disabled={currentPage === totalPages}
-          className="rounded-lg p-2 text-slate-600 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-10px_rgba(37,99,235,0.45)] disabled:cursor-not-allowed disabled:opacity-45"
+          className="rounded-lg p-2 text-slate-600 shadow-sm transition-colors duration-200 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
         >
           <ChevronRight size={16} />
         </button>

@@ -150,7 +150,7 @@ export default function VerifyResetPage() {
             </div>
 
             <div className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm p-8">
-              <h1 className="text-xl font-bold text-slate-900">Verify Your Identity</h1>
+              <h1 className="text-xl font-extrabold text-slate-900">Verify Your Identity</h1>
               <p className="mt-2 text-sm text-slate-600">
                 Enter the 6-digit code sent to{' '}
                 <span className="font-semibold text-slate-800">{maskedEmail || email}</span>
@@ -176,7 +176,7 @@ export default function VerifyResetPage() {
                       onChange={(e) => handleChange(index, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(index, e)}
                       onPaste={index === 0 ? handlePaste : undefined}
-                      className={`w-12 h-14 text-center text-xl font-bold rounded-lg border-2 outline-none transition
+                      className={`w-12 h-14 text-center text-xl font-extrabold rounded-lg border-2 outline-none transition
                         ${digit
                           ? 'border-blue-600 bg-blue-50 text-blue-600'
                           : 'border-slate-200 bg-white text-slate-900'

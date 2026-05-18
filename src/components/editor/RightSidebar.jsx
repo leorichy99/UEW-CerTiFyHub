@@ -92,7 +92,7 @@ function LayersPanel() {
   return (
     <div>
       <div
-        className="mb-2 text-[10px] font-bold uppercase tracking-widest"
+        className="mb-2 text-[10px] font-extrabold uppercase tracking-widest"
         style={{ color: THEME.textMuted }}
       >
         Layer Stack
@@ -378,7 +378,7 @@ function PropertiesPanel() {
               />
               <button
                 onClick={() => updateElement(selectedId, { bold: !el.bold })}
-                className="h-7 w-8 rounded text-xs font-bold transition-colors"
+                className="h-7 w-8 rounded text-xs font-extrabold transition-colors"
                 style={{
                   background: el.bold ? THEME.bgActive : THEME.bgInput,
                   color: el.bold ? THEME.textBright : THEME.textMuted,
@@ -768,7 +768,7 @@ function AssetsPanel() {
 function Section({ label, children }) {
   return (
     <div className="mb-3">
-      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest" style={{ color: THEME.textMuted }}>
+      <div className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest" style={{ color: THEME.textMuted }}>
         {label}
       </div>
       {children}
@@ -784,7 +784,7 @@ function CollapsibleSection({ label, isOpen, onToggle, children }) {
         onClick={onToggle}
         className="flex w-full items-center justify-between rounded px-1 py-1 transition-colors"
       >
-        <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: THEME.textMuted }}>
+        <div className="text-[10px] font-extrabold uppercase tracking-widest" style={{ color: THEME.textMuted }}>
           {label}
         </div>
         <ChevronDown

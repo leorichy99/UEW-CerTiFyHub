@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { X, Loader2, ArrowLeft, ArrowRight, AlertTriangle } from "lucide-react";
 import { accountAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { useConfirmDialog } from "../context/ConfirmDialogContext";
 import StepIndicator from "./provision-steps/StepIndicator";
 import Step1Identity from "./provision-steps/Step1Identity";
 import Step2Authorisation from "./provision-steps/Step2Authorisation";
@@ -27,6 +28,7 @@ export default function ProvisionWizard({
   permConstants,
   authorisations,
 }) {
+  const confirm = useConfirmDialog();
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState(new Set());
@@ -41,8 +43,6 @@ export default function ProvisionWizard({
   const [stepValid, setStepValid] = useState({ 1: false, 2: false, 3: false });
 
   // UI states
-  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  const [showFinalConfirm, setShowFinalConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
@@ -61,8 +61,6 @@ export default function ProvisionWizard({
       setPermissions(INITIAL_PERMS);
       setNotes("");
       setStepValid({ 1: false, 2: false, 3: false });
-      setShowCancelConfirm(false);
-      setShowFinalConfirm(false);
       setSubmitting(false);
       setSubmitError("");
       setEditMode(false);
@@ -180,13 +178,15 @@ export default function ProvisionWizard({
 
   // --- Cancel ---
 
-  const handleCancelClick = () => {
-    setShowCancelConfirm(true);
-  };
-
-  const confirmCancel = () => {
-    setShowCancelConfirm(false);
-    onClose();
+  const handleCancelClick = async () => {
+    const confirmed = await confirm({
+      title: "Discard this provisioning session?",
+      message: "You are about to discard this provisioning session. All entered data will be lost. Are you sure?",
+      confirmLabel: "Yes, discard",
+      cancelLabel: "Go back",
+      variant: "danger",
+    });
+    if (confirmed) onClose();
   };
 
   // --- Submit ---
@@ -227,9 +227,28 @@ export default function ProvisionWizard({
           ? d
           : d?.detail || d?.email?.[0] || d?.letter_reference_number?.[0] || JSON.stringify(d) || "Provisioning failed.";
       setSubmitError(msg);
-      setShowFinalConfirm(false);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleProvisionClick = async () => {
+    const confirmed = await confirm({
+      title: "Confirm Provisioning",
+      content: (
+        <div className="space-y-2">
+          <p>
+            You are about to create this account and send login credentials to <strong>{identity.email}</strong>.
+          </p>
+          <p>This action will be logged under your Super Admin account.</p>
+        </div>
+      ),
+      confirmLabel: "Yes, Provision",
+      cancelLabel: "Cancel",
+      variant: "warning",
+    });
+    if (confirmed) {
+      handleProvision();
     }
   };
 
@@ -249,7 +268,7 @@ export default function ProvisionWizard({
         {/* Fixed Header */}
         <div className="shrink-0 border-b border-slate-200 px-6 py-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 id="provision-wizard-title" className="text-lg font-bold text-slate-900">
+            <h2 id="provision-wizard-title" className="text-lg font-extrabold text-slate-900">
               Provision New Account
             </h2>
             <button
@@ -320,55 +339,6 @@ export default function ProvisionWizard({
 
         {/* Fixed Footer */}
         <div className="shrink-0 border-t border-slate-200 px-6 py-4">
-          {/* Cancel confirmation inline */}
-          {showCancelConfirm && (
-            <div className="mb-3 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-3 text-sm">
-              <AlertTriangle size={16} className="text-amber-600 shrink-0" />
-              <span className="text-amber-800 flex-1">
-                You are about to discard this provisioning session. All entered data will be lost. Are you sure?
-              </span>
-              <button
-                onClick={() => setShowCancelConfirm(false)}
-                className="px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50"
-              >
-                Go back
-              </button>
-              <button
-                onClick={confirmCancel}
-                className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
-              >
-                Yes, discard
-              </button>
-            </div>
-          )}
-
-          {/* Final provision confirmation inline (Step 4 only) */}
-          {showFinalConfirm && currentStep === 4 && (
-            <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg p-3 flex flex-col sm:flex-row items-start sm:items-center gap-3 text-sm">
-              <span className="text-blue-800 flex-1">
-                You are about to create this account and send login credentials to <strong>{identity.email}</strong>.
-                This action will be logged under your Super Admin account. Proceed?
-              </span>
-              <div className="flex gap-2 shrink-0">
-                <button
-                  onClick={() => setShowFinalConfirm(false)}
-                  disabled={submitting}
-                  className="px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleProvision}
-                  disabled={submitting}
-                  className="px-4 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-slate-300 flex items-center gap-1.5"
-                >
-                  {submitting && <Loader2 size={12} className="animate-spin" />}
-                  {submitting ? "Provisioning..." : "Yes, Provision"}
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Navigation buttons */}
           <div className="flex items-center justify-between">
             <div>
@@ -413,13 +383,15 @@ export default function ProvisionWizard({
                 </button>
               )}
 
-              {currentStep === 4 && !showFinalConfirm && (
+              {currentStep === 4 && (
                 <button
                   type="button"
-                  onClick={() => setShowFinalConfirm(true)}
-                  className="flex items-center gap-1.5 px-5 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                  onClick={handleProvisionClick}
+                  disabled={submitting}
+                  className="flex items-center gap-1.5 px-5 py-2 text-sm font-extrabold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors shadow-sm"
                 >
-                  Confirm and Provision
+                  {submitting && <Loader2 size={12} className="animate-spin" />}
+                  {submitting ? "Provisioning..." : "Confirm and Provision"}
                 </button>
               )}
             </div>

@@ -522,21 +522,58 @@ class CertificateViewSet(viewsets.ModelViewSet):
                         font_size = el.get('fontSize', 16)
                         el_width = el.get('width', 0)
                         align = el.get('align', 'left')
+                        wrap_mode = str(el.get('wrap', 'word')).lower()
                         fill_rgb = self._hex_to_rgb(el.get('fill', '#000000'), (0, 0, 0))
                         font = _load_font(el, font_size)
+                        line_height = font_size * 1.2
 
-                        if align == 'center' and el_width:
-                            bbox = draw.textbbox((0, 0), text, font=font)
-                            tw = bbox[2] - bbox[0]
-                            text_x = x + (el_width - tw) / 2
-                        elif align == 'right' and el_width:
-                            bbox = draw.textbbox((0, 0), text, font=font)
-                            tw = bbox[2] - bbox[0]
-                            text_x = x + el_width - tw
-                        else:
-                            text_x = x
+                        def _measure_line(s):
+                            # Prefer getlength (advance width, matches browser measureText)
+                            # over textbbox (includes glyph overhang) so wrapping aligns with Konva.
+                            try:
+                                return font.getlength(s)
+                            except Exception:
+                                bb = draw.textbbox((0, 0), s, font=font)
+                                return bb[2] - bb[0]
 
-                        draw.text((text_x, y), text, fill=fill_rgb, font=font)
+                        # Tolerance to absorb sub-pixel font metric differences
+                        # between PIL and Konva (browser canvas) so near-fit lines
+                        # don't get split into "Title" / "that".
+                        wrap_limit = (el_width or 0) + max(2, font_size * 0.15)
+
+                        def _wrap_line(s):
+                            if wrap_mode == 'none' or not el_width or el_width <= 0:
+                                return [s]
+                            words = s.split(' ')
+                            out = []
+                            cur = ''
+                            for w in words:
+                                test = f'{cur} {w}'.strip() if cur else w
+                                if _measure_line(test) <= wrap_limit or not cur:
+                                    cur = test
+                                else:
+                                    out.append(cur)
+                                    cur = w
+                            if cur:
+                                out.append(cur)
+                            return out or ['']
+
+                        # Split explicit newlines then word-wrap each paragraph
+                        lines = []
+                        for para in text.split('\n'):
+                            lines.extend(_wrap_line(para))
+
+                        for i, line in enumerate(lines):
+                            ly = y + i * line_height
+                            if align == 'center' and el_width:
+                                tw = _measure_line(line)
+                                lx = x + (el_width - tw) / 2
+                            elif align == 'right' and el_width:
+                                tw = _measure_line(line)
+                                lx = x + el_width - tw
+                            else:
+                                lx = x
+                            draw.text((lx, ly), line, fill=fill_rgb, font=font)
 
                     elif el_type == 'image':
                         src = el.get('src', '')
@@ -1046,9 +1083,16 @@ class CertificateViewSet(viewsets.ModelViewSet):
     @staticmethod
     def _wrap_text(text, font_name, font_size, max_width):
         """Word-wrap text into lines that fit within max_width —
-        mirrors Konva <Text> wrapping behaviour."""
+        mirrors Konva <Text> wrapping behaviour.
+
+        A small tolerance is added to absorb sub-pixel font metric
+        differences between ReportLab and the browser canvas (Konva),
+        so near-fit lines don't get split unexpectedly.
+        """
         if max_width <= 0:
             return [text]
+
+        wrap_limit = max_width + max(2, font_size * 0.15)
 
         words = text.split(' ')
         lines = []
@@ -1057,7 +1101,7 @@ class CertificateViewSet(viewsets.ModelViewSet):
         for word in words:
             test_line = f'{current_line} {word}'.strip() if current_line else word
             w = pdfmetrics.stringWidth(test_line, font_name, font_size)
-            if w <= max_width or not current_line:
+            if w <= wrap_limit or not current_line:
                 current_line = test_line
             else:
                 lines.append(current_line)

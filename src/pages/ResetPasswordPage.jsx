@@ -99,7 +99,7 @@ export default function ResetPasswordPage() {
               </div>
             </div>
             
-            <h2 className="text-xl font-bold text-slate-900 mb-2">Password Reset Successful!</h2>
+            <h2 className="text-xl font-extrabold text-slate-900 mb-2">Password Reset Successful!</h2>
             <p className="text-sm text-slate-600 mb-6">
               Your password has been successfully reset. You can now log in with your new password.
             </p>
@@ -128,7 +128,7 @@ export default function ResetPasswordPage() {
             </div>
 
             <div className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm p-8">
-              <h1 className="text-xl font-bold text-slate-900">Reset Password</h1>
+              <h1 className="text-xl font-extrabold text-slate-900">Reset Password</h1>
               <p className="mt-2 text-sm text-slate-600">
                 Create your new password
               </p>

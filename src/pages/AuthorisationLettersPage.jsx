@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { authorisationAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import Drawer from "../components/Drawer";
+import PageHeader from "../components/ui/PageHeader";
 import { UEW_DEPARTMENTS } from "../utils/constants";
 import {
   Loader2, Search, Plus, FileText, Upload, CheckCircle,
@@ -82,7 +83,8 @@ export default function AuthorisationLettersPage() {
       await fetchLetters();
     } catch (err) {
       const d = err?.response?.data;
-      setFormError(typeof d === "string" ? d : d?.detail || d?.reference_number?.[0] || JSON.stringify(d) || "Failed to log authorisation.");
+      const fallback = err?.friendlyMessage || "Failed to log authorisation.";
+      setFormError(typeof d === "string" ? d : d?.detail || d?.reference_number?.[0] || fallback);
     } finally {
       setSubmitting(false);
     }
@@ -94,10 +96,11 @@ export default function AuthorisationLettersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-
-      </div>
+            <PageHeader
+              title="Authorization Letters"
+              description="Manage authorization letters for certificate issuance"
+              showSearch={false}
+            />
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 flex items-center gap-2">

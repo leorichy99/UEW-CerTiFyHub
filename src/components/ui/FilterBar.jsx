@@ -69,7 +69,7 @@ export default function FilterBar({
             onClick={onRefresh}
             disabled={refreshing}
             aria-label="Refresh data"
-            className="rounded-lg border border-slate-200 p-2.5 text-slate-500 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50 disabled:opacity-50"
+            className="rounded-lg border border-slate-200 p-2.5 text-slate-500 shadow-sm transition-colors duration-200 hover:bg-slate-50 disabled:opacity-50"
           >
             <RefreshCw
               size={18}

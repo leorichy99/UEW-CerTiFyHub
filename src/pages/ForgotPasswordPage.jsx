@@ -55,7 +55,7 @@ export default function ForgotPasswordPage() {
             </div>
 
             <div className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm p-8">
-              <h1 className="text-xl font-bold text-slate-900">Forgot Password?</h1>
+              <h1 className="text-xl font-extrabold text-slate-900">Forgot Password?</h1>
               <p className="mt-2 text-sm text-slate-600">
                 Enter your email address and we&apos;ll send you a 6-digit verification code.
               </p>

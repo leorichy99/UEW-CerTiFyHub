@@ -181,6 +181,7 @@ class AccountDetailSerializer(serializers.ModelSerializer):
     credential_status = serializers.SerializerMethodField()
     letter_reference_number = serializers.SerializerMethodField()
     authorisation_references = serializers.SerializerMethodField()
+    is_locked = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -189,7 +190,7 @@ class AccountDetailSerializer(serializers.ModelSerializer):
             'staff_id', 'department', 'account_type', 'access_duration',
             'access_end_date', 'permissions', 'permission_history',
             'is_legacy', 'first_login_completed', 'credential_status',
-            'letter_reference_number', 'authorisation_references',
+            'letter_reference_number', 'authorisation_references', 'is_locked',
         ]
 
     def _profile(self, obj):
@@ -252,6 +253,15 @@ class AccountDetailSerializer(serializers.ModelSerializer):
     def get_authorisation_references(self, obj):
         refs = obj.authorisation_references.all()
         return AuthorisationReferenceSerializer(refs, many=True).data if refs.exists() else []
+
+    def get_is_locked(self, obj):
+        from .models import LoginAttemptTracker
+        try:
+            email_hash = LoginAttemptTracker.hash_email(obj.email)
+            tracker = LoginAttemptTracker.objects.get(email_hash=email_hash)
+            return tracker.is_locked()
+        except LoginAttemptTracker.DoesNotExist:
+            return False
 
 
 class PermissionUpdateSerializer(serializers.Serializer):

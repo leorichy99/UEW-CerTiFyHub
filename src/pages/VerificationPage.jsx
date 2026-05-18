@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../services/api";
 import {
@@ -21,8 +21,11 @@ export default function VerificationPage() {
     document.title = "Verify Certificate — UEW CerTiFyHub";
   }, []);
 
+  const hasFetched = useRef(false);
+
   useEffect(() => {
-    if (id) {
+    if (id && !hasFetched.current) {
+      hasFetched.current = true;
       verifyCertificate(id);
     }
   }, [id]);
@@ -104,7 +107,7 @@ export default function VerificationPage() {
             <div className="flex">
               <XCircle className="h-6 w-6 text-red-400 shrink-0" />
               <div className="ml-3">
-                <p className="text-sm text-red-700 font-bold">
+                <p className="text-sm text-red-700 font-extrabold">
                   Verification Failed
                 </p>
                 <p className="text-sm text-red-600 mt-1">{error}</p>
@@ -132,7 +135,7 @@ export default function VerificationPage() {
                 )}
                 <div>
                   <h2
-                    className={`text-xl font-bold ${
+                    className={`text-xl font-extrabold ${
                       result.status === "VALID"
                         ? "text-green-800"
                         : "text-red-800"
@@ -164,7 +167,7 @@ export default function VerificationPage() {
                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
                     Student Name
                   </h3>
-                  <p className="text-xl font-bold text-slate-900">
+                  <p className="text-xl font-extrabold text-slate-900">
                     {result.certificate.student_name}
                   </p>
                 </div>
@@ -172,7 +175,7 @@ export default function VerificationPage() {
                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
                     Degree Awarded
                   </h3>
-                  <p className="text-xl font-bold text-slate-900">
+                  <p className="text-xl font-extrabold text-slate-900">
                     {result.certificate.degree_type_display}
                   </p>
                 </div>

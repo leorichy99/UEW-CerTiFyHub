@@ -5,10 +5,10 @@ import { certificateAPI } from "../services/api";
 import Pagination from "../components/Pagination";
 import SummaryStatCard from "../components/SummaryStatCard";
 import PageSkeleton from "../components/ui/PageSkeleton";
+import PageHeader from "../components/ui/PageHeader";
 import {
   FileText,
   Search,
-  Filter,
   Download,
   Eye,
   FileCheck,
@@ -21,14 +21,19 @@ import {
   XCircle,
   Clipboard,
 } from "lucide-react";
-import { confirmDialog } from '../components/ConfirmDialog';
+import { useConfirmDialog } from '../context/ConfirmDialogContext';
 import CertificatePreview from '../components/CertificatePreview';
+import RefreshButton from '../components/ui/RefreshButton';
 
 export default function SuperAdminCertificatesPage() {
+  const confirm = useConfirmDialog();
   const toast = useToast();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [certificates, setCertificates] = useState([]);
   const [totalItems, setTotalItems] = useState(0);
   const [stats, setStats] = useState({
@@ -42,6 +47,7 @@ export default function SuperAdminCertificatesPage() {
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("30d");
   const [departments, setDepartments] = useState([]);
 
@@ -69,13 +75,14 @@ export default function SuperAdminCertificatesPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [departmentFilter, dateFilter]);
+  }, [departmentFilter, statusFilter, dateFilter]);
 
   // Build query params for backend
   const buildParams = useCallback(() => {
     const params = { page: currentPage, page_size: itemsPerPage };
     if (debouncedSearch) params.search = debouncedSearch;
     if (departmentFilter !== "all") params.program = departmentFilter;
+    if (statusFilter !== "all") params.status = statusFilter;
     if (dateFilter !== "all") {
       const now = new Date();
       let cutoff;
@@ -86,11 +93,13 @@ export default function SuperAdminCertificatesPage() {
       if (cutoff) params.date_from = cutoff.toISOString().slice(0, 10);
     }
     return params;
-  }, [currentPage, itemsPerPage, debouncedSearch, departmentFilter, dateFilter]);
+  }, [currentPage, itemsPerPage, debouncedSearch, departmentFilter, statusFilter, dateFilter]);
 
-  // Fetch certificates page
-  const fetchCertificates = useCallback(async () => {
-    setLoading(true);
+  // Fetch certificates page (silent flag avoids the full-page skeleton)
+  const initialLoadDoneRef = useRef(false);
+  const fetchCertificates = useCallback(async ({ silent = false } = {}) => {
+    if (silent) setRefreshing(true);
+    else setLoading(true);
     try {
       const res = await certificateAPI.getAll(buildParams());
       const data = res.data;
@@ -100,9 +109,11 @@ export default function SuperAdminCertificatesPage() {
       setTotalItems(count);
     } catch (err) {
       console.error("Failed to fetch certificates:", err);
-      toast.error("Failed to load certificates");
+      toastRef.current.error("Failed to load certificates");
     } finally {
-      setLoading(false);
+      if (silent) setRefreshing(false);
+      else setLoading(false);
+      initialLoadDoneRef.current = true;
     }
   }, [buildParams]);
 
@@ -130,6 +141,11 @@ export default function SuperAdminCertificatesPage() {
     }
   }, []);
 
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([fetchCertificates({ silent: true }), fetchStats()]);
+    toastRef.current.success("Data refreshed");
+  }, [fetchCertificates, fetchStats]);
+
   // Fetch departments once
   useEffect(() => {
     (async () => {
@@ -144,7 +160,9 @@ export default function SuperAdminCertificatesPage() {
   }, [fetchStats]);
 
   useEffect(() => {
-    fetchCertificates();
+    // Use silent refresh once initial load is done so filter changes don't
+    // re-trigger the full-page skeleton.
+    fetchCertificates({ silent: initialLoadDoneRef.current });
   }, [fetchCertificates]);
 
   // Pagination (server-side)
@@ -157,7 +175,7 @@ export default function SuperAdminCertificatesPage() {
 
   // Actions
   const handleRevoke = async (cert) => {
-    const ok = await confirmDialog({
+    const ok = await confirm({
       title: 'Revoke Certificate',
       message: `Revoke certificate for ${cert.student_name}? This will invalidate the certificate.`,
       confirmLabel: 'Revoke',
@@ -168,7 +186,7 @@ export default function SuperAdminCertificatesPage() {
     try {
       await certificateAPI.revoke(cert.id);
       toast.success("Certificate revoked successfully");
-      fetchCertificates();
+      fetchCertificates({ silent: true });
       fetchStats();
     } catch (err) {
       toast.error("Failed to revoke certificate");
@@ -178,7 +196,7 @@ export default function SuperAdminCertificatesPage() {
   };
 
   const handleReactivate = async (cert) => {
-    const ok = await confirmDialog({
+    const ok = await confirm({
       title: 'Reactivate Certificate',
       message: `Reactivate certificate for ${cert.student_name}?`,
       confirmLabel: 'Reactivate',
@@ -189,7 +207,7 @@ export default function SuperAdminCertificatesPage() {
     try {
       await certificateAPI.reactivate(cert.id);
       toast.success("Certificate reactivated successfully");
-      fetchCertificates();
+      fetchCertificates({ silent: true });
       fetchStats();
     } catch (err) {
       toast.error("Failed to reactivate certificate");
@@ -259,6 +277,11 @@ export default function SuperAdminCertificatesPage() {
 
   return (
     <div className="min-h-screen">
+      <PageHeader
+        title="Certificates"
+        description="Manage and monitor all issued certificates"
+        showSearch={false}
+      />
       <div className="">
         {/* Overview Metric Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -266,14 +289,14 @@ export default function SuperAdminCertificatesPage() {
             title="Total Issued"
             value={stats.totalIssued.toLocaleString()}
             Icon={FileText}
-            tone="brand"
+            tone="neutral"
             trend={`${stats.growthThisMonth > 0 ? `+${stats.growthThisMonth}%` : `${stats.growthThisMonth}%`} this month`}
           />
           <SummaryStatCard
             title="Active"
             value={stats.active.toLocaleString()}
             Icon={CheckCircle}
-            tone="emerald"
+            tone="positive"
             trend={stats.totalIssued > 0
               ? `${((stats.active / stats.totalIssued) * 100).toFixed(1)}% of total`
               : "0% of total"}
@@ -282,7 +305,7 @@ export default function SuperAdminCertificatesPage() {
             title="Revoked"
             value={stats.revoked.toLocaleString()}
             Icon={XCircle}
-            tone="red"
+            tone="negative"
             trend={stats.revoked > 0 ? "High priority alerts" : "No revocations"}
             trendPositive={stats.revoked === 0}
           />
@@ -290,7 +313,7 @@ export default function SuperAdminCertificatesPage() {
             title="Verified Nodes"
             value={stats.verifiedNodes}
             Icon={Activity}
-            tone="blue"
+            tone="info"
             trend={stats.verifiedNodes > 0 ? "Network healthy" : "No data yet"}
             trendPositive={stats.verifiedNodes > 0}
           />
@@ -356,18 +379,29 @@ export default function SuperAdminCertificatesPage() {
               />
             </div>
 
-            {/* Filter & Export buttons */}
+            {/* Status, Refresh & Export buttons */}
             <div className="flex items-center gap-2">
-              <button
-                title="Advanced filters"
-                className="rounded-lg border border-slate-200 p-2.5 text-slate-500 shadow-[0_10px_24px_-18px_rgba(71,85,105,0.4)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-[0_16px_28px_-16px_rgba(71,85,105,0.45)]"
-              >
-                <Filter size={18} className="text-slate-500" />
-              </button>
+              <div className="relative">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  aria-label="Filter by status"
+                  className="appearance-none pl-4 pr-10 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white min-w-40"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="ISSUED">Active</option>
+                  <option value="REVOKED">Revoked</option>
+                </select>
+                <ChevronDown
+                  size={16}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                />
+              </div>
+              <RefreshButton onClick={handleRefresh} spinning={refreshing} />
               <button
                 onClick={exportCertificates}
                 title="Export CSV"
-                className="rounded-lg border border-slate-200 p-2.5 text-slate-500 shadow-[0_10px_24px_-18px_rgba(37,99,235,0.24)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-50 hover:text-blue-600 hover:shadow-[0_16px_28px_-16px_rgba(37,99,235,0.35)]"
+                className="rounded-lg border border-slate-200 p-2.5 text-slate-500 shadow-sm transition-colors duration-200 hover:bg-blue-50 hover:text-blue-600"
               >
                 <Download size={18} className="text-slate-500" />
               </button>
@@ -455,11 +489,11 @@ export default function SuperAdminCertificatesPage() {
                     {/* Status */}
                     <td className="px-6 py-4">
                       {cert.status === "ISSUED" ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-100 text-emerald-700 uppercase tracking-wide">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-extrabold bg-emerald-100 text-emerald-700 uppercase tracking-wide">
                           Active
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-red-100 text-red-700 uppercase tracking-wide">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-extrabold bg-red-100 text-red-700 uppercase tracking-wide">
                           Revoked
                         </span>
                       )}
@@ -495,7 +529,7 @@ export default function SuperAdminCertificatesPage() {
                         <button
                           onClick={() => handlePreview(cert)}
                           title="View certificate"
-                          className="rounded-lg p-2 text-slate-400 shadow-[0_10px_24px_-18px_rgba(37,99,235,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-50 hover:text-blue-600 hover:shadow-[0_16px_28px_-16px_rgba(37,99,235,0.35)]"
+                          className="rounded-lg p-2 text-slate-400 shadow-sm transition-colors duration-200 hover:bg-blue-50 hover:text-blue-600"
                         >
                           <Eye size={18} />
                         </button>
@@ -504,7 +538,7 @@ export default function SuperAdminCertificatesPage() {
                         <button
                           onClick={() => handleVerifyLog(cert)}
                           title="View blockchain receipt"
-                          className="rounded-lg p-2 text-slate-400 shadow-[0_10px_24px_-18px_rgba(37,99,235,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-50 hover:text-blue-600 hover:shadow-[0_16px_28px_-16px_rgba(37,99,235,0.35)]"
+                          className="rounded-lg p-2 text-slate-400 shadow-sm transition-colors duration-200 hover:bg-blue-50 hover:text-blue-600"
                         >
                           <FileCheck size={18} />
                         </button>
@@ -515,7 +549,7 @@ export default function SuperAdminCertificatesPage() {
                             onClick={() => handleRevoke(cert)}
                             disabled={actionLoading === cert.id}
                             title="Revoke certificate"
-                            className="rounded-lg p-2 text-slate-400 shadow-[0_10px_24px_-18px_rgba(220,38,38,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-red-50 hover:text-red-600 hover:shadow-[0_16px_28px_-16px_rgba(220,38,38,0.35)] disabled:opacity-50"
+                            className="rounded-lg p-2 text-slate-400 shadow-sm transition-colors duration-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                           >
                             {actionLoading === cert.id ? (
                               <div className="h-4.5 w-4.5 border-2 border-red-300 border-t-transparent rounded-full animate-spin" />
@@ -528,7 +562,7 @@ export default function SuperAdminCertificatesPage() {
                             onClick={() => handleReactivate(cert)}
                             disabled={actionLoading === cert.id}
                             title="Reactivate certificate"
-                            className="rounded-lg p-2 text-slate-400 shadow-[0_10px_24px_-18px_rgba(5,150,105,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-emerald-50 hover:text-emerald-600 hover:shadow-[0_16px_28px_-16px_rgba(5,150,105,0.35)] disabled:opacity-50"
+                            className="rounded-lg p-2 text-slate-400 shadow-sm transition-colors duration-200 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50"
                           >
                             {actionLoading === cert.id ? (
                               <div className="h-4.5 w-4.5 border-2 border-emerald-300 border-t-transparent rounded-full animate-spin" />

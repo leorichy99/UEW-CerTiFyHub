@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -15,7 +15,8 @@ import {
 
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
-import { ToastProvider } from "./components/ToastContainer";
+import { ConfirmDialogProvider } from "./context/ConfirmDialogContext";
+import { ToastProvider, useToast } from "./components/ToastContainer";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -30,7 +31,6 @@ const CertificatesPage = lazy(() => import("./pages/CertificatesPage"));
 const StudentsPage = lazy(() => import("./pages/StudentsPage"));
 const TemplatesPage = lazy(() => import("./pages/TemplatesPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
-const CertificateForm = lazy(() => import("./components/CertificateForm"));
 const AccountManagementPage = lazy(() => import("./pages/AccountManagementPage"));
 const AuthorisationLettersPage = lazy(() => import("./pages/AuthorisationLettersPage"));
 const SuperAdminCertificatesPage = lazy(() => import("./pages/SuperAdminCertificatesPage"));
@@ -43,15 +43,6 @@ const TemplateEditorPage = lazy(() => import("./pages/TemplateEditorPage"));
 
 function DashboardLayout({ children }) {
   return <Layout>{children}</Layout>;
-}
-
-function CertificateFormWrapper() {
-  const navigate = useNavigate();
-  return <CertificateForm onSuccess={() => navigate("/certificates")} />;
-}
-
-function CertificateFormWrapperWithRefresh({ onCertificateCreated }) {
-  return <CertificateForm onSuccess={onCertificateCreated} />;
 }
 
 function HomeRedirect() {
@@ -182,21 +173,6 @@ function AnimatedRoutes() {
       />
 
       <Route
-        path="/create-certificate"
-        element={
-          <ProtectedRoute roles={["ADMIN", "SUPER_ADMIN"]} requiredPermission="certificates.issue">
-            <DashboardLayout>
-              <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-      </div>}>
-                <CertificateFormWrapper />
-              </RouteShell>
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
         path="/certificates"
         element={
           <ProtectedRoute>
@@ -205,21 +181,6 @@ function AnimatedRoutes() {
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>}>
                 <CertificatesPage />
-              </RouteShell>
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/certificates/create"
-        element={
-          <ProtectedRoute requiredPermission="certificates.issue">
-            <DashboardLayout>
-              <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-      </div>}>
-                <CertificateFormWrapper />
               </RouteShell>
             </DashboardLayout>
           </ProtectedRoute>
@@ -409,15 +370,35 @@ function AnimatedRoutes() {
   );
 }
 
+function ForbiddenListener() {
+  const toast = useToast();
+  useEffect(() => {
+    let lastShown = 0;
+    const handler = () => {
+      const now = Date.now();
+      // Debounce: only show once every 4 seconds
+      if (now - lastShown < 4000) return;
+      lastShown = now;
+      toast.error("You don't have permission to perform this action.");
+    };
+    window.addEventListener("api:forbidden", handler);
+    return () => window.removeEventListener("api:forbidden", handler);
+  }, [toast]);
+  return null;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
+          <ForbiddenListener />
           <NotificationProvider>
-            <ErrorBoundary>
-              <AnimatedRoutes />
-            </ErrorBoundary>
+            <ConfirmDialogProvider>
+              <ErrorBoundary>
+                <AnimatedRoutes />
+              </ErrorBoundary>
+            </ConfirmDialogProvider>
           </NotificationProvider>
         </ToastProvider>
       </AuthProvider>

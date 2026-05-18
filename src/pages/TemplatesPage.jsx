@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "../components/ToastContainer";
 import { useAuth } from "../context/AuthContext";
 import { templateAPI } from "../services/api";
+import PageHeader from "../components/ui/PageHeader";
 import { Plus, Search, Lock, Eye, FileText, LayoutGrid } from "lucide-react";
 import SummaryStatCard from "../components/SummaryStatCard";
 import Pagination from "../components/Pagination";
@@ -98,12 +99,17 @@ export default function TemplatesPage() {
   return (
     <div className="min-h-[calc(100vh-7rem)]">
       <div className="mx-auto max-w-6xl px-6 py-6">
+        <PageHeader
+          title="Templates"
+          description="Browse and manage certificate templates"
+          showSearch={false}
+        />
 
         {/* Summary stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <SummaryStatCard title="Total Templates" value={templateStats.total} Icon={LayoutGrid} tone="blue" />
-          <SummaryStatCard title="Filtered Results" value={templateStats.showing} Icon={FileText} tone="slate" />
-          {isSuperAdmin && <SummaryStatCard title="Locked" value={templateStats.locked} Icon={Lock} tone="amber" />}
+          <SummaryStatCard title="Total Templates" value={templateStats.total} Icon={LayoutGrid} tone="info" />
+          <SummaryStatCard title="Filtered Results" value={templateStats.showing} Icon={FileText} tone="neutral" />
+          {isSuperAdmin && <SummaryStatCard title="Locked" value={templateStats.locked} Icon={Lock} tone="warning" />}
         </div>
 
         <div className="mb-4">
@@ -175,7 +181,7 @@ export default function TemplatesPage() {
                   {thumb ? (
                     <img src={thumb} alt={title} className="h-full w-full object-cover" />
                   ) : (
-                    <div className="h-full w-full bg-linear-to-br from-slate-200 to-slate-50" />
+                    <div className="h-full w-full bg-slate-100" />
                   )}
                   <div className="absolute right-3 top-3 rounded-md bg-blue-600 px-2 py-1 text-[10px] font-semibold text-white">
                     v{version}
@@ -237,7 +243,7 @@ export default function TemplatesPage() {
         {/* Template Preview Modal */}
         {previewTemplate && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
             onClick={() => setPreviewTemplate(null)}
             onKeyDown={(e) => { if (e.key === "Escape") setPreviewTemplate(null); }}
           >

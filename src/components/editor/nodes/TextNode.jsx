@@ -19,7 +19,7 @@ export default function TextNode({
       text={el.text}
       x={el.x}
       y={el.y}
-      width={el.width}
+      width={el.userResized ? el.width : undefined}
       draggable={draggable}
       fill={el.fill}
       fontSize={el.fontSize}
@@ -51,6 +51,7 @@ export default function TextNode({
           x: node.x(),
           y: node.y(),
           width: node.width() * scaleX,
+          userResized: true,
           fontSize: el.fontSize * Math.max(scaleX, scaleY),
           rotation: node.rotation(),
         });

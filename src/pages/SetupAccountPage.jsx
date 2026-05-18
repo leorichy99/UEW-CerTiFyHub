@@ -67,7 +67,7 @@ export default function SetupAccountPage() {
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-8 text-center space-y-4">
           <CheckCircle className="h-14 w-14 text-green-500 mx-auto" />
-          <h1 className="text-2xl font-bold text-slate-800">Account Ready</h1>
+          <h1 className="text-2xl font-extrabold text-slate-800">Account Ready</h1>
           <p className="text-slate-600 text-sm">
             Your password has been set successfully. You can now log in with your institutional email and new password.
           </p>
@@ -87,7 +87,7 @@ export default function SetupAccountPage() {
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-8 text-center space-y-4">
           <XCircle className="h-14 w-14 text-red-500 mx-auto" />
-          <h1 className="text-2xl font-bold text-slate-800">Setup Failed</h1>
+          <h1 className="text-2xl font-extrabold text-slate-800">Setup Failed</h1>
           <p className="text-slate-600 text-sm">{error}</p>
           <button
             onClick={() => navigate("/login")}
@@ -105,7 +105,7 @@ export default function SetupAccountPage() {
       <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-8 space-y-6">
         <div className="text-center space-y-2">
           <ShieldCheck className="h-12 w-12 text-blue-600 mx-auto" />
-          <h1 className="text-2xl font-bold text-slate-800">Set Your Password</h1>
+          <h1 className="text-2xl font-extrabold text-slate-800">Set Your Password</h1>
           <p className="text-sm text-slate-500">
             Your account has been provisioned. Please create a secure password to activate your access.
           </p>

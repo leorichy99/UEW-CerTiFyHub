@@ -358,9 +358,11 @@ export default function Canvas() {
           ref={paperRef}
           className="relative my-12 rounded-sm shadow-lg"
           style={{
-            width: canvasWidth * zoom,
-            height: canvasHeight * zoom,
+            width: Math.round(canvasWidth * zoom),
+            height: Math.round(canvasHeight * zoom),
             background: "#ffffff",
+            transform: "translateZ(0)",
+            willChange: "transform",
           }}
         >
           <div
@@ -398,8 +400,8 @@ export default function Canvas() {
             }}
           >
             <Stage
-              width={canvasWidth * zoom}
-              height={canvasHeight * zoom}
+              width={Math.round(canvasWidth * zoom)}
+              height={Math.round(canvasHeight * zoom)}
               scaleX={zoom}
               scaleY={zoom}
               ref={stageRef}

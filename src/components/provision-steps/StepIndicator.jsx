@@ -39,7 +39,7 @@ export default function StepIndicator({ currentStep, completedSteps, onStepClick
                 }`}
               >
                 <span
-                  className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold transition-all duration-200 ${
+                  className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-extrabold transition-all duration-200 ${
                     isCompleted
                       ? "bg-blue-600 text-white group-hover:bg-blue-700"
                       : isCurrent

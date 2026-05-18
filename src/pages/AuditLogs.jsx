@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useToast } from "../components/ToastContainer";
 import { superAdminAPI } from "../services/api";
+import PageHeader from "../components/ui/PageHeader";
 import { 
   FileText, 
   Shield, 
@@ -8,22 +9,27 @@ import {
   Activity, 
   Database,
   Search,
-  Filter,
   Download,
   Calendar,
   Eye,
   AlertTriangle,
   CheckCircle,
-  XCircle
+  XCircle,
+  ChevronDown,
 } from "lucide-react";
 import Pagination from "../components/Pagination";
+import RefreshButton from "../components/ui/RefreshButton";
 
 export default React.memo(function AuditLogs() {
   const toast = useToast();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState("admin");
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilter, setDateFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [initialLoad, setInitialLoad] = useState(true);
@@ -45,19 +51,18 @@ export default React.memo(function AuditLogs() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, dateFilter]);
+  }, [activeTab, dateFilter, statusFilter]);
 
-  useEffect(() => {
-    fetchAuditLogs();
-  }, [activeTab, currentPage, itemsPerPage, dateFilter, debouncedSearch]);
-
-  const fetchAuditLogs = async () => {
-    setLoading(true);
+  const initialLoadDoneRef = useRef(false);
+  const fetchAuditLogs = useCallback(async ({ silent = false } = {}) => {
+    if (silent) setRefreshing(true);
+    else setLoading(true);
     try {
       const { data } = await superAdminAPI.getAuditLogs({
         category: activeTab,
         search: debouncedSearch,
         date: dateFilter,
+        status: statusFilter,
         page: currentPage,
         page_size: itemsPerPage,
       });
@@ -65,12 +70,25 @@ export default React.memo(function AuditLogs() {
       setTotalItems(data.count || 0);
     } catch (error) {
       console.error("Failed to fetch audit logs:", error);
-      toast.error("Failed to load audit logs");
+      toastRef.current.error("Failed to load audit logs");
     } finally {
-      setLoading(false);
+      if (silent) setRefreshing(false);
+      else setLoading(false);
       setInitialLoad(false);
+      initialLoadDoneRef.current = true;
     }
-  };
+  }, [activeTab, debouncedSearch, dateFilter, statusFilter, currentPage, itemsPerPage]);
+
+  useEffect(() => {
+    // Use silent refresh once the initial load completes so filter changes
+    // don't unmount the table.
+    fetchAuditLogs({ silent: initialLoadDoneRef.current });
+  }, [fetchAuditLogs]);
+
+  const handleRefresh = useCallback(async () => {
+    await fetchAuditLogs({ silent: true });
+    toastRef.current.success("Audit logs refreshed");
+  }, [fetchAuditLogs]);
 
   const formatTimestamp = (timestamp) => {
     const d = typeof timestamp === "string" ? new Date(timestamp) : timestamp;
@@ -109,6 +127,7 @@ export default React.memo(function AuditLogs() {
         category: activeTab,
         search: debouncedSearch,
         date: dateFilter,
+        status: statusFilter,
         page: 1,
         page_size: 1000,
       });
@@ -132,21 +151,30 @@ export default React.memo(function AuditLogs() {
       a.download = `audit_${dateStr}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success('Audit logs exported successfully');
+      toastRef.current.success('Audit logs exported successfully');
     } catch (err) {
       console.error('Failed to export audit logs:', err);
-      toast.error('Failed to export audit logs');
+      toastRef.current.error('Failed to export audit logs');
     }
-  }, [activeTab, debouncedSearch, dateFilter, toast]);
+  }, [activeTab, debouncedSearch, dateFilter, statusFilter]);
 
   const tabs = [
     { id: "admin", label: "Admin Activity", icon: Shield },
+    { id: "provisioning", label: "Provisioning", icon: Users },
+    { id: "credentials", label: "Credentials", icon: CheckCircle },
+    { id: "permissions", label: "Permissions", icon: Activity },
     { id: "security", label: "Security Logs", icon: AlertTriangle },
-    { id: "login", label: "Login Attempts", icon: Users }
+    { id: "login", label: "Login Attempts", icon: Users },
+    { id: "verification", label: "Verification", icon: Eye }
   ];
 
   return (
     <div className="">
+      <PageHeader
+        title="Audit Logs"
+        description="Track and review all system activities and events"
+        showSearch={false}
+      />
       {/* Tab Navigation */}
       <div className="border-b border-slate-200 mb-6">
         <nav className="flex space-x-8">
@@ -198,14 +226,29 @@ export default React.memo(function AuditLogs() {
               <option value="week">Last 7 Days</option>
               <option value="month">Last 30 Days</option>
             </select>
+            <label htmlFor="audit-status-filter" className="sr-only">Status filter</label>
+            <select
+              id="audit-status-filter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm transition"
+            >
+              <option value="all">All Statuses</option>
+              <option value="success">Success</option>
+              <option value="failed">Failed</option>
+              <option value="warning">Warning</option>
+            </select>
           </div>
-          <button
-            onClick={exportLogs}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
-          >
-            <Download size={14} />
-            Export Logs
-          </button>
+          <div className="flex items-center gap-2">
+            <RefreshButton onClick={handleRefresh} spinning={refreshing} />
+            <button
+              onClick={exportLogs}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+            >
+              <Download size={14} />
+              Export Logs
+            </button>
+          </div>
         </div>
       </div>
 

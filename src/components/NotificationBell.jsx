@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell, Check, CheckCheck, Archive, Filter,
   Award, Shield, Settings, AlertTriangle, Info,
-  CheckCircle, XCircle, ChevronDown, Loader2,
+  CheckCircle, XCircle, ChevronDown, Loader2, X,
 } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
 import { useToast } from './ToastContainer';
-import { confirmDialog } from './ConfirmDialog';
+import { useConfirmDialog } from '../context/ConfirmDialogContext';
 
 const FILTER_TABS = [
   { key: 'all', label: 'All' },
@@ -63,8 +64,8 @@ function getPriorityBorder(priority) {
 }
 
 export default function NotificationBell() {
+  const confirm = useConfirmDialog();
   const [open, setOpen] = useState(false);
-  const dropdownRef = useRef(null);
   const toast = useToast();
   const {
     notifications,
@@ -87,19 +88,6 @@ export default function NotificationBell() {
     registerToast(toast);
   }, [toast, registerToast]);
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    function handleClick(e) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setOpen(false);
-      }
-    }
-    if (open) {
-      document.addEventListener('mousedown', handleClick);
-      return () => document.removeEventListener('mousedown', handleClick);
-    }
-  }, [open]);
-
   const handleFilterChange = useCallback((key) => {
     if (key === 'unread') {
       changeFilter('all');
@@ -118,33 +106,68 @@ export default function NotificationBell() {
   const visibleNotifications = activeTabNotifications.slice(0, 5);
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      {/* Bell Button */}
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="relative flex h-9 w-9 items-center justify-center bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition rounded-lg"
-        title="Notifications"
-      >
-        <Bell className="h-4.5 w-4.5" />
-        {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white leading-none">
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
-        )}
-      </button>
+    <>
+      <div className="relative">
+        {/* Bell Button */}
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="relative flex h-9 w-9 items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition rounded-lg"
+          title="Notifications"
+        >
+          <Bell className="h-4.5 w-4.5" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-extrabold text-white leading-none">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </button>
+      </div>
 
-      {/* Dropdown Panel */}
-      {open && (
-        <div className="absolute right-0 top-full mt-2 w-100 max-h-130 bg-white rounded-xl border border-slate-200 shadow-xl flex flex-col z-20 overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-            <h3 className="text-sm font-semibold text-slate-800">Notifications</h3>
+      {/* Drawer Backdrop */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40"
+            onClick={() => setOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Drawer Panel */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed top-0 right-0 h-full w-full sm:w-[400px] bg-white shadow-2xl z-50 flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h3 className="text-base font-semibold text-slate-900">Notifications</h3>
+              <button
+                onClick={() => setOpen(false)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
+                title="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Actions Bar */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-2">
                 {unreadCount > 0 && (
                   <button
                     onClick={markAllAsRead}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium transition"
+                    className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium transition"
                     title="Mark all as read"
                   >
                     <CheckCheck size={14} />
@@ -154,7 +177,7 @@ export default function NotificationBell() {
                 {notifications.length > 0 && (
                   <button
                     onClick={async () => {
-                      const ok = await confirmDialog({
+                      const ok = await confirm({
                         title: 'Clear All Notifications',
                         message: 'Permanently delete all notifications? This cannot be undone.',
                         confirmLabel: 'Clear All',
@@ -168,7 +191,7 @@ export default function NotificationBell() {
                         toast.error('Failed to clear notifications');
                       }
                     }}
-                    className="flex items-center gap-1 text-xs text-rose-600 hover:text-rose-700 font-medium transition"
+                    className="flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-700 font-medium transition"
                     title="Clear all notifications"
                   >
                     <Archive size={14} />
@@ -176,110 +199,111 @@ export default function NotificationBell() {
                   </button>
                 )}
               </div>
-          </div>
+            </div>
 
-          {/* Filter Tabs */}
-          <div className="flex gap-1 px-3 py-2 border-b border-slate-100 bg-slate-50/50">
-            {FILTER_TABS.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => handleFilterChange(tab.key)}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition whitespace-nowrap ${
-                  filter === tab.key || (tab.key === 'all' && filter === 'all')
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
-                }`}
-              >
-                {tab.label}
-                {tab.key === 'unread' && unreadCount > 0 && (
-                  <span className="ml-1 text-[10px] bg-red-100 text-red-600 px-1 py-0.5 rounded-full">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {/* Notification List */}
-          <div className="flex-1 overflow-y-auto z-50">
-            {visibleNotifications.length === 0 && !loading ? (
-              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-                <Bell size={32} className="mb-2 opacity-40" />
-                <p className="text-sm">No notifications</p>
-              </div>
-            ) : (
-              <ul className="divide-y divide-slate-50">
-                {visibleNotifications.map((notif) => (
-                  <li
-                    key={notif.id}
-                    className={`group flex items-start gap-3 px-4 py-3 transition cursor-pointer border-l-2 ${
-                      getPriorityBorder(notif.priority)
-                    } ${notif.is_read ? 'bg-white' : 'bg-blue-50/40'} hover:bg-slate-50`}
-                    onClick={() => {
-                      if (!notif.is_read) markAsRead(notif.id);
-                    }}
-                  >
-                    {/* Icon */}
-                    <div className="mt-0.5 shrink-0">
-                      {getNotificationIcon(notif.notification_type, notif.priority)}
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className={`text-sm leading-snug ${notif.is_read ? 'text-slate-600' : 'text-slate-800 font-medium'}`}>
-                          {notif.title}
-                        </p>
-                        {!notif.is_read && (
-                          <span className="shrink-0 h-2 w-2 rounded-full bg-blue-500 mt-1.5" />
-                        )}
-                      </div>
-                      {notif.message && (
-                        <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{notif.message}</p>
-                      )}
-                      <p className="text-[11px] text-slate-400 mt-1">{timeAgo(notif.created_at)}</p>
-                    </div>
-
-                    {/* Actions (visible on hover) */}
-                    <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
-                      {!notif.is_read && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); markAsRead(notif.id); }}
-                          className="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-blue-600 transition"
-                          title="Mark as read"
-                        >
-                          <Check size={14} />
-                        </button>
-                      )}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); archiveNotification(notif.id); }}
-                        className="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition"
-                        title="Archive"
-                      >
-                        <Archive size={14} />
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {/* Load More */}
-            {hasMore && (
-              <div className="flex justify-center py-3 border-t border-slate-100">
+            {/* Filter Tabs */}
+            <div className="flex gap-1 px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 overflow-x-auto">
+              {FILTER_TABS.map((tab) => (
                 <button
-                  onClick={loadMore}
-                  disabled={loading}
-                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium transition disabled:opacity-50"
+                  key={tab.key}
+                  onClick={() => handleFilterChange(tab.key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap ${
+                    filter === tab.key || (tab.key === 'all' && filter === 'all')
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                  }`}
                 >
-                  {loading ? <Loader2 size={14} className="animate-spin" /> : <ChevronDown size={14} />}
-                  <span>{loading ? 'Loading...' : 'Load more'}</span>
+                  {tab.label}
+                  {tab.key === 'unread' && unreadCount > 0 && (
+                    <span className="ml-1.5 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full">
+                      {unreadCount}
+                    </span>
+                  )}
                 </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+              ))}
+            </div>
+
+            {/* Notification List */}
+            <div className="flex-1 overflow-y-auto">
+              {visibleNotifications.length === 0 && !loading ? (
+                <div className="flex flex-col items-center justify-center h-full py-16 text-slate-400">
+                  <Bell size={40} className="mb-3 opacity-30" />
+                  <p className="text-sm font-medium">No notifications</p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-50">
+                  {visibleNotifications.map((notif) => (
+                    <li
+                      key={notif.id}
+                      className={`group flex items-start gap-3 px-5 py-4 transition cursor-pointer border-l-2 ${
+                        getPriorityBorder(notif.priority)
+                      } ${notif.is_read ? 'bg-white' : 'bg-blue-50/40'} hover:bg-slate-50`}
+                      onClick={() => {
+                        if (!notif.is_read) markAsRead(notif.id);
+                      }}
+                    >
+                      {/* Icon */}
+                      <div className="mt-0.5 shrink-0">
+                        {getNotificationIcon(notif.notification_type, notif.priority)}
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className={`text-sm leading-snug ${notif.is_read ? 'text-slate-600' : 'text-slate-800 font-medium'}`}>
+                            {notif.title}
+                          </p>
+                          {!notif.is_read && (
+                            <span className="shrink-0 h-2 w-2 rounded-full bg-blue-500 mt-1.5" />
+                          )}
+                        </div>
+                        {notif.message && (
+                          <p className="text-xs text-slate-500 mt-1 line-clamp-2">{notif.message}</p>
+                        )}
+                        <p className="text-[11px] text-slate-400 mt-1.5">{timeAgo(notif.created_at)}</p>
+                      </div>
+
+                      {/* Actions (visible on hover) */}
+                      <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                        {!notif.is_read && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); markAsRead(notif.id); }}
+                            className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-blue-600 transition"
+                            title="Mark as read"
+                          >
+                            <Check size={14} />
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); archiveNotification(notif.id); }}
+                          className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition"
+                          title="Archive"
+                        >
+                          <Archive size={14} />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {/* Load More */}
+              {hasMore && (
+                <div className="flex justify-center py-4 border-t border-slate-100">
+                  <button
+                    onClick={loadMore}
+                    disabled={loading}
+                    className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium transition disabled:opacity-50"
+                  >
+                    {loading ? <Loader2 size={14} className="animate-spin" /> : <ChevronDown size={14} />}
+                    <span>{loading ? 'Loading...' : 'Load more'}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

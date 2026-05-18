@@ -84,6 +84,25 @@ api.interceptors.response.use(
     const isAuthRequest = url.includes("/auth/token/");
     if (isAuthRequest) return Promise.reject(error);
 
+    // Handle 403 Forbidden gracefully: tag the error and dispatch a global event
+    // so the app can show a single user-friendly toast instead of raw JSON.
+    if (status === 403) {
+      error.isForbidden = true;
+      error.friendlyMessage = "You don't have permission to perform this action.";
+      if (typeof window !== "undefined") {
+        try {
+          window.dispatchEvent(
+            new CustomEvent("api:forbidden", {
+              detail: { url, method: originalRequest.method },
+            })
+          );
+        } catch (_) {
+          // ignore
+        }
+      }
+      return Promise.reject(error);
+    }
+
     if (status !== 401 || originalRequest._retry) {
       return Promise.reject(error);
     }
@@ -150,44 +169,6 @@ export const certificateAPI = {
 
   // Get single certificate
   getOne: (id) => api.get(`/certificates/${id}/`),
-
-  // Create certificate
-  create: (data) => {
-    const formData = new FormData();
-
-    // Append text fields
-    if (data.student !== undefined && data.student !== null && data.student !== "") {
-      formData.append("student", data.student);
-    }
-    if (data.template !== undefined && data.template !== null && data.template !== "") {
-      formData.append("template", data.template);
-    }
-    if (data.status !== undefined && data.status !== null && data.status !== "") {
-      formData.append("status", data.status);
-    }
-    formData.append("student_name", data.student_name);
-    formData.append("degree_type", data.degree_type);
-    formData.append("honors", data.honors);
-    formData.append("program", data.program);
-    formData.append("date_awarded", data.date_awarded);
-
-    // Append files if they exist
-    if (data.university_logo) {
-      formData.append("university_logo", data.university_logo);
-    }
-    if (data.vc_signature) {
-      formData.append("vc_signature", data.vc_signature);
-    }
-    if (data.registrar_signature) {
-      formData.append("registrar_signature", data.registrar_signature);
-    }
-
-    return api.post("/certificates/", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
-  },
 
   // Update certificate
   update: (id, data) => {
@@ -302,9 +283,9 @@ export const superAdminAPI = {
   getStats: () => api.get("/analytics/super-admin-stats/"),
   getGlobalAnalytics: (range = "30d") =>
     api.get("/analytics/global/", { params: { range } }),
-  getAuditLogs: ({ category = "admin", search = "", date = "all", page = 1, page_size = 20 } = {}) =>
+  getAuditLogs: ({ category = "admin", search = "", date = "all", status = "all", page = 1, page_size = 20 } = {}) =>
     api.get("/analytics/audit-logs/", {
-      params: { category, search, date, page, page_size },
+      params: { category, search, date, status, page, page_size },
     }),
 };
 

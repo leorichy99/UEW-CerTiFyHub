@@ -12,11 +12,11 @@ from datetime import timedelta
 from django.utils import timezone
 
 from .models import AuditLog
-from core.permissions import IsSuperAdmin, IsActiveAccount, HasPermission
+from core.permissions import IsSuperAdmin, IsActiveAccount, HasPermission, IsAdminOrSuperAdmin
 
 
 class AdminStatsView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsActiveAccount, HasPermission.of('reports.view')]
+    permission_classes = [permissions.IsAuthenticated, IsActiveAccount, IsAdminOrSuperAdmin]
 
     def get(self, request):
         total_certs = Certificate.objects.count()
@@ -277,6 +277,7 @@ class AuditLogsView(APIView):
         category = request.query_params.get('category', 'admin')
         search = request.query_params.get('search', '').strip()
         date_filter = request.query_params.get('date', 'all')
+        status_filter = request.query_params.get('status', 'all')
 
         qs = AuditLog.objects.all()
 
@@ -286,6 +287,9 @@ class AuditLogsView(APIView):
 
         if category and category != 'all':
             qs = qs.filter(category=category)
+
+        if status_filter and status_filter != 'all':
+            qs = qs.filter(status=status_filter)
 
         if search:
             qs = qs.filter(

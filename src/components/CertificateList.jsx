@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useToast } from './ToastContainer';
 import { useAuth } from '../context/AuthContext';
-import { confirmDialog } from './ConfirmDialog';
+import { useConfirmDialog } from '../context/ConfirmDialogContext';
 import { Download, Eye, Trash2, RefreshCw, FileText, Search, X, Filter, Clipboard, CheckCircle, XCircle, FileCheck } from 'lucide-react';
 import { certificateAPI } from '../services/api';
 import Pagination from './Pagination';
@@ -28,6 +28,7 @@ const formatCertId = (certNumber) => {
 };
 
 export default function CertificateList({ refreshTrigger, onViewCertificate }) {
+  const confirm = useConfirmDialog();
   const toast = useToast();
   const { user } = useAuth();
   const isSuperAdmin = user?.profile?.role === 'SUPER_ADMIN';
@@ -153,30 +154,30 @@ export default function CertificateList({ refreshTrigger, onViewCertificate }) {
     }
   };
 
-  const handleDelete = (cert) =>
-    confirmDialog({
+  const handleDelete = async (cert) => {
+    const confirmed = await confirm({
       title: 'Delete Certificate',
       message: `Are you sure you want to delete the certificate for ${cert.student_name}? This action cannot be undone.`,
-      onConfirm: async () => {
-        // Snapshot for rollback, then optimistic remove
-        const snapshot = certificates;
-        setCertificates(prev => prev.filter(c => c.id !== cert.id));
-        
-        try {
-          await certificateAPI.delete(cert.id);
-          toast.success('Certificate deleted successfully');
-        } catch (err) {
-          if (err.response?.status === 404) {
-            // Already gone from DB — keep it removed from UI
-            toast.success('Certificate already deleted');
-          } else {
-            // Rollback
-            setCertificates(snapshot);
-            toast.error(err.response?.data?.error || 'Failed to delete certificate');
-          }
-        }
-      }
     });
+    if (!confirmed) return;
+    // Snapshot for rollback, then optimistic remove
+    const snapshot = certificates;
+    setCertificates(prev => prev.filter(c => c.id !== cert.id));
+
+    try {
+      await certificateAPI.delete(cert.id);
+      toast.success('Certificate deleted successfully');
+    } catch (err) {
+      if (err.response?.status === 404) {
+        // Already gone from DB — keep it removed from UI
+        toast.success('Certificate already deleted');
+      } else {
+        // Rollback
+        setCertificates(snapshot);
+        toast.error(err.response?.data?.error || 'Failed to delete certificate');
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -217,14 +218,14 @@ export default function CertificateList({ refreshTrigger, onViewCertificate }) {
     <div className="space-y-6">
       {/* Summary stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <SummaryStatCard title="Total Certificates" value={stats.total} Icon={FileCheck} tone="blue" />
-        <SummaryStatCard title="Active" value={stats.active} Icon={CheckCircle} tone="green" />
-        <SummaryStatCard title="Revoked" value={stats.revoked} Icon={XCircle} tone="red" />
+        <SummaryStatCard title="Total Certificates" value={stats.total} Icon={FileCheck} tone="info" />
+        <SummaryStatCard title="Active" value={stats.active} Icon={CheckCircle} tone="positive" />
+        <SummaryStatCard title="Revoked" value={stats.revoked} Icon={XCircle} tone="negative" />
       </div>
 
       <div className="bg-white rounded-xl shadow-lg overflow-hidden">
         <div className="p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h2 className="text-xl font-bold text-slate-800">
+          <h2 className="text-xl font-extrabold text-slate-800">
             Certificate Registry
           </h2>
           <button

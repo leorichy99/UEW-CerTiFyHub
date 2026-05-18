@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../components/ToastContainer";
-import { confirmDialog } from "../components/ConfirmDialog";
+import { useConfirmDialog } from "../context/ConfirmDialogContext";
 import { templateAPI } from "../services/api";
+import PageHeader from "../components/ui/PageHeader";
 import {
   Search,
   ChevronDown,
@@ -31,6 +32,7 @@ const STATUS_BADGE = {
 };
 
 export default function SuperAdminTemplatesPage() {
+  const confirm = useConfirmDialog();
   const toast = useToast();
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -107,7 +109,7 @@ export default function SuperAdminTemplatesPage() {
   };
 
   const handleDelete = async (template) => {
-    const confirmed = await confirmDialog({
+    const confirmed = await confirm({
       title: "Delete Template",
       message: `Are you sure you want to delete "${template.name}"? This action cannot be undone.`,
     });
@@ -173,13 +175,18 @@ export default function SuperAdminTemplatesPage() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Templates"
+        description="Manage certificate templates and design configurations"
+        showSearch={false}
+      />
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <SummaryStatCard title="Total Templates" value={stats.total} Icon={LayoutGrid} tone="blue" />
-        <SummaryStatCard title="Locked (Official)" value={stats.locked} Icon={Lock} tone="green" />
-        <SummaryStatCard title="Drafts / Unlocked" value={stats.draftsUnlocked} Icon={FileText} tone="slate" />
-        <SummaryStatCard title="Active Creators" value={stats.creators} Icon={Users} tone="amber" />
+        <SummaryStatCard title="Total Templates" value={stats.total} Icon={LayoutGrid} tone="info" />
+        <SummaryStatCard title="Locked (Official)" value={stats.locked} Icon={Lock} tone="positive" />
+        <SummaryStatCard title="Drafts / Unlocked" value={stats.draftsUnlocked} Icon={FileText} tone="neutral" />
+        <SummaryStatCard title="Active Creators" value={stats.creators} Icon={Users} tone="warning" />
       </div>
 
       {/* Search + Filters Bar */}
@@ -271,13 +278,13 @@ export default function SuperAdminTemplatesPage() {
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="h-full w-full bg-linear-to-br from-slate-200 to-slate-50" />
+                    <div className="h-full w-full bg-slate-100" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${badge.bg} ${badge.text}`}
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-extrabold ${badge.bg} ${badge.text}`}
                     >
                       {badge.label}
                     </span>
@@ -364,13 +371,13 @@ export default function SuperAdminTemplatesPage() {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="h-full w-full bg-linear-to-br from-slate-200 to-slate-50 flex items-center justify-center">
+                  <div className="h-full w-full bg-slate-100 flex items-center justify-center">
                     <FileText size={32} className="text-slate-300" />
                   </div>
                 )}
                 {/* Status badge */}
                 <span
-                  className={`absolute left-3 top-3 rounded px-2 py-0.5 text-[10px] font-bold tracking-wide ${badge.bg} ${badge.text}`}
+                  className={`absolute left-3 top-3 rounded px-2 py-0.5 text-[10px] font-extrabold tracking-wide ${badge.bg} ${badge.text}`}
                 >
                   {badge.label}
                 </span>
@@ -392,7 +399,7 @@ export default function SuperAdminTemplatesPage() {
                 {/* Creator */}
                 {template.created_by_name && (
                   <div className="mt-2 flex items-center gap-2">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-[10px] font-extrabold text-blue-700">
                       {template.created_by_initials || "??"}
                     </div>
                     <div>
@@ -482,7 +489,7 @@ export default function SuperAdminTemplatesPage() {
       {/* Template Preview Modal */}
       {previewTemplate && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
           onClick={() => setPreviewTemplate(null)}
           onKeyDown={(e) => { if (e.key === "Escape") setPreviewTemplate(null); }}
         >

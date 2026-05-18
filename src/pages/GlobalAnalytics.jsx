@@ -1,12 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "../components/ToastContainer";
 import { superAdminAPI } from "../services/api";
+import PageHeader from "../components/ui/PageHeader";
 import {
   ResponsiveContainer,
   BarChart,
   Bar,
   AreaChart,
   Area,
+  PieChart,
+  Pie,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -26,10 +30,15 @@ import {
   Loader2,
 } from "lucide-react";
 import SummaryStatCard from "../components/SummaryStatCard";
+import RefreshButton from "../components/ui/RefreshButton";
 
 export default function GlobalAnalytics() {
   const toast = useToast();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const initialLoadDoneRef = useRef(false);
   const [timeRange, setTimeRange] = useState("30d");
 
   const [analytics, setAnalytics] = useState({
@@ -45,12 +54,9 @@ export default function GlobalAnalytics() {
     },
   });
 
-  useEffect(() => {
-    fetchAnalytics();
-  }, [timeRange]);
-
-  const fetchAnalytics = async () => {
-    setLoading(true);
+  const fetchAnalytics = useCallback(async ({ silent = false } = {}) => {
+    if (silent) setRefreshing(true);
+    else setLoading(true);
     try {
       const { data } = await superAdminAPI.getGlobalAnalytics(timeRange);
       setAnalytics({
@@ -67,11 +73,22 @@ export default function GlobalAnalytics() {
       });
     } catch (error) {
       console.error("Failed to fetch analytics:", error);
-      toast.error("Failed to load analytics data");
+      toastRef.current.error("Failed to load analytics data");
     } finally {
-      setLoading(false);
+      if (silent) setRefreshing(false);
+      else setLoading(false);
+      initialLoadDoneRef.current = true;
     }
-  };
+  }, [timeRange]);
+
+  useEffect(() => {
+    fetchAnalytics({ silent: initialLoadDoneRef.current });
+  }, [fetchAnalytics]);
+
+  const handleRefresh = useCallback(async () => {
+    await fetchAnalytics({ silent: true });
+    toastRef.current.success("Analytics refreshed");
+  }, [fetchAnalytics]);
 
   const exportAnalytics = () => {
     const s = analytics.summary;
@@ -125,7 +142,11 @@ export default function GlobalAnalytics() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      <PageHeader
+        title="Analytics"
+        description="System-wide certificate issuance and verification trends"
+        showSearch={true}
+      />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="relative">
@@ -142,6 +163,7 @@ export default function GlobalAnalytics() {
             </select>
             <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           </div>
+          <RefreshButton onClick={handleRefresh} spinning={refreshing} />
           <button
             onClick={exportAnalytics}
             className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition"
@@ -158,7 +180,7 @@ export default function GlobalAnalytics() {
           title="Total Issued"
           value={fmt(s.totalIssued)}
           Icon={FileText}
-          tone="brand"
+          tone="neutral"
           trend={`${growthText(s.growthRate)} vs prev period`}
           trendPositive={s.growthRate >= 0}
         />
@@ -166,7 +188,7 @@ export default function GlobalAnalytics() {
           title="Total Verified"
           value={fmt(s.totalVerified)}
           Icon={Activity}
-          tone="emerald"
+          tone="positive"
           trend={`${growthText(s.verificationGrowth)} vs prev period`}
           trendPositive={s.verificationGrowth >= 0}
         />
@@ -175,20 +197,20 @@ export default function GlobalAnalytics() {
           value={s.verificationRate}
           valueSuffix="%"
           Icon={BarChart3}
-          tone="blue"
+          tone="info"
           trend="of all issued certificates"
         />
         <SummaryStatCard
           title="Departments"
           value={analytics.departmentBreakdown.length}
           Icon={Building}
-          tone="amber"
+          tone="warning"
           trend="active departments"
         />
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-[2.5fr_1.5fr] gap-5">
         {/* Issuance Trends */}
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex items-center justify-between mb-5">
@@ -203,7 +225,17 @@ export default function GlobalAnalytics() {
           ) : (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={analytics.issuanceTrends.slice(0, 7)} barGap={4}>
+                <AreaChart data={analytics.issuanceTrends.slice(0, 7)}>
+                  <defs>
+                    <linearGradient id="colorIssued" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="colorVerified" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis
                     dataKey="date"
@@ -219,9 +251,9 @@ export default function GlobalAnalytics() {
                     labelFormatter={formatDate}
                   />
                   <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "12px", fontWeight: 600 }} />
-                  <Bar dataKey="issued" name="Issued" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="verified" name="Verified" fill="#10b981" radius={[4, 4, 0, 0]} />
-                </BarChart>
+                  <Area type="natural" dataKey="issued" name="Issued" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorIssued)" />
+                  <Area type="natural" dataKey="verified" name="Verified" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorVerified)" />
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           )}
@@ -241,40 +273,50 @@ export default function GlobalAnalytics() {
           ) : (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={analytics.verificationTrends.slice(0, 12)}>
-                  <defs>
-                    <linearGradient id="colorQr" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#242576" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="#242576" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorBc" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorApi" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis
-                    dataKey="date"
-                    tickFormatter={formatDate}
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: "#94a3b8", fontSize: 12 }}
-                    dy={8}
-                  />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} />
+                <PieChart>
+                  <Pie
+                    data={analytics.verificationTrends.slice(0, 12).map((item) => ({
+                      name: item.date ? formatDate(item.date) : 'Unknown',
+                      value: (item.qr || 0) + (item.blockchain || 0) + (item.api || 0),
+                      qr: item.qr || 0,
+                      blockchain: item.blockchain || 0,
+                      api: item.api || 0,
+                    }))}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    innerRadius={50}
+                    paddingAngle={3}
+                    labelLine={false}
+                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                  >
+                    {analytics.verificationTrends.slice(0, 12).map((entry, idx) => (
+                      <Cell key={idx} fill={["#242576", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"][idx % 6]} />
+                    ))}
+                  </Pie>
                   <Tooltip
                     contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 4px 12px rgb(0 0 0 / 0.1)" }}
-                    labelFormatter={formatDate}
+                    formatter={(value, name, props) => {
+                      const data = props.payload;
+                      return [
+                        `QR: ${data.qr}, BC: ${data.blockchain}, API: ${data.api}`,
+                        formatDate(name)
+                      ];
+                    }}
                   />
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "12px", fontWeight: 600 }} />
-                  <Area type="monotone" dataKey="qr" name="QR" stroke="#242576" strokeWidth={2} fillOpacity={1} fill="url(#colorQr)" />
-                  <Area type="monotone" dataKey="blockchain" name="Blockchain" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorBc)" />
-                  <Area type="monotone" dataKey="api" name="API" stroke="#f59e0b" strokeWidth={2} fillOpacity={1} fill="url(#colorApi)" />
-                </AreaChart>
+                  <Legend 
+                    verticalAlign="bottom" 
+                    iconType="circle" 
+                    iconSize={8} 
+                    wrapperStyle={{ fontSize: "12px", fontWeight: 600 }}
+                    formatter={(value, entry) => {
+                      const data = entry.payload;
+                      return `${value}: ${data.value}`;
+                    }}
+                  />
+                </PieChart>
               </ResponsiveContainer>
             </div>
           )}

@@ -2,7 +2,6 @@ import { useEffect, useRef, useMemo } from "react";
 import { FileText, Shield } from "lucide-react";
 
 const PERMISSION_DESCRIPTIONS = {
-  "certificates.issue": "Create and issue new certificates to students or recipients. High privilege.",
   "certificates.revoke": "Mark issued certificates as revoked. Requires explicit justification in the letter.",
   "certificates.edit_drafts": "Modify certificate records in draft state before issuance.",
   "certificates.view_all": "Read-only access to the full certificate registry.",

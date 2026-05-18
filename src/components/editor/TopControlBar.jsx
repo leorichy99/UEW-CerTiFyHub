@@ -2,7 +2,7 @@
 import React from "react";
 import {
   Pencil,
-  Eye,
+  Play,
   SaveAll,
   Undo2,
   Redo2,
@@ -297,7 +297,7 @@ export default function TopControlBar() {
             border: `1px solid ${THEME.borderLight}`,
           }}
         >
-          <Eye className="h-3.5 w-3.5" />
+          <Play className="h-3.5 w-3.5" />
           Preview
         </button>
 

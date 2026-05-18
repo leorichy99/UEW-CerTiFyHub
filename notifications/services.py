@@ -71,24 +71,29 @@ def notify(
     except Exception as e:
         logger.warning(f'Audit log failed for notification: {e}')
 
-    # 3. PUSH via WebSocket channel layer
+    # 3. PUSH via WebSocket channel layer or SSE
+    from django.conf import settings
+    use_sse = getattr(settings, 'USE_SSE_NOTIFICATIONS', True)
+    
     try:
         payload = NotificationSerializer(notification).data
         channel_layer = get_channel_layer()
 
         if recipient:
+            group_name = f'notifications_user_{recipient.id}'
             async_to_sync(channel_layer.group_send)(
-                f'notifications_user_{recipient.id}',
+                group_name,
                 {'type': 'notification.message', 'data': payload},
             )
 
         if role_target:
+            group_name = f'notifications_role_{role_target}'
             async_to_sync(channel_layer.group_send)(
-                f'notifications_role_{role_target}',
+                group_name,
                 {'type': 'notification.message', 'data': payload},
             )
     except Exception as e:
-        logger.warning(f'WebSocket push failed for notification {notification.id}: {e}')
+        logger.warning(f'Push failed for notification {notification.id}: {e}')
 
     # 4. Queue email for critical notifications or email channel
     if priority == 'critical' or delivery_channel == 'email':

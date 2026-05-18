@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { accountAPI, authorisationAPI } from "../services/api";
+import { useConfirmDialog } from "../context/ConfirmDialogContext";
 import {
   Loader2, ChevronDown, X, Award, BookOpen,
   ShieldCheck, BarChart3, Settings, Plus, Minus,
@@ -8,7 +9,7 @@ import {
 
 // ── Category metadata ────────────────────────────────────────────────────
 const CATEGORY_META = {
-  certificate_management: { icon: Award, color: "text-blue-600 bg-blue-50", description: "Create, view, revoke, and download certificates" },
+  certificate_management: { icon: Award, color: "text-blue-600 bg-blue-50", description: "View, revoke, and download certificates" },
   student_records: { icon: BookOpen, color: "text-emerald-600 bg-emerald-50", description: "Access and manage student information" },
   verification: { icon: ShieldCheck, color: "text-violet-600 bg-violet-50", description: "Verify certificate authenticity and view logs" },
   reporting_audit: { icon: BarChart3, color: "text-amber-600 bg-amber-50", description: "Access reports and export data" },
@@ -17,7 +18,6 @@ const CATEGORY_META = {
 
 // ── Human-readable permission labels & descriptions ──────────────────────
 const PERMISSION_INFO = {
-  "certificates.issue": { label: "Issue Certificates", desc: "Create and issue new certificates to students or recipients. High privilege." },
   "certificates.revoke": { label: "Revoke Certificates", desc: "Mark issued certificates as revoked. Requires explicit justification in the authorisation letter." },
   "certificates.edit_drafts": { label: "Edit Certificate Drafts", desc: "Modify certificate records in draft state before issuance." },
   "certificates.view_all": { label: "View All Certificates", desc: "Read-only access to the full certificate registry." },
@@ -137,6 +137,8 @@ function normaliseName(name) {
 //  MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 export default function PermissionEditorDrawer({ open, account, permConstants, onClose, onSaved }) {
+  const confirm = useConfirmDialog();
+
   // ── Core permission state ──────────────────────────────────────────────
   const [originalPerms, setOriginalPerms] = useState({});
   const [currentPerms, setCurrentPerms] = useState({});
@@ -155,10 +157,6 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
   const [refError, setRefError] = useState("");
   const [nameMismatchAck, setNameMismatchAck] = useState(false);
   const [provisioningNotes, setProvisioningNotes] = useState("");
-
-  // ── Confirmation flow ──────────────────────────────────────────────────
-  const [showConfirmPanel, setShowConfirmPanel] = useState(false);
-  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   // ── Refs ────────────────────────────────────────────────────────────────
   const drawerRef = useRef(null);
@@ -202,8 +200,6 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
     if (!open || !account) return;
     setLoading(true);
     setError("");
-    setShowConfirmPanel(false);
-    setShowCancelConfirm(false);
     setSelectedRef(null);
     setRefSearch("");
     setRefResults([]);
@@ -296,9 +292,16 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
   };
 
   // ── Close with unsaved changes check ───────────────────────────────────
-  const handleClose = () => {
+  const handleClose = async () => {
     if (hasChanges) {
-      setShowCancelConfirm(true);
+      const confirmed = await confirm({
+        title: "Discard unsaved changes?",
+        message: "You have unsaved changes. Closing this drawer will discard them. Are you sure?",
+        confirmLabel: "Yes, discard",
+        cancelLabel: "Keep Editing",
+        variant: "danger",
+      });
+      if (confirmed) resetAndClose();
     } else {
       resetAndClose();
     }
@@ -306,8 +309,6 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
   handleCloseRef.current = handleClose;
 
   const resetAndClose = () => {
-    setShowCancelConfirm(false);
-    setShowConfirmPanel(false);
     onClose();
   };
 
@@ -357,9 +358,55 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
       } else {
         setError("Changes could not be saved. Please try again. If this problem persists, contact the system administrator.");
       }
-      setShowConfirmPanel(false);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveClick = async () => {
+    if (!canSave) return;
+    const confirmed = await confirm({
+      title: "Confirm Permission Changes",
+      content: (
+        <div className="space-y-3">
+          <p>
+            You are about to make the following permission changes to <strong>{accountName}</strong>&rsquo;s account:
+          </p>
+          {added.length > 0 && (
+            <div>
+              <p className="text-sm font-semibold text-emerald-600 uppercase tracking-wider mb-1">Adding</p>
+              <ul className="list-disc pl-5 text-sm text-slate-700 space-y-0.5">
+                {added.map((k) => (
+                  <li key={k}>{PERMISSION_INFO[k]?.label || k}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {removed.length > 0 && (
+            <div>
+              <p className="text-sm font-semibold text-red-500 uppercase tracking-wider mb-1">Removing</p>
+              <ul className="list-disc pl-5 text-sm text-slate-700 space-y-0.5">
+                {removed.map((k) => (
+                  <li key={k}>{PERMISSION_INFO[k]?.label || k}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="text-xs text-slate-500 space-y-0.5 pt-1 border-t border-slate-200">
+            <p><span className="text-slate-400">Authorisation reference:</span> <strong className="text-slate-700">{selectedRef?.reference_number}</strong></p>
+            <p><span className="text-slate-400">Approved by:</span> <strong className="text-slate-700">{selectedRef?.authorising_head_name}</strong>
+              {selectedRef?.approval_date && <span className="text-slate-400 ml-1">· {selectedRef.approval_date}</span>}
+            </p>
+          </div>
+          <p className="text-xs text-slate-500 italic">This action will be logged under your Super Admin account.</p>
+        </div>
+      ),
+      confirmLabel: "Confirm Changes",
+      cancelLabel: "Go Back",
+      variant: "warning",
+    });
+    if (confirmed) {
+      handleSave();
     }
   };
 
@@ -375,7 +422,7 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
       aria-label="Edit Permissions"
     >
       {/* Backdrop — does NOT close on click per spec */}
-      <div className={`absolute inset-0 bg-black/50 backdrop-blur-[2px] transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`} />
+      <div className={`absolute inset-0 bg-black/50 transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`} />
 
       {/* Drawer panel */}
       <div
@@ -386,7 +433,7 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
         <div className="shrink-0 border-b border-slate-200 px-6 py-4">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Edit Permissions</h2>
+              <h2 className="text-lg font-extrabold text-slate-900">Edit Permissions</h2>
               {account && (
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                   {accountName}
@@ -447,7 +494,7 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
               {/* ─ Section 2: Session Changes Summary ──────────────────── */}
               {hasChanges && (
                 <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3" role="status" aria-live="polite">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Changes in this session</h4>
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Changes in this session</h4>
                   {added.length > 0 && (
                     <div className="space-y-1">
                       <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">Adding</p>
@@ -475,7 +522,7 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
 
               {/* ─ Section 3: Authorisation Reference ──────────────────── */}
               <div className="space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Authorisation Reference</h4>
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Authorisation Reference</h4>
 
                 {/* Search field */}
                 <div className="relative">
@@ -615,87 +662,8 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
           )}
         </div>
 
-        {/* ── INLINE CONFIRMATION PANEL ──────────────────────────────────── */}
-        {showConfirmPanel && (
-          <div className="shrink-0 border-t-2 border-blue-200 bg-blue-50/50 px-6 py-5 space-y-4 max-h-[50vh] overflow-y-auto" role="alert">
-            <h4 className="text-sm font-bold text-slate-800">
-              You are about to make the following permission changes<br />
-              to <span className="text-blue-700">{accountName}</span>'s account:
-            </h4>
-            {added.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">Adding</p>
-                {added.map((k) => (
-                  <div key={k} className="flex items-center gap-2 pl-1 text-sm text-slate-700">
-                    <Plus size={13} className="text-emerald-500 shrink-0" />
-                    {PERMISSION_INFO[k]?.label || k}
-                  </div>
-                ))}
-              </div>
-            )}
-            {removed.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold text-red-500 uppercase tracking-wider">Removing</p>
-                {removed.map((k) => (
-                  <div key={k} className="flex items-center gap-2 pl-1 text-sm text-slate-700">
-                    <Minus size={13} className="text-red-400 shrink-0" />
-                    {PERMISSION_INFO[k]?.label || k}
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="text-xs text-slate-500 space-y-0.5 pt-1 border-t border-blue-200">
-              <p><span className="text-slate-400">Authorisation reference:</span> <strong className="text-slate-700">{selectedRef?.reference_number}</strong></p>
-              <p><span className="text-slate-400">Approved by:</span> <strong className="text-slate-700">{selectedRef?.authorising_head_name}</strong>
-                {selectedRef?.approval_date && <span className="text-slate-400 ml-1">· {selectedRef.approval_date}</span>}
-              </p>
-            </div>
-            <p className="text-xs text-slate-500 italic">This action will be logged under your Super Admin account.</p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowConfirmPanel(false)}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-white transition-colors"
-              >
-                Go Back
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:bg-blue-400 transition-colors"
-              >
-                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                {saving ? "Saving…" : "Confirm Changes"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ── CANCEL CONFIRMATION INLINE ─────────────────────────────────── */}
-        {showCancelConfirm && (
-          <div className="shrink-0 border-t-2 border-amber-200 bg-amber-50/50 px-6 py-4 space-y-3" role="alert">
-            <p className="text-sm text-slate-700 font-medium">
-              You have unsaved changes. Closing this drawer will discard them. Are you sure?
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowCancelConfirm(false)}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-white transition-colors"
-              >
-                Keep Editing
-              </button>
-              <button
-                onClick={resetAndClose}
-                className="flex-1 px-4 py-2.5 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-              >
-                Discard Changes
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* ── FIXED FOOTER ──────────────────────────────────────────────── */}
-        {!showConfirmPanel && !showCancelConfirm && (
-          <div className="shrink-0 border-t border-slate-200 px-6 py-4 bg-white space-y-3">
+        <div className="shrink-0 border-t border-slate-200 px-6 py-4 bg-white space-y-3">
             {/* Error message */}
             {error && (
               <div className="flex items-start gap-2 text-red-700 bg-red-50 border border-red-200 rounded-lg p-3 text-sm" role="alert">
@@ -720,7 +688,7 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
                 Cancel
               </button>
               <button
-                onClick={() => setShowConfirmPanel(true)}
+                onClick={handleSaveClick}
                 disabled={!canSave}
                 title={saveTooltip}
                 className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
@@ -729,7 +697,6 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
               </button>
             </div>
           </div>
-        )}
       </div>
     </div>
   );

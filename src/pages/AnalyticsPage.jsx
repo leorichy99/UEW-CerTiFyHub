@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "../services/api";
+import PageHeader from "../components/ui/PageHeader";
 import {
   PieChart,
   Pie,
@@ -103,34 +104,39 @@ export default function AnalyticsPage() {
       title: "Total Certificates",
       value: data.counts.certificates,
       Icon: Award,
-      tone: "blue",
+      tone: "info",
       trend: `${data.counts.certificates} issued`,
     },
     {
       title: "Registered Students",
       value: data.counts.students,
       Icon: Users,
-      tone: "brand",
+      tone: "neutral",
       trend: `${data.counts.students} enrolled`,
     },
     {
       title: "Active Templates",
       value: data.counts.templates,
       Icon: Library,
-      tone: "violet",
+      tone: "info",
       trend: `${data.counts.templates} available`,
     },
     {
       title: "Verification Requests",
       value: "0",
       Icon: Activity,
-      tone: "emerald",
+      tone: "positive",
       trend: "No requests yet",
     },
   ];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
+      <PageHeader
+        title="Analytics"
+        description="Certificate issuance trends and program distribution"
+        showSearch={true}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {cards.map((card, i) => (
@@ -148,7 +154,7 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
           <div className="flex justify-between items-center mb-8">
-            <h3 className="text-xl font-bold text-slate-900">Issuance Timeline</h3>
+            <h3 className="text-xl font-extrabold text-slate-900">Issuance Timeline</h3>
             <TrendingUp size={20} className="text-slate-400" />
           </div>
           <div className="h-80 w-full">
@@ -192,7 +198,7 @@ export default function AnalyticsPage() {
 
         <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
           <div className="flex justify-between items-center mb-8">
-            <h3 className="text-xl font-bold text-slate-900">Distribution by Program</h3>
+            <h3 className="text-xl font-extrabold text-slate-900">Distribution by Program</h3>
             <Activity size={20} className="text-slate-400" />
           </div>
           <div className="h-80 w-full">
@@ -243,7 +249,7 @@ export default function AnalyticsPage() {
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-8 border-b border-slate-100 flex justify-between items-center">
-          <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+          <h3 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
             <Clock size={20} className="text-blue-600" />
             Recent Issuances
           </h3>
@@ -252,16 +258,16 @@ export default function AnalyticsPage() {
           <table className="w-full text-left">
             <thead className="bg-(--color-brand-dark)">
               <tr>
-                <th className="px-8 py-4 text-xs font-bold text-white uppercase tracking-widest">Student</th>
-                <th className="px-8 py-4 text-xs font-bold text-white uppercase tracking-widest">Certificate #</th>
-                <th className="px-8 py-4 text-xs font-bold text-white uppercase tracking-widest">Date</th>
-                <th className="px-8 py-4 text-xs font-bold text-white uppercase tracking-widest">Status</th>
+                <th className="px-8 py-4 text-xs font-extrabold text-white uppercase tracking-widest">Student</th>
+                <th className="px-8 py-4 text-xs font-extrabold text-white uppercase tracking-widest">Certificate #</th>
+                <th className="px-8 py-4 text-xs font-extrabold text-white uppercase tracking-widest">Date</th>
+                <th className="px-8 py-4 text-xs font-extrabold text-white uppercase tracking-widest">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {(data.recent_activity || []).map((item, i) => (
                 <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-8 py-4 font-bold text-slate-900">{item.student_name}</td>
+                  <td className="px-8 py-4 font-extrabold text-slate-900">{item.student_name}</td>
                   <td className="px-8 py-4 text-sm font-mono text-slate-500">{item.certificate_number}</td>
                   <td className="px-8 py-4 text-sm text-slate-600">
                     {new Date(item.generated_date).toLocaleDateString()}

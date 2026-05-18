@@ -52,7 +52,7 @@ export default function Login() {
               <img src={uewLogo} alt="UEW Logo" className="h-24 w-24" width={96} height={96} />
             </div>
             <div className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm p-8">
-              <h1 className="text-xl font-bold text-slate-900">Login</h1>
+              <h1 className="text-xl font-extrabold text-slate-900">Login</h1>
 
               {error && (
                 <div className="mt-4 bg-red-50 border border-red-100 text-red-600 p-3 rounded-lg text-sm flex items-center gap-2" role="alert">

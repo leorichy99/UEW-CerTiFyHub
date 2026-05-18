@@ -37,12 +37,12 @@ export default function AuthBrandingPanel({ subtitle = "Welcome back!" }) {
   return (
     <div className="hidden lg:block relative overflow-hidden">
       <div className="absolute inset-0 bg-[url('/uew_bg.jpg')] bg-cover bg-center" />
-      <div className="absolute inset-0 bg-linear-to-br from-[#E6232B]/90 to-(--color-brand-dark)/90" />
+      <div className="absolute inset-0 bg-(--color-brand-dark)/90" />
       <div className="absolute inset-0 bg-slate-950/25" />
 
       <div className="relative h-full flex items-center justify-center p-10">
         <div className="w-full max-w-xl">
-          <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md px-10 py-10">
+          <div className="rounded-2xl border border-white/15 bg-white/10 px-10 py-10">
             <div className="text-3xl font-extrabold tracking-tight text-white">
               UEW CerTiFyHub
             </div>
@@ -54,7 +54,7 @@ export default function AuthBrandingPanel({ subtitle = "Welcome back!" }) {
                   <ActiveIcon size={20} className="text-white" />
                 </div>
                 <div>
-                  <div className="text-lg font-bold text-white">
+                  <div className="text-lg font-extrabold text-white">
                     {FEATURES[activeFeature].title}
                   </div>
                   <div className="mt-1 text-sm text-white/80 leading-relaxed">

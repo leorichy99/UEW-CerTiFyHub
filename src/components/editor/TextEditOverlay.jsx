@@ -36,8 +36,9 @@ export default function TextEditOverlay() {
           lineHeight: textEditor.lineHeight || 1.2,
           padding: 0,
           margin: 0,
-          boxSizing: "border-box",
-          whiteSpace: "nowrap",
+          boxSizing: "content-box",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
           border: "2px solid transparent",
           pointerEvents: "none",
           color: "transparent",
@@ -68,7 +69,10 @@ export default function TextEditOverlay() {
           ta.style.width = "auto";
           ta.style.height = ta.scrollHeight + "px";
           ta.style.width =
-            Math.min(ta.scrollWidth + 2, textEditor.maxWidth || 9999) + "px";
+            Math.max(
+              textEditor.minWidth || 0,
+              Math.min(ta.scrollWidth + 2, textEditor.maxWidth || 99999)
+            ) + "px";
           const cursor = ta.selectionStart;
           const before = val.slice(0, cursor);
           const atMatch = before.match(/@(\w*)$/);
@@ -126,10 +130,8 @@ export default function TextEditOverlay() {
             e.preventDefault();
             cancelTextEditing();
           }
-          if (e.key === "Enter" && !e.shiftKey && !mentionDropdown) {
-            e.preventDefault();
-            commitTextEditing();
-          }
+          // Enter and Shift+Enter both insert a newline (default textarea behaviour).
+          // Commit happens on blur (click outside).
         }}
         style={{
           position: "absolute",
@@ -154,8 +156,9 @@ export default function TextEditOverlay() {
           margin: 0,
           resize: "none",
           overflow: "hidden",
-          boxSizing: "border-box",
-          whiteSpace: "nowrap",
+          boxSizing: "content-box",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
           caretColor: THEME.accent,
         }}
       />

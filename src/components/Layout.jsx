@@ -20,7 +20,7 @@ import {
   User,
 } from "lucide-react";
 import NotificationBell from "./NotificationBell";
-import { confirmDialog } from "./ConfirmDialog";
+import { useConfirmDialog } from "../context/ConfirmDialogContext";
 import uewLogo from "../assets/uew-logo.svg";
 
 const SIDEBAR_KEY = "sidebar_collapsed";
@@ -42,6 +42,7 @@ function SidebarTooltip({ label, collapsed, children }) {
 }
 
 export default React.memo(function Layout({ children }) {
+  const confirm = useConfirmDialog();
   const { user, logout, hasPermission, isSuperAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -55,7 +56,7 @@ export default React.memo(function Layout({ children }) {
   }, [collapsed]);
 
   const handleLogout = useCallback(async () => {
-    const confirmed = await confirmDialog({
+    const confirmed = await confirm({
       title: "Log Out",
       message: "Are you sure you want to log out of your account?",
       confirmLabel: "Logout",
@@ -72,8 +73,6 @@ export default React.memo(function Layout({ children }) {
     "/students": "Student Management",
     "/templates": "Templates",
     "/bulk-issue": "Bulk Upload & Field Mapping",
-    "/create-certificate": "Create Certificate",
-    "/certificates/create": "Create Certificate",
     "/certificates/bulk": "Bulk Upload & Field Mapping",
     "/admin/dashboard": "Dashboard",
     "/admin/certificates": "Certificates Management",
@@ -158,7 +157,7 @@ export default React.memo(function Layout({ children }) {
           {!collapsed && (
             <div className="flex items-center gap-3 min-w-0">
               <img src={uewLogo} alt="UEW" className="h-8 w-8 shrink-0" loading="lazy" decoding="async" />
-              <span className="font-bold text-white truncate">CerTiFyHub</span>
+              <span className="font-extrabold text-white truncate">CerTiFyHub</span>
             </div>
           )}
           <button
@@ -183,16 +182,10 @@ export default React.memo(function Layout({ children }) {
             )}
 
             {/* Permission-gated management section for non-SA */}
-            {!isSuperAdmin && (hasPermission('students.view') || hasPermission('certificates.issue')) && (
+            {!isSuperAdmin && hasPermission('students.view') && (
               <>
                 {renderSectionDivider("Management")}
-                {hasPermission('students.view') && renderNavItem("/students", Users, "Student Management")}
-                {hasPermission('certificates.issue') && (
-                  <>
-                    {renderSectionDivider("Actions")}
-                    {renderNavItem("/create-certificate", FilePlus, "Create Certificate")}
-                  </>
-                )}
+                {renderNavItem("/students", Users, "Student Management")}
               </>
             )}
 
@@ -222,7 +215,7 @@ export default React.memo(function Layout({ children }) {
             <div className="flex flex-col items-center gap-2">
               <SidebarTooltip label={`${displayName} (${roleLabel})`} collapsed>
                 <div
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-[#242576] text-sm font-bold cursor-default"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-[#242576] text-sm font-extrabold cursor-default"
                   tabIndex={0}
                   role="img"
                   aria-label={`${displayName} (${roleLabel})`}
@@ -244,7 +237,7 @@ export default React.memo(function Layout({ children }) {
           ) : (
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[#242576] text-sm font-bold">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[#242576] text-sm font-extrabold">
                   {initials}
                 </div>
                 <div className="min-w-0">
@@ -269,8 +262,8 @@ export default React.memo(function Layout({ children }) {
       {/* Main content area */}
       <main id="main-content" className="flex-1 h-screen bg-(--color-bg-page) flex flex-col overflow-hidden min-w-0">
         {/* Header bar */}
-        <header className="sticky top-0 z-10 flex items-center justify-between bg-white border-b border-slate-200 px-8 py-3 shadow-sm">
-          <h1 className="text-lg font-bold text-slate-800 whitespace-nowrap">
+        {/* <header className="sticky top-0 z-10 flex items-center justify-between bg-(--color-bg-page) border-b border-slate-200 px-8 py-3">
+          <h1 className="text-2xl font-extrabold text-slate-800 whitespace-nowrap">
             {pageTitle}
           </h1>
 
@@ -288,7 +281,7 @@ export default React.memo(function Layout({ children }) {
           <div className="flex items-center gap-4 whitespace-nowrap">
             <NotificationBell />
           </div>
-        </header>
+        </header> */}
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto transition-all duration-300">
