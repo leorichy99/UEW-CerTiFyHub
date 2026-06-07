@@ -8,7 +8,7 @@ class CertificateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Certificate
         fields = [
-            'id', 'student', 'template', 'status',
+            'id', 'student_record', 'template', 'status',
             'student_name', 'degree_type', 'degree_type_display',
             'honors', 'honors_display', 'program', 'date_awarded',
             'university_logo', 'vc_signature', 'registrar_signature',

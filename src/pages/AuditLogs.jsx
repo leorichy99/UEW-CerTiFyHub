@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useToast } from "../components/ToastContainer";
 import { superAdminAPI } from "../services/api";
-import PageHeader from "../components/ui/PageHeader";
 import { 
   FileText, 
   Shield, 
@@ -19,6 +18,7 @@ import {
 } from "lucide-react";
 import Pagination from "../components/Pagination";
 import RefreshButton from "../components/ui/RefreshButton";
+import Table from "../components/ui/Table";
 
 export default React.memo(function AuditLogs() {
   const toast = useToast();
@@ -159,27 +159,21 @@ export default React.memo(function AuditLogs() {
   }, [activeTab, debouncedSearch, dateFilter, statusFilter]);
 
   const tabs = [
-    { id: "admin", label: "Admin Activity", icon: Shield },
-    { id: "provisioning", label: "Provisioning", icon: Users },
-    { id: "credentials", label: "Credentials", icon: CheckCircle },
-    { id: "permissions", label: "Permissions", icon: Activity },
-    { id: "security", label: "Security Logs", icon: AlertTriangle },
-    { id: "login", label: "Login Attempts", icon: Users },
-    { id: "verification", label: "Verification", icon: Eye }
+    { id: "admin", label: "Admin Activity"},
+    { id: "provisioning", label: "Provisioning"},
+    { id: "credentials", label: "Credentials"},
+    { id: "permissions", label: "Permissions"},
+    { id: "security", label: "Security Logs"},
+    { id: "login", label: "Login Attempts"},
+    { id: "verification", label: "Verification"}
   ];
 
   return (
     <div className="">
-      <PageHeader
-        title="Audit Logs"
-        description="Track and review all system activities and events"
-        showSearch={false}
-      />
       {/* Tab Navigation */}
       <div className="border-b border-slate-200 mb-6">
         <nav className="flex space-x-8">
           {tabs.map((tab) => {
-            const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
@@ -190,7 +184,6 @@ export default React.memo(function AuditLogs() {
                     : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
                 }`}
               >
-                <Icon size={18} />
                 {tab.label}
               </button>
             );
@@ -253,53 +246,51 @@ export default React.memo(function AuditLogs() {
       </div>
 
       {/* Logs Table */}
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-[#242576]">
-              <tr>
-                <th className="px-2 py-2 text-left text-sm font-medium text-white uppercase">Timestamp</th>
-                <th className="px-2 py-2 text-left text-sm font-medium text-white uppercase">User</th>
-                <th className="px-2 py-2 text-left text-sm font-medium text-white uppercase">Action</th>
-                <th className="px-2 py-2 text-left text-sm font-medium text-white uppercase">Target</th>
-                <th className="px-2 py-2 text-left text-sm font-medium text-white uppercase">IP</th>
-                <th className="px-2 py-2 text-left text-sm font-medium text-white uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-sm font-medium text-white uppercase">Details</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-slate-200">
-              {paginatedLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50">
-                  <td className="px-2 py-2 text-sm text-slate-900">
-                    {formatTimestamp(log.timestamp)}
-                  </td>
-                  <td className="px-2 py-2 text-sm font-medium text-slate-900">
-                    {log.user}
-                  </td>
-                  <td className="px-2 py-2 text-sm text-slate-900">
-                    {log.action}
-                  </td>
-                  <td className="px-2 py-2 text-sm text-slate-900">
-                    {log.target}
-                  </td>
-                  <td className="px-2 py-2 text-sm text-slate-500">
-                    {log.ip}
-                  </td>
-                  <td className="px-2 py-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-1 text-sm font-medium rounded-full ${getStatusBadge(log.status)}`}>
-                        {log.status}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-2 py-2 text-sm text-slate-500">
-                    {log.details}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <div className="bg-white shadow-lg overflow-hidden">
+        <Table>
+          <Table.Head>
+            <tr>
+              <Table.HeaderCell>Timestamp</Table.HeaderCell>
+              <Table.HeaderCell>User</Table.HeaderCell>
+              <Table.HeaderCell>Action</Table.HeaderCell>
+              <Table.HeaderCell>Target</Table.HeaderCell>
+              <Table.HeaderCell>IP</Table.HeaderCell>
+              <Table.HeaderCell>Status</Table.HeaderCell>
+              <Table.HeaderCell>Details</Table.HeaderCell>
+            </tr>
+          </Table.Head>
+          <Table.Body>
+            {paginatedLogs.map((log) => (
+              <Table.Row key={log.id}>
+                <Table.Cell className="text-sm text-slate-900">
+                  {formatTimestamp(log.timestamp)}
+                </Table.Cell>
+                <Table.Cell className="text-sm font-medium text-slate-900">
+                  {log.user}
+                </Table.Cell>
+                <Table.Cell className="text-sm text-slate-900">
+                  {log.action}
+                </Table.Cell>
+                <Table.Cell className="text-sm text-slate-900">
+                  {log.target}
+                </Table.Cell>
+                <Table.Cell className="text-sm text-slate-500">
+                  {log.ip}
+                </Table.Cell>
+                <Table.Cell>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 text-sm font-medium rounded-full ${getStatusBadge(log.status)}`}>
+                      {log.status}
+                    </span>
+                  </div>
+                </Table.Cell>
+                <Table.Cell className="text-sm text-slate-500">
+                  {log.details}
+                </Table.Cell>
+              </Table.Row>
+            ))}
+          </Table.Body>
+        </Table>
 
         {logs.length === 0 && !loading && (
           <div className="text-center py-12 text-slate-500">

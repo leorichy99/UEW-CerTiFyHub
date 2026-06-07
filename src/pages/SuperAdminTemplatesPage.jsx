@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "../components/ToastContainer";
 import { useConfirmDialog } from "../context/ConfirmDialogContext";
 import { templateAPI } from "../services/api";
-import PageHeader from "../components/ui/PageHeader";
 import {
   Search,
   ChevronDown,
@@ -175,14 +174,8 @@ export default function SuperAdminTemplatesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Templates"
-        description="Manage certificate templates and design configurations"
-        showSearch={false}
-      />
-
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <SummaryStatCard title="Total Templates" value={stats.total} Icon={LayoutGrid} tone="info" />
         <SummaryStatCard title="Locked (Official)" value={stats.locked} Icon={Lock} tone="positive" />
         <SummaryStatCard title="Drafts / Unlocked" value={stats.draftsUnlocked} Icon={FileText} tone="neutral" />

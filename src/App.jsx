@@ -28,7 +28,13 @@ const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
 const VerifyResetPage = lazy(() => import("./pages/VerifyResetPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const CertificatesPage = lazy(() => import("./pages/CertificatesPage"));
-const StudentsPage = lazy(() => import("./pages/StudentsPage"));
+const ConfirmationPage = lazy(() => import("./pages/ConfirmationPage"));
+const RegistryFacultiesPage = lazy(() => import("./pages/RegistryFacultiesPage"));
+const RegistrySessionDetailPage = lazy(() => import("./pages/RegistrySessionDetailPage"));
+const BatchesListPage = lazy(() => import("./pages/BatchesListPage"));
+const CongregationsListPage = lazy(() => import("./pages/CongregationsListPage"));
+const CongregationDetailPage = lazy(() => import("./pages/CongregationDetailPage"));
+const CongregationTemplatesPage = lazy(() => import("./pages/CongregationTemplatesPage"));
 const TemplatesPage = lazy(() => import("./pages/TemplatesPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const AccountManagementPage = lazy(() => import("./pages/AccountManagementPage"));
@@ -40,6 +46,7 @@ const AuditLogs = lazy(() => import("./pages/AuditLogs"));
 const GlobalAnalytics = lazy(() => import("./pages/GlobalAnalytics"));
 const SuperAdminTemplatesPage = lazy(() => import("./pages/SuperAdminTemplatesPage"));
 const TemplateEditorPage = lazy(() => import("./pages/TemplateEditorPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 
 function DashboardLayout({ children }) {
   return <Layout>{children}</Layout>;
@@ -70,8 +77,59 @@ function RouteShell({ children, fallback }) {
   );
 }
 
+const ROUTE_TITLES = [
+  { path: "/login", title: "Login" },
+  { path: "/setup-account/:token", title: "Setup Account" },
+  { path: "/verify", title: "Verify Certificate" },
+  { path: "/verify/:id", title: "Verify Certificate" },
+  { path: "/forgot-password", title: "Forgot Password" },
+  { path: "/forgot-password/verify", title: "Verify Reset" },
+  { path: "/forgot-password/reset", title: "Reset Password" },
+  { path: "/confirm/:token", title: "Confirm Details" },
+  { path: "/dashboard", title: "Dashboard" },
+  { path: "/certificates", title: "Certificates" },
+  { path: "/templates", title: "Templates" },
+  { path: "/templates/new", title: "New Template" },
+  { path: "/templates/:id/edit", title: "Edit Template" },
+  { path: "/profile", title: "Profile" },
+  { path: "/admin/dashboard", title: "Admin Dashboard" },
+  { path: "/admin/certificates", title: "All Certificates" },
+  { path: "/admin/templates", title: "All Templates" },
+  { path: "/admin/users", title: "Account Management" },
+  { path: "/admin/settings", title: "System Settings" },
+  { path: "/admin/audit", title: "Audit Logs" },
+  { path: "/admin/analytics", title: "Analytics" },
+  { path: "/admin/batches", title: "Certificate Batches" },
+  { path: "/admin/batches/:id", title: "Batch" },
+  { path: "/admin/congregations", title: "Congregations" },
+  { path: "/admin/congregations/:id", title: "Congregation" },
+  { path: "/admin/congregation-templates", title: "Congregation Templates" },
+  { path: "/registry/faculties-departments", title: "Faculties & Departments" },
+  { path: "/registry/congregations/:congregation_id/sessions/:session_id", title: "Session" },
+  { path: "/settings/faculties-departments", title: "Faculties & Departments" },
+  { path: "/authorisation-letters", title: "Authorisation Letters" },
+];
+
+function getTitleForPath(pathname) {
+  for (const route of ROUTE_TITLES) {
+    const pattern = route.path
+      .replace(/:([^/]+)/g, "([^/]+)")
+      .replace(/\*/g, ".*");
+    const regex = new RegExp(`^${pattern}$`);
+    if (regex.test(pathname)) {
+      return route.title;
+    }
+  }
+  return null;
+}
+
 function AnimatedRoutes() {
   const location = useLocation();
+
+  useEffect(() => {
+    const title = getTitleForPath(location.pathname);
+    document.title = title ? `${title} — UEW CerTiFyHub` : "UEW CerTiFyHub";
+  }, [location.pathname]);
 
   return (
     <Routes location={location} key={location.pathname}>
@@ -145,6 +203,18 @@ function AnimatedRoutes() {
           </RouteShell>
         }
       />
+      {/* Public student confirmation page (no auth) */}
+      <Route
+        path="/confirm/:token"
+        element={
+          <RouteShell fallback={<div className="min-h-[60vh] flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          </div>}>
+            <ConfirmationPage />
+          </RouteShell>
+        }
+      />
+
       {/* Legacy activation route — redirect to login */}
       <Route path="/activate-admin/:token" element={<Navigate to="/login" replace />} />
 
@@ -188,19 +258,91 @@ function AnimatedRoutes() {
       />
 
       <Route
-        path="/students"
+        path="/settings/faculties-departments"
         element={
-          <ProtectedRoute requiredPermission="students.view">
+          <ProtectedRoute roles={["SUPER_ADMIN"]}>
             <DashboardLayout>
-              <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-      </div>}>
-                <StudentsPage />
+              <RouteShell fallback={<div className="min-h-[60vh] flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              </div>}>
+                <RegistryFacultiesPage />
               </RouteShell>
             </DashboardLayout>
           </ProtectedRoute>
         }
       />
+
+      {/* Batch-centric navigation (replaces congregations) */}
+      <Route
+        path="/admin/batches"
+        element={
+          <ProtectedRoute roles={["SUPER_ADMIN"]}>
+            <DashboardLayout>
+              <RouteShell fallback={<div className="min-h-[60vh] flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              </div>}>
+                <BatchesListPage />
+              </RouteShell>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/batches/:id"
+        element={
+          <ProtectedRoute roles={["SUPER_ADMIN"]}>
+            <DashboardLayout>
+              <RouteShell fallback={<div className="min-h-[60vh] flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              </div>}>
+                <RegistrySessionDetailPage />
+              </RouteShell>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Legacy congregation routes — redirect to batches */}
+      <Route path="/admin/congregations" element={<Navigate to="/admin/batches" replace />} />
+      <Route path="/admin/congregations/:id" element={<Navigate to="/admin/batches" replace />} />
+      <Route path="/admin/congregation-templates" element={<Navigate to="/admin/batches" replace />} />
+      <Route path="/registry/congregations/:congregation_id/sessions/:session_id" element={<Navigate to="/admin/batches/:session_id" replace />} />
+
+      {/* Slice 5: Congregation-centric navigation (kept for direct access but redirects above) */}
+      <Route
+        path="/admin/congregations-legacy"
+        element={
+          <ProtectedRoute roles={["SUPER_ADMIN"]}>
+            <DashboardLayout>
+              <RouteShell fallback={<div className="min-h-[60vh] flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              </div>}>
+                <CongregationsListPage />
+              </RouteShell>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/congregations-legacy/:id"
+        element={
+          <ProtectedRoute roles={["SUPER_ADMIN"]}>
+            <DashboardLayout>
+              <RouteShell fallback={<div className="min-h-[60vh] flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              </div>}>
+                <CongregationDetailPage />
+              </RouteShell>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Legacy route redirects */}
+      <Route path="/students" element={<Navigate to="/" replace />} />
+      <Route path="/registry/sessions" element={<Navigate to="/admin/batches" replace />} />
+      <Route path="/registry/sessions/:id" element={<Navigate to="/admin/batches" replace />} />
+      <Route path="/registry/faculties" element={<Navigate to="/settings/faculties-departments" replace />} />
 
       <Route
         path="/templates"
@@ -334,6 +476,21 @@ function AnimatedRoutes() {
       />
 
       <Route path="/admin/invitations" element={<Navigate to="/admin/accounts" replace />} />
+
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <RouteShell fallback={<div className="min-h-[60vh] flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              </div>}>
+                <ProfilePage />
+              </RouteShell>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/admin/templates"

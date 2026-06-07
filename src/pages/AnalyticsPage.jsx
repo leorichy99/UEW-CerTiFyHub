@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import axios from "../services/api";
-import PageHeader from "../components/ui/PageHeader";
 import {
   PieChart,
   Pie,
@@ -23,6 +22,7 @@ import {
   Clock,
 } from "lucide-react";
 import SummaryStatCard from "../components/SummaryStatCard";
+import Table from "../components/ui/Table";
 
 export default function AnalyticsPage() {
   const [data, setData] = useState(null);
@@ -132,12 +132,6 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
-      <PageHeader
-        title="Analytics"
-        description="Certificate issuance trends and program distribution"
-        showSearch={true}
-      />
-
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {cards.map((card, i) => (
           <SummaryStatCard
@@ -247,45 +241,43 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-8 border-b border-slate-100 flex justify-between items-center">
           <h3 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
             <Clock size={20} className="text-blue-600" />
             Recent Issuances
           </h3>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-(--color-brand-dark)">
-              <tr>
-                <th className="px-8 py-4 text-xs font-extrabold text-white uppercase tracking-widest">Student</th>
-                <th className="px-8 py-4 text-xs font-extrabold text-white uppercase tracking-widest">Certificate #</th>
-                <th className="px-8 py-4 text-xs font-extrabold text-white uppercase tracking-widest">Date</th>
-                <th className="px-8 py-4 text-xs font-extrabold text-white uppercase tracking-widest">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {(data.recent_activity || []).map((item, i) => (
-                <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-8 py-4 font-extrabold text-slate-900">{item.student_name}</td>
-                  <td className="px-8 py-4 text-sm font-mono text-slate-500">{item.certificate_number}</td>
-                  <td className="px-8 py-4 text-sm text-slate-600">
-                    {new Date(item.generated_date).toLocaleDateString()}
-                  </td>
-                  <td className="px-8 py-4 text-sm">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-black uppercase ${
-                        item.status === "ISSUED" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-                      }`}
-                    >
-                      {item.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <Table.Head>
+            <tr>
+              <Table.HeaderCell>Student</Table.HeaderCell>
+              <Table.HeaderCell>Certificate #</Table.HeaderCell>
+              <Table.HeaderCell>Date</Table.HeaderCell>
+              <Table.HeaderCell>Status</Table.HeaderCell>
+            </tr>
+          </Table.Head>
+          <Table.Body>
+            {(data.recent_activity || []).map((item, i) => (
+              <Table.Row key={i}>
+                <Table.Cell className="font-extrabold text-slate-900">{item.student_name}</Table.Cell>
+                <Table.Cell className="text-sm font-mono text-slate-500">{item.certificate_number}</Table.Cell>
+                <Table.Cell className="text-sm text-slate-600">
+                  {new Date(item.generated_date).toLocaleDateString()}
+                </Table.Cell>
+                <Table.Cell className="text-sm">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-black uppercase ${
+                      item.status === "ISSUED" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {item.status}
+                  </span>
+                </Table.Cell>
+              </Table.Row>
+            ))}
+          </Table.Body>
+        </Table>
       </div>
     </div>
   );

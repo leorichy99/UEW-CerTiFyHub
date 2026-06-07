@@ -36,15 +36,15 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://41.74.80.63:8000',
+        target: 'http://20.8.3.184:8000',
         changeOrigin: true,
       },
       '/media': {
-        target: 'http://41.74.80.63:8000',
+        target: 'http://20.8.3.184:8000',
         changeOrigin: true,
       },
       '/ws': {
-        target: 'http://41.74.80.63:8000',
+        target: 'http://20.8.3.184:8000',
         changeOrigin: true,
         ws: true,
       },

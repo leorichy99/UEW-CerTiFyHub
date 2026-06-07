@@ -13,8 +13,9 @@ class CertificateTemplate(models.Model):
     background_image = models.ImageField(upload_to='templates/backgrounds/', null=True, blank=True)
     
     # Store dimensions to render correctly on frontend/backend
-    canvas_width = models.IntegerField(default=800)
-    canvas_height = models.IntegerField(default=600)
+    # A4 landscape in PDF points (72 DPI) — must match CANVAS_PRESETS in editor
+    canvas_width = models.IntegerField(default=842)
+    canvas_height = models.IntegerField(default=595)
     
     # Stores the Konva JSON state (nodes: [{attrs...}, ...])
     metadata = models.JSONField(default=dict)

@@ -24,7 +24,7 @@ class CertificateFactory(factory.django.DjangoModelFactory):
     
     class Params:
         with_student = factory.Trait(
-            student=factory.SubFactory('tests.factories.students.StudentFactory'),
+            student_record=factory.SubFactory('tests.factories.registry.StudentRecordFactory'),
         )
         with_template = factory.Trait(
             template=factory.SubFactory('tests.factories.templates.CertificateTemplateFactory'),

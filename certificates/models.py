@@ -26,7 +26,10 @@ class Certificate(models.Model):
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    student = models.ForeignKey('students.Student', on_delete=models.CASCADE, null=True, blank=True)
+    student_record = models.ForeignKey(
+        'registry.StudentRecord', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='certificates',
+    )
     template = models.ForeignKey('templates.CertificateTemplate', on_delete=models.SET_NULL, null=True, blank=True)
     status = models.CharField(max_length=20, default='ISSUED', choices=[('ISSUED', 'Issued'), ('REVOKED', 'Revoked')])
     

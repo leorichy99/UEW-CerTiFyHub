@@ -63,7 +63,7 @@ class PDFRendererAdapter:
         
         return None
     
-    def draw_text(self, canvas, text, x, y, font_name, font_size, fill='#000000', 
+    def draw_text(self, canvas, text, x, y, font_name, font_size, fill='#000000',
                  align='left', max_width=0, line_height=None):
         """
         Draw text on the canvas with optional word wrapping.
@@ -93,7 +93,7 @@ class PDFRendererAdapter:
         paragraphs = text.split('\n')
         wrapped_lines = []
         for para in paragraphs:
-            if max_width:
+            if max_width and max_width > 0:
                 wrapped_lines.extend(wrap_text(para, font_name, font_size, max_width))
             else:
                 wrapped_lines.append(para)
@@ -101,12 +101,20 @@ class PDFRendererAdapter:
         for i, line in enumerate(wrapped_lines):
             y_offset = y + font_size + i * line_height
             
-            if align == 'center' and max_width:
-                center_x = x + max_width / 2
-                canvas.drawCentredString(center_x, y_offset, line)
-            elif align == 'right' and max_width:
-                right_x = x + max_width
-                canvas.drawRightString(right_x, y_offset, line)
+            if align == 'center':
+                if max_width:
+                    center_x = x + max_width / 2
+                    canvas.drawCentredString(center_x, y_offset, line)
+                else:
+                    # Konva: x is the center point when no width is set
+                    canvas.drawCentredString(x, y_offset, line)
+            elif align == 'right':
+                if max_width:
+                    right_x = x + max_width
+                    canvas.drawRightString(right_x, y_offset, line)
+                else:
+                    # Konva: x is the right edge when no width is set
+                    canvas.drawRightString(x, y_offset, line)
             else:
                 canvas.drawString(x, y_offset, line)
     

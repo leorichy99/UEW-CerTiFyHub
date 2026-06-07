@@ -10,7 +10,7 @@ import {
 // ── Category metadata ────────────────────────────────────────────────────
 const CATEGORY_META = {
   certificate_management: { icon: Award, color: "text-blue-600 bg-blue-50", description: "View, revoke, and download certificates" },
-  student_records: { icon: BookOpen, color: "text-emerald-600 bg-emerald-50", description: "Access and manage student information" },
+  student_registry: { icon: BookOpen, color: "text-emerald-600 bg-emerald-50", description: "Manage congregation sessions and student records" },
   verification: { icon: ShieldCheck, color: "text-violet-600 bg-violet-50", description: "Verify certificate authenticity and view logs" },
   reporting_audit: { icon: BarChart3, color: "text-amber-600 bg-amber-50", description: "Access reports and export data" },
   system_configuration: { icon: Settings, color: "text-slate-600 bg-slate-100", description: "Manage certificate templates and system config" },
@@ -22,9 +22,14 @@ const PERMISSION_INFO = {
   "certificates.edit_drafts": { label: "Edit Certificate Drafts", desc: "Modify certificate records in draft state before issuance." },
   "certificates.view_all": { label: "View All Certificates", desc: "Read-only access to the full certificate registry." },
   "certificates.download": { label: "Download Certificates", desc: "Export certificate records or PDFs." },
-  "students.view": { label: "View Student Records", desc: "Read-only access to student data linked to certificates." },
-  "students.edit": { label: "Edit Student Records", desc: "Modify student data. High privilege. Confirm letter scope before enabling." },
-  "students.import": { label: "Import Student Data", desc: "Bulk import student records from an external file. Very high privilege. Must be explicitly stated in the letter scope." },
+  "registry.sessions.create": { label: "Create Congregation Sessions", desc: "Create and configure new congregation sessions." },
+  "registry.records.upload": { label: "Upload Student Records", desc: "Upload CSV/XLSX files of student records into a draft session." },
+  "registry.records.manage": { label: "Manage Student Records", desc: "Edit or delete student records while a session is in Draft." },
+  "registry.sessions.publish": { label: "Publish Sessions", desc: "Publish a draft session and dispatch confirmation emails. Very high privilege." },
+  "registry.confirmation.view": { label: "View Confirmation Status", desc: "View confirmation progress, statuses, and audit trail." },
+  "registry.disputes.resolve": { label: "Resolve Disputes", desc: "Resolve student disputes raised during confirmation." },
+  "registry.issuance.initiate": { label: "Initiate Issuance", desc: "Trigger the issuance engine for a closed session." },
+  "registry.export": { label: "Export Session Data", desc: "Export student records and confirmation data as CSV." },
   "verification.verify": { label: "Verify Certificates", desc: "Access the internal verification interface to confirm certificate authenticity." },
   "verification.view_logs": { label: "View Verification Logs", desc: "See the history of all verification requests and their outcomes." },
   "reports.view": { label: "View Reports", desc: "Access pre-built system reports including issuance summaries and statistics." },
@@ -35,7 +40,7 @@ const PERMISSION_INFO = {
 // Only show these 5 categories (exclude user_account_management)
 const VISIBLE_CATEGORY_IDS = [
   "certificate_management",
-  "student_records",
+  "student_registry",
   "verification",
   "reporting_audit",
   "system_configuration",

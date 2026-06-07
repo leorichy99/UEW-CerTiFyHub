@@ -2,15 +2,15 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { authorisationAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import Drawer from "../components/Drawer";
-import PageHeader from "../components/ui/PageHeader";
+import Table from "../components/ui/Table";
 import { UEW_DEPARTMENTS } from "../utils/constants";
 import {
-  Loader2, Search, Plus, FileText, Upload, CheckCircle,
+  Loader2, Search, Plus, FileX, Upload, CheckCircle,
   Clock, AlertTriangle, Eye,
 } from "lucide-react";
 
 const STATUS_BADGE = {
-  pending: { className: "bg-amber-100 text-amber-700", icon: Clock, label: "Pending" },
+  pending: { className: "bg-amber-100 text-amber-900", icon: Clock, label: "Pending" },
   used: { className: "bg-green-100 text-green-700", icon: CheckCircle, label: "Used" },
   cancelled: { className: "bg-red-100 text-red-700", icon: AlertTriangle, label: "Cancelled" },
 };
@@ -96,12 +96,6 @@ export default function AuthorisationLettersPage() {
 
   return (
     <div className="space-y-6">
-            <PageHeader
-              title="Authorization Letters"
-              description="Manage authorization letters for certificate issuance"
-              showSearch={false}
-            />
-
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 flex items-center gap-2">
           <AlertTriangle size={16} /> {error}
@@ -274,58 +268,56 @@ export default function AuthorisationLettersPage() {
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-blue-600" /></div>
       ) : letters.length === 0 ? (
-        <div className="text-center py-12 text-slate-500 text-sm">
-          <FileText className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+        <div className="text-center py-12 text-slate-700 text-md">
+          <FileX className="h-30 w-30 text-slate-300 mx-auto mb-3" />
           No authorisation letters logged yet.
         </div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="text-left px-4 py-3 font-semibold text-slate-600">Reference</th>
-                <th className="text-left px-4 py-3 font-semibold text-slate-600">Purpose</th>
-                <th className="text-left px-4 py-3 font-semibold text-slate-600">Requester</th>
-                <th className="text-left px-4 py-3 font-semibold text-slate-600">Staff ID</th>
-                <th className="text-left px-4 py-3 font-semibold text-slate-600">Approval Date</th>
-                <th className="text-left px-4 py-3 font-semibold text-slate-600">Status</th>
-                <th className="text-left px-4 py-3 font-semibold text-slate-600">Logged By</th>
-                <th className="text-right px-4 py-3 font-semibold text-slate-600">Document</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {letters.map((letter) => {
-                const badge = STATUS_BADGE[letter.status] || STATUS_BADGE.pending;
-                const BadgeIcon = badge.icon;
-                return (
-                  <tr key={letter.id} className="hover:bg-slate-50/50">
-                    <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-800">{letter.reference_number}</td>
-                    <td className="px-4 py-3 text-xs text-slate-600 capitalize">{letter.purpose === "permission_change" ? "Permission Change" : "Provisioning"}</td>
-                    <td className="px-4 py-3 text-slate-700">{letter.requester_name}</td>
-                    <td className="px-4 py-3 text-slate-600">{letter.requester_staff_id}</td>
-                    <td className="px-4 py-3 text-slate-600">{letter.approval_date}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${badge.className}`}>
-                        <BadgeIcon size={12} /> {badge.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">{letter.logged_by_name || "—"}</td>
-                    <td className="px-4 py-3 text-right">
-                      {letter.scanned_letter ? (
-                        <a href={letter.scanned_letter} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 text-xs font-medium">
-                          <Eye size={14} /> View
-                        </a>
-                      ) : (
-                        <span className="text-slate-400 text-xs">None</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <Table.Head>
+            <tr>
+              <Table.HeaderCell>Reference</Table.HeaderCell>
+              <Table.HeaderCell>Purpose</Table.HeaderCell>
+              <Table.HeaderCell>Requester</Table.HeaderCell>
+              <Table.HeaderCell>Staff ID</Table.HeaderCell>
+              <Table.HeaderCell>Approval Date</Table.HeaderCell>
+              <Table.HeaderCell>Status</Table.HeaderCell>
+              <Table.HeaderCell>Logged By</Table.HeaderCell>
+              <Table.HeaderCell className="text-right">Document</Table.HeaderCell>
+            </tr>
+          </Table.Head>
+          <Table.Body>
+            {letters.map((letter) => {
+              const badge = STATUS_BADGE[letter.status] || STATUS_BADGE.pending;
+              const BadgeIcon = badge.icon;
+              return (
+                <Table.Row key={letter.id}>
+                  <Table.Cell className="font-mono text-xs font-semibold text-slate-800">{letter.reference_number}</Table.Cell>
+                  <Table.Cell className="text-xs text-slate-600 capitalize">{letter.purpose === "permission_change" ? "Permission Change" : "Provisioning"}</Table.Cell>
+                  <Table.Cell className="text-slate-700">{letter.requester_name}</Table.Cell>
+                  <Table.Cell className="text-slate-600">{letter.requester_staff_id}</Table.Cell>
+                  <Table.Cell className="text-slate-600">{letter.approval_date}</Table.Cell>
+                  <Table.Cell>
+                    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${badge.className}`}>
+                      <BadgeIcon size={12} /> {badge.label}
+                    </span>
+                  </Table.Cell>
+                  <Table.Cell className="text-slate-600">{letter.logged_by_name || "—"}</Table.Cell>
+                  <Table.Cell className="text-right">
+                    {letter.scanned_letter ? (
+                      <a href={letter.scanned_letter} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 text-xs font-medium">
+                        <Eye size={14} /> View
+                      </a>
+                    ) : (
+                      <span className="text-slate-400 text-xs">None</span>
+                    )}
+                  </Table.Cell>
+                </Table.Row>
+              );
+            })}
+          </Table.Body>
+        </Table>
       )}
     </div>
   );

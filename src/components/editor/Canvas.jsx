@@ -10,7 +10,7 @@ import {
   Transformer,
 } from "react-konva";
 import { useEditor } from "./EditorContext";
-import { THEME } from "./constants";
+import { THEME, PAGE_MARGIN } from "./constants";
 import TextEditOverlay from "./TextEditOverlay";
 
 import LogoNode from "./nodes/LogoNode";
@@ -141,7 +141,12 @@ export default function Canvas() {
     <div
       ref={canvasShellRef}
       className="relative flex flex-1 w-full overflow-hidden"
-      style={{ background: THEME.bgCanvas }}
+      style={{
+        background: THEME.bgCanvas,
+        backgroundImage:
+          "radial-gradient(circle, rgba(255,255,255,0.08) 1px, transparent 1px)",
+        backgroundSize: "16px 16px",
+      }}
     >
       {/* Rulers */}
       {showRulers && (
@@ -608,6 +613,19 @@ export default function Canvas() {
                       }}
                     />
                   )}
+
+                {/* Margin guide — shows 1-inch printable area boundary */}
+                <Rect
+                  x={PAGE_MARGIN}
+                  y={PAGE_MARGIN}
+                  width={Math.max(0, canvasWidth - PAGE_MARGIN * 2)}
+                  height={Math.max(0, canvasHeight - PAGE_MARGIN * 2)}
+                  listening={false}
+                  stroke="#FF6B6B"
+                  strokeWidth={1}
+                  dash={[6, 4]}
+                  opacity={0.6}
+                />
 
                 {/* Snap lines */}
                 {snapLines.vertical.map((x, i) => (

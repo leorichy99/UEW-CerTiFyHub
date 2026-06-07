@@ -36,7 +36,13 @@ export default function TextNode({
       onDragStart={onDragStart}
       onDragMove={onDragMove}
       onDragEnd={(e) => {
-        onChange({ x: e.target.x(), y: e.target.y() });
+        const node = e.target;
+        const patch = { x: node.x(), y: node.y() };
+        // Keep stored width in sync with the rendered glyph extent for
+        // auto-sized text so the center/right anchor stays accurate in the
+        // backend and snap logic. Explicit (userResized) boxes keep their width.
+        if (!el.userResized) patch.width = Math.round(node.width());
+        onChange(patch);
         onDragEnd?.(e);
       }}
       onTransformEnd={(e) => {
@@ -47,12 +53,17 @@ export default function TextNode({
         node.scaleX(1);
         node.scaleY(1);
 
+        const MIN_FONT_SIZE = 8;
+        const MAX_FONT_SIZE = 200;
+        const rawFontSize = el.fontSize * Math.max(scaleX, scaleY);
+        const clampedFontSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, rawFontSize));
+
         onChange({
           x: node.x(),
           y: node.y(),
           width: node.width() * scaleX,
           userResized: true,
-          fontSize: el.fontSize * Math.max(scaleX, scaleY),
+          fontSize: clampedFontSize,
           rotation: node.rotation(),
         });
       }}

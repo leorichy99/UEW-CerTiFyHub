@@ -16,10 +16,15 @@ GRANTABLE_PERMISSIONS = {
     "certificates.view_all": "View all certificates",
     "certificates.download": "Download certificates",
 
-    # Category 2 — Student and Recipient Records
-    "students.view": "View student records",
-    "students.edit": "Edit student records",
-    "students.import": "Import student data",
+    # Category 2 — Student Registry (congregation sessions + records)
+    "registry.sessions.create": "Create congregation sessions",
+    "registry.records.upload": "Upload student records",
+    "registry.records.manage": "Manage student records (edit/delete in Draft)",
+    "registry.sessions.publish": "Publish sessions and dispatch confirmation emails",
+    "registry.confirmation.view": "View confirmation status",
+    "registry.disputes.resolve": "Resolve student disputes",
+    "registry.issuance.initiate": "Initiate certificate issuance",
+    "registry.export": "Export session data",
 
     # Category 3 — Verification
     "verification.verify": "Verify certificates",
@@ -36,7 +41,8 @@ GRANTABLE_PERMISSIONS = {
 # ── Super-Admin-only permissions (never grantable via letter) ────────────
 
 SUPER_ADMIN_ONLY_PERMISSIONS = {
-    "students.delete": "Delete student records",
+    "registry.sessions.archive": "Archive congregation sessions",
+    "registry.faculties.manage": "Manage faculties and departments",
     "accounts.view_list": "View account list",
     "accounts.deactivate": "Deactivate accounts",
     "accounts.modify_permissions": "Modify account permissions",
@@ -66,12 +72,17 @@ PERMISSION_CATEGORIES = [
         ],
     },
     {
-        "id": "student_records",
-        "label": "Student and Recipient Records",
+        "id": "student_registry",
+        "label": "Student Registry",
         "permissions": [
-            "students.view",
-            "students.edit",
-            "students.import",
+            "registry.sessions.create",
+            "registry.records.upload",
+            "registry.records.manage",
+            "registry.sessions.publish",
+            "registry.confirmation.view",
+            "registry.disputes.resolve",
+            "registry.issuance.initiate",
+            "registry.export",
         ],
     },
     {

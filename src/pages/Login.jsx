@@ -15,7 +15,7 @@ import uewLogo from "../assets/uew-logo.svg";
 import AuthBrandingPanel from "../components/ui/AuthBrandingPanel";
 
 export default function Login() {
-  const [formData, setFormData] = useState({ username: "", password: "" });
+  const [formData, setFormData] = useState({ username: "", password: "", rememberMe: false });
   const [error, setError] = useState("");
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -34,7 +34,19 @@ export default function Login() {
       await login(formData.username, formData.password);
       navigate("/");
     } catch (err) {
-      setError("Invalid credentials. Please try again.");
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail || err?.response?.data?.message || "";
+      if (status === 401) {
+        setError(detail || "Invalid username or password.");
+      } else if (status === 403) {
+        setError(detail || "Your account is locked or deactivated. Contact support.");
+      } else if (status >= 500) {
+        setError("Server error. Please try again later.");
+      } else if (!err?.response) {
+        setError("Network error. Check your connection and try again.");
+      } else {
+        setError(detail || "Something went wrong. Please try again.");
+      }
     }
     finally {
       setSubmitting(false);
@@ -108,10 +120,19 @@ export default function Login() {
                   </div>
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.rememberMe}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, rememberMe: e.target.checked }))}
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    Remember me
+                  </label>
                   <Link to="/forgot-password" className="text-xs text-blue-600 hover:underline transition">
-                  Forgot Password?
-                </Link>
+                    Forgot Password?
+                  </Link>
                 </div>
 
                 <button

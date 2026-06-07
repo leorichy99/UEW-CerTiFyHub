@@ -16,14 +16,24 @@ UserModel = get_user_model()
 # ── Profile & User Serializers ───────────────────────────────────────────
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    avatar = serializers.SerializerMethodField()
+
     class Meta:
         model = UserProfile
         fields = [
             'role', 'phone_number', 'organization', 'staff_id', 'department',
             'account_type', 'access_duration', 'access_end_date',
             'permissions', 'is_legacy', 'first_login_completed',
-            'credential_status',
+            'credential_status', 'avatar',
         ]
+
+    def get_avatar(self, obj):
+        if obj.avatar:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.avatar.url)
+            return obj.avatar.url
+        return None
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -32,6 +42,51 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'profile']
+
+
+class ProfileUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for updating current user's profile."""
+    avatar = serializers.ImageField(required=False, allow_null=True)
+
+    class Meta:
+        model = User
+        fields = ['first_name', 'last_name', 'username', 'email', 'avatar']
+        read_only_fields = ['email']
+
+    def update(self, instance, validated_data):
+        profile_data = {}
+        if 'avatar' in self.initial_data:
+            profile_data['avatar'] = self.initial_data.get('avatar')
+
+        for attr in ['first_name', 'last_name', 'username']:
+            if attr in validated_data:
+                setattr(instance, attr, validated_data[attr])
+        instance.save()
+
+        if profile_data and hasattr(instance, 'profile'):
+            if profile_data.get('avatar'):
+                instance.profile.avatar = profile_data['avatar']
+            instance.profile.save()
+
+        return instance
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    """Serializer for changing user password."""
+    current_password = serializers.CharField(required=True, write_only=True)
+    new_password = serializers.CharField(required=True, write_only=True, min_length=8)
+    confirm_password = serializers.CharField(required=True, write_only=True)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['confirm_password']:
+            raise serializers.ValidationError({'confirm_password': 'Passwords do not match.'})
+        return attrs
+
+    def validate_current_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError('Current password is incorrect.')
+        return value
 
 
 # ── Authorisation Reference Serializers ──────────────────────────────────

@@ -223,13 +223,19 @@ export const certificateAPI = {
     ),
 };
 
-export const studentAPI = {
-  getAll: (params) => api.get("/students/", { params }),
-  getOne: (id) => api.get(`/students/${id}/`),
-  create: (data) => api.post("/students/", data),
-  update: (id, data) => api.patch(`/students/${id}/`, data),
-  delete: (id) => api.delete(`/students/${id}/`),
-  bulkCreate: (students) => api.post("/students/bulk_create/", { students }),
+export const registryAPI = {
+  faculties: {
+    getAll: (params) => api.get("/registry/faculties/", { params }),
+    create: (data) => api.post("/registry/faculties/", data),
+    update: (id, data) => api.patch(`/registry/faculties/${id}/`, data),
+    delete: (id) => api.delete(`/registry/faculties/${id}/`),
+  },
+  departments: {
+    getAll: (params) => api.get("/registry/departments/", { params }),
+    create: (data) => api.post("/registry/departments/", data),
+    update: (id, data) => api.patch(`/registry/departments/${id}/`, data),
+    delete: (id) => api.delete(`/registry/departments/${id}/`),
+  },
 };
 
 export const templateAPI = {
@@ -287,6 +293,23 @@ export const superAdminAPI = {
     api.get("/analytics/audit-logs/", {
       params: { category, search, date, status, page, page_size },
     }),
+};
+
+// Profile API
+export const profileAPI = {
+  me: () => api.get('/auth/me/'),
+  update: (data) => {
+    const formData = new FormData();
+    if (data.first_name !== undefined) formData.append('first_name', data.first_name);
+    if (data.last_name !== undefined) formData.append('last_name', data.last_name);
+    if (data.username !== undefined) formData.append('username', data.username);
+    if (data.avatar instanceof File) formData.append('avatar', data.avatar);
+    if (data.avatar === null) formData.append('avatar', '');
+    return api.patch('/auth/me/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  changePassword: (data) => api.post('/auth/change-password/', data),
 };
 
 // Notification API

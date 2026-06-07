@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { authAPI } from "../services/api";
-import { Loader2, CheckCircle, XCircle, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, Eye, EyeOff, ShieldCheck, ArrowLeft } from "lucide-react";
 
 const PASSWORD_RULES = [
   { id: "length", label: "At least 12 characters", test: (p) => p.length >= 12 },
@@ -178,6 +178,16 @@ export default function SetupAccountPage() {
             {submitting ? "Setting up..." : "Activate Account"}
           </button>
         </form>
+
+        <div className="text-center">
+          <Link
+            to="/login"
+            className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 transition"
+          >
+            <ArrowLeft size={14} />
+            Back to Login
+          </Link>
+        </div>
       </div>
     </div>
   );

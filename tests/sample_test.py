@@ -12,7 +12,7 @@ from tests.factories import (
     UserFactory,
     UserProfileFactory,
     CertificateFactory,
-    StudentFactory,
+    StudentRecordFactory,
     TestCertificateBuilder,
     TestUserBuilder,
 )

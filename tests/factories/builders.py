@@ -6,7 +6,6 @@ Useful for complex scenarios that need flexible configuration.
 from datetime import date, timedelta
 from tests.factories.core import UserFactory, UserProfileFactory
 from tests.factories.certificates import CertificateFactory
-from tests.factories.students import StudentFactory
 from tests.factories.templates import CertificateTemplateFactory
 
 
@@ -19,7 +18,7 @@ class TestCertificateBuilder:
         self._honors = None
         self._program = None
         self._date_awarded = None
-        self._student = None
+        self._student_record = None
         self._template = None
         self._status = 'ISSUED'
         self._created_by = None
@@ -49,9 +48,9 @@ class TestCertificateBuilder:
         self._date_awarded = date
         return self
     
-    def with_student(self, student):
-        """Set student instance."""
-        self._student = student
+    def with_student_record(self, student_record):
+        """Set student record instance."""
+        self._student_record = student_record
         return self
     
     def with_template(self, template):
@@ -82,8 +81,8 @@ class TestCertificateBuilder:
             kwargs['program'] = self._program
         if self._date_awarded:
             kwargs['date_awarded'] = self._date_awarded
-        if self._student:
-            kwargs['student'] = self._student
+        if self._student_record:
+            kwargs['student_record'] = self._student_record
         if self._template:
             kwargs['template'] = self._template
         if self._status:

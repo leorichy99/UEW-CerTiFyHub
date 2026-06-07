@@ -329,54 +329,53 @@ export default function CertificateList({ refreshTrigger, onViewCertificate }) {
         ) : (
           <>
             {/* Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-(--color-brand-dark) text-white text-left text-xs uppercase tracking-wider">
-                    <th className="px-4 py-2 font-semibold">Certificate ID</th>
-                    <th className="px-4 py-2 font-semibold">Recipient</th>
-                    <th className="px-4 py-2 font-semibold">Program</th>
-                    <th className="px-4 py-2 font-semibold">Issued</th>
-                    <th className="px-4 py-2 font-semibold">Status</th>
-                    <th className="px-4 py-2 font-semibold text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {certificates.map((cert) => (
-                    <tr key={cert.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 py-2">
-                        <span className="text-sm font-medium text-blue-600 inline-flex items-center gap-1">
-                          {formatCertId(cert.certificate_number)}
-                          <button
-                            type="button"
-                            onClick={() => { navigator.clipboard.writeText(cert.certificate_number); toast.success('Certificate ID copied'); }}
-                            className="p-0.5 rounded hover:bg-blue-100 text-blue-400 hover:text-blue-600 transition"
-                            title="Copy certificate ID"
-                          >
-                            <Clipboard size={12} />
-                          </button>
+            <Table>
+              <Table.Head>
+                <tr>
+                  <Table.HeaderCell>Certificate ID</Table.HeaderCell>
+                  <Table.HeaderCell>Recipient</Table.HeaderCell>
+                  <Table.HeaderCell>Program</Table.HeaderCell>
+                  <Table.HeaderCell>Issued</Table.HeaderCell>
+                  <Table.HeaderCell>Status</Table.HeaderCell>
+                  <Table.HeaderCell className="text-right">Actions</Table.HeaderCell>
+                </tr>
+              </Table.Head>
+              <Table.Body>
+                {certificates.map((cert) => (
+                  <Table.Row key={cert.id}>
+                    <Table.Cell>
+                      <span className="text-sm font-medium text-blue-600 inline-flex items-center gap-1">
+                        {formatCertId(cert.certificate_number)}
+                        <button
+                          type="button"
+                          onClick={() => { navigator.clipboard.writeText(cert.certificate_number); toast.success('Certificate ID copied'); }}
+                          className="p-0.5 rounded hover:bg-blue-100 text-blue-400 hover:text-blue-600 transition"
+                          title="Copy certificate ID"
+                        >
+                          <Clipboard size={12} />
+                        </button>
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <p className="text-sm font-medium text-slate-900">{cert.student_name}</p>
+                      <p className="text-xs text-slate-400">{cert.degree_type_display} &middot; {cert.honors_display}</p>
+                    </Table.Cell>
+                    <Table.Cell className="text-sm text-slate-600">{cert.program}</Table.Cell>
+                    <Table.Cell className="text-sm text-slate-500">{new Date(cert.date_awarded).toLocaleDateString()}</Table.Cell>
+                    <Table.Cell>
+                      {cert.status === 'REVOKED' ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
+                          <XCircle size={12} /> Revoked
                         </span>
-                      </td>
-                      <td className="px-4 py-2">
-                        <p className="text-sm font-medium text-slate-900">{cert.student_name}</p>
-                        <p className="text-xs text-slate-400">{cert.degree_type_display} &middot; {cert.honors_display}</p>
-                      </td>
-                      <td className="px-4 py-2 text-sm text-slate-600">{cert.program}</td>
-                      <td className="px-4 py-2 text-sm text-slate-500">{new Date(cert.date_awarded).toLocaleDateString()}</td>
-                      <td className="px-4 py-2">
-                        {cert.status === 'REVOKED' ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
-                            <XCircle size={12} /> Revoked
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                            <CheckCircle size={12} /> Active
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                          <CheckCircle size={12} /> Active
+                        </span>
+                      )}
+                    </Table.Cell>
+                    <Table.Cell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
                             onClick={() => onViewCertificate(cert)}
                             className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 transition"
                             title="Preview"
@@ -400,12 +399,11 @@ export default function CertificateList({ refreshTrigger, onViewCertificate }) {
                             </button>
                           )}
                         </div>
-                      </td>
-                    </tr>
+                      </Table.Cell>
+                    </Table.Row>
                   ))}
-                </tbody>
-              </table>
-            </div>
+              </Table.Body>
+            </Table>
 
             {totalPages > 1 && (
               <div className="p-6">

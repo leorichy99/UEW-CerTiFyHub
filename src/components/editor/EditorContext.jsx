@@ -32,6 +32,12 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
   const altDupRef = useRef({ active: false, fromId: null, toId: null });
   const pendingEditIdRef = useRef(null);
 
+  // ─── Unsaved changes / auto-save ─────────────────────────────────
+  const savedSnapshotRef = useRef(null);
+  const autoSaveTimerRef = useRef(null);
+  const [lastAutoSavedAt, setLastAutoSavedAt] = useState(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
   // ─── State ───────────────────────────────────────────────────────
   const [zoom, setZoom] = useState(0.75);
   const [canvasPresetId, setCanvasPresetId] = useState("a4_landscape");
@@ -82,6 +88,13 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
   });
 
   const elements = elementsByPreset[canvasPresetId] || [];
+
+  // Mirror latest elements into a ref so async measurement (font-load
+  // normalization) can read fresh state without stale closures.
+  const elementsByPresetRef = useRef(elementsByPreset);
+  useEffect(() => {
+    elementsByPresetRef.current = elementsByPreset;
+  }, [elementsByPreset]);
 
   // ─── History hook integration (must be after elements is defined) ───────
   const useNewHistory = true; // Feature flag for gradual migration
@@ -144,6 +157,11 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
       setTemplateTitle(initialData.name);
     }
 
+    // Initialize saved snapshot after loading so we don't flag loaded data as "unsaved"
+    setTimeout(() => {
+      updateSavedSnapshot();
+    }, 0);
+
     const incomingBgByPreset = initialData?.metadata?.background_by_preset;
     const incomingBg = initialData?.metadata?.canvas?.background;
     if (incomingBgByPreset && typeof incomingBgByPreset === "object") {
@@ -190,6 +208,21 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
 
   function cloneElements(els) {
     return els.map((el) => ({ ...el }));
+  }
+
+  function getCurrentSnapshot(overrides = {}) {
+    return JSON.stringify({
+      elementsByPreset: overrides.elementsByPreset ?? elementsByPreset,
+      backgroundByPreset,
+      guides,
+      templateTitle,
+      canvasPresetId,
+    });
+  }
+
+  function updateSavedSnapshot() {
+    savedSnapshotRef.current = getCurrentSnapshot();
+    setHasUnsavedChanges(false);
   }
 
   function measurePaperOffset() {
@@ -385,10 +418,11 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
   }
 
   function addPlaceholder(name) {
+    const id = "el-" + Date.now();
     applyElementsUpdate((prev) => [
       ...prev,
       {
-        id: "el-" + Date.now(),
+        id,
         type: "text",
         text: `{${name}}`,
         x: 100,
@@ -403,6 +437,9 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
         opacity: 1,
       },
     ]);
+    // Replace the placeholder default width with the real measured width so the
+    // center anchor (x + width/2) is accurate immediately.
+    persistNaturalWidth(id);
   }
 
   function addQrPlaceholder() {
@@ -506,8 +543,16 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
 
   function snapDragMove(el, e) {
     const node = e.target;
-    const w = el.width ?? (el.radius ? el.radius * 2 : node.width());
-    const h = el.height ?? (el.radius ? el.radius * 2 : node.height());
+    // For text, always use the live rendered width so center-snapping reflects
+    // the actual glyph extent (stored width can be a stale/auto default).
+    const w =
+      el.type === "text"
+        ? node.width()
+        : (el.width ?? (el.radius ? el.radius * 2 : node.width()));
+    const h =
+      el.type === "text"
+        ? node.height()
+        : (el.height ?? (el.radius ? el.radius * 2 : node.height()));
     const isCenterAnchored =
       el.type === "shape_ellipse" ||
       el.type === "shape_circle" ||
@@ -687,13 +732,32 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
       applyElementsUpdate((prev) => prev.filter((el) => el.id !== textEditor.id));
       setSelectedId(null);
     } else {
-      // Only persist text content; let Konva re-measure width naturally so
-      // the bounding box and positions remain stable across edit sessions.
-      // The width is only persisted when the user explicitly resizes via the
-      // transformer (which sets userResized=true on the element).
-      updateElement(textEditor.id, { text: textEditor.value });
+      const id = textEditor.id;
+      updateElement(id, { text: textEditor.value });
+      // After the new text renders, persist the natural width for non-resized
+      // text so the center/right anchor (x + width/2) stays accurate in the
+      // backend renderer and snap logic.
+      persistNaturalWidth(id);
     }
     setTextEditor(null);
+  }
+
+  // Measure the rendered glyph extent of an auto-sized text element and store
+  // it as `width`, so backend rendering and snapping anchor about the true
+  // visual center. No-op for explicit (userResized) boxes.
+  function persistNaturalWidth(id) {
+    requestAnimationFrame(() => {
+      const stage = stageRef.current;
+      if (!stage) return;
+      const node = stage.findOne("#" + id);
+      if (!node) return;
+      const el = (elementsByPreset[canvasPresetId] || []).find((e) => e.id === id);
+      if (!el || el.type !== "text" || el.userResized) return;
+      const measured = Math.round(node.width());
+      if (measured && Math.abs((el.width || 0) - measured) >= 1) {
+        updateElement(id, { width: measured });
+      }
+    });
   }
 
   function cancelTextEditing() {
@@ -764,11 +828,48 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
   };
 
   // ─── Publish / Save ──────────────────────────────────────────────
-  async function publishTemplate() {
+  function validateElements(els) {
+    const issues = [];
+    for (const el of els) {
+      if (el.type === "text" && el.fontSize) {
+        if (el.fontSize > 200) {
+          issues.push(`Element "${el.text || el.id}" has an unusually large font size (${Math.round(el.fontSize)}px). It may have been corrupted. Please resize or delete it.`);
+        }
+        if (el.fontSize < 8) {
+          issues.push(`Element "${el.text || el.id}" has a very small font size (${Math.round(el.fontSize)}px). Minimum is 8px.`);
+        }
+      }
+      // Detect elements with extreme size that would render as giant blocks
+      const area = (el.width || 0) * (el.height || 0);
+      if (area > 0 && area < 500 && el.fontSize > 50) {
+        issues.push(`Element "${el.text || el.id}" has font size ${Math.round(el.fontSize)}px but very small dimensions. This may render incorrectly.`);
+      }
+    }
+    return issues;
+  }
+
+  async function publishTemplate(opts = {}) {
     const finalElementsByPreset = {
       ...elementsByPreset,
       [canvasPresetId]: elements,
     };
+
+    // Validate all presets before saving
+    const allIssues = [];
+    for (const [presetId, presetEls] of Object.entries(finalElementsByPreset)) {
+      const issues = validateElements(presetEls);
+      if (issues.length) {
+        allIssues.push(`[${presetId}] ${issues.join("; ")}`);
+      }
+    }
+    if (allIssues.length && !opts.skipValidation) {
+      const ok = window.confirm(
+        "Potential issues were found in your template:\n\n" +
+        allIssues.join("\n") +
+        "\n\nSave anyway?"
+      );
+      if (!ok) return;
+    }
 
     const payload = {
       title: templateTitle,
@@ -787,13 +888,31 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
     if (onSave) {
       setIsSaving(true);
       try {
-        await onSave(payload);
+        await onSave(payload, opts);
+        if (!opts.silent) {
+          updateSavedSnapshot();
+        }
       } catch (err) {
         console.error("Save failed:", err);
-        toast.error("Failed to save template");
+        if (!opts.silent) {
+          toast.error("Failed to save template");
+        }
       } finally {
         setIsSaving(false);
       }
+    }
+  }
+
+  // ─── Close guard ─────────────────────────────────────────────────
+  async function handleClose() {
+    if (hasUnsavedChanges) {
+      const ok = window.confirm(
+        "You have unsaved changes. If you leave now, your changes will be lost.\n\nLeave anyway?"
+      );
+      if (!ok) return;
+    }
+    if (typeof onClose === "function") {
+      onClose();
     }
   }
 
@@ -829,6 +948,13 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
 
   // ─── Preset switch ───────────────────────────────────────────────
   function switchPreset(newPresetId) {
+    if (newPresetId === canvasPresetId) return;
+    if (hasUnsavedChanges) {
+      const ok = window.confirm(
+        "You have unsaved changes on the current preset.\n\nSwitching will preserve them in memory, but they won't be saved to the server until you click Save.\n\nSwitch anyway?"
+      );
+      if (!ok) return;
+    }
     setElementsByPreset((prev) => {
       const next = {
         ...prev,
@@ -915,6 +1041,21 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
       if (e.key === "Escape") {
         e.preventDefault();
         setSelectedId(null);
+        return;
+      }
+
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const visibleElements = elements.filter((el) => el.visible !== false);
+        if (visibleElements.length === 0) return;
+        const currentIndex = visibleElements.findIndex((el) => el.id === selectedId);
+        let nextIndex;
+        if (e.shiftKey) {
+          nextIndex = currentIndex <= 0 ? visibleElements.length - 1 : currentIndex - 1;
+        } else {
+          nextIndex = currentIndex === -1 || currentIndex === visibleElements.length - 1 ? 0 : currentIndex + 1;
+        }
+        setSelectedId(visibleElements[nextIndex].id);
         return;
       }
 
@@ -1066,6 +1207,151 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
     return () => el.removeEventListener("wheel", onWheel);
   }, [isPreview]);
 
+  // ─── Unsaved changes detection ───────────────────────────────────
+  useEffect(() => {
+    if (!savedSnapshotRef.current) return;
+    const current = getCurrentSnapshot();
+    const changed = current !== savedSnapshotRef.current;
+    setHasUnsavedChanges(changed);
+  }, [elementsByPreset, backgroundByPreset, guides, templateTitle, canvasPresetId]);
+
+  // ─── beforeunload guard ──────────────────────────────────────────
+  useEffect(() => {
+    function onBeforeUnload(e) {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = "You have unsaved changes. Are you sure you want to leave?";
+        return e.returnValue;
+      }
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  // ─── Normalize auto-sized text widths on load ────────────────────
+  // Existing templates may carry stale/default `width` values that make the
+  // center anchor (x + width/2) inaccurate. After fonts are ready, re-measure
+  // the natural width of non-resized text and persist it via a silent save so
+  // existing templates self-heal without a manual re-save.
+  const normalizedPresetsRef = useRef(new Set());
+  useEffect(() => {
+    if (!initialData) return;
+    const presetId = canvasPresetId;
+    if (normalizedPresetsRef.current.has(presetId)) return;
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        if (document.fonts?.ready) await document.fonts.ready;
+      } catch (_) {
+        // fonts API unavailable — proceed with current metrics
+      }
+      // Wait two frames so Konva re-renders text with the loaded fonts.
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      if (cancelled) return;
+      const stage = stageRef.current;
+      if (!stage) return;
+
+      const current = elementsByPresetRef.current[presetId] || [];
+      if (!current.length) return;
+
+      let changed = false;
+      const next = current.map((el) => {
+        if (el.type !== "text" || el.userResized) return el;
+        const node = stage.findOne("#" + el.id);
+        if (!node) return el;
+        const measured = Math.round(node.width());
+        if (!measured || Math.abs((el.width || 0) - measured) < 1) return el;
+        changed = true;
+        return { ...el, width: measured };
+      });
+
+      if (cancelled) return;
+      normalizedPresetsRef.current.add(presetId);
+      if (!changed) return;
+
+      ignoreHistoryRef.current = true;
+      setElementsByPreset((prev) => ({ ...prev, [presetId]: next }));
+      setTimeout(() => {
+        ignoreHistoryRef.current = false;
+      }, 0);
+
+      // Persist silently so the corrected widths reach the backend renderer.
+      if (onSave) {
+        const finalByPreset = { ...elementsByPresetRef.current, [presetId]: next };
+        const payload = {
+          title: templateTitle,
+          canvas: {
+            presetId,
+            width: canvasWidth,
+            height: canvasHeight,
+            background: canvasBackground,
+          },
+          elements: next,
+          elements_by_preset: finalByPreset,
+          background_by_preset: backgroundByPreset,
+          guides,
+        };
+        onSave(payload, { silent: true })
+          .then(() => {
+            savedSnapshotRef.current = getCurrentSnapshot({ elementsByPreset: finalByPreset });
+            setHasUnsavedChanges(false);
+            setLastAutoSavedAt(Date.now());
+          })
+          .catch(() => {
+            // Silent fail — unsaved indicator remains; user can save manually.
+          });
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialData, canvasPresetId]);
+
+  // ─── Auto-save ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+
+    autoSaveTimerRef.current = setTimeout(() => {
+      if (hasUnsavedChanges && onSave) {
+        // Build payload and call onSave silently
+        const finalElementsByPreset = {
+          ...elementsByPreset,
+          [canvasPresetId]: elements,
+        };
+        const payload = {
+          title: templateTitle,
+          canvas: {
+            presetId: canvasPresetId,
+            width: canvasWidth,
+            height: canvasHeight,
+            background: canvasBackground,
+          },
+          elements: finalElementsByPreset[canvasPresetId],
+          elements_by_preset: finalElementsByPreset,
+          background_by_preset: backgroundByPreset,
+          guides,
+        };
+        onSave(payload, { silent: true })
+          .then(() => {
+            setLastAutoSavedAt(Date.now());
+            updateSavedSnapshot();
+          })
+          .catch(() => {
+            // Silent fail — user will see unsaved-changes indicator remains
+          });
+      }
+    }, 30000); // 30 seconds
+
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [hasUnsavedChanges, elementsByPreset, backgroundByPreset, guides, templateTitle, canvasPresetId, canvasWidth, canvasHeight, canvasBackground, elements, onSave]);
+
   // ─── Context value ───────────────────────────────────────────────
   const value = useMemo(() => ({
     // Refs
@@ -1097,6 +1383,8 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
     activeRightTab, setActiveRightTab,
     guides, setGuides,
     openToolGroups, setOpenToolGroups,
+    hasUnsavedChanges,
+    lastAutoSavedAt,
 
     // Background
     backgroundByPreset, setBackgroundByPreset,
@@ -1121,7 +1409,7 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
     startTextEditing, commitTextEditing, cancelTextEditing,
     outlineSelectedText, generateSpiralPoints,
     publishTemplate, switchPreset, measurePaperOffset,
-    isValidCssColor, onClose,
+    isValidCssColor, onClose, handleClose,
 
     // Layer operations
     reorderElement, toggleElementVisibility, toggleElementLock, renameElement,
@@ -1139,6 +1427,7 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
     openToolGroups, backgroundByPreset, canvasBackground, patternImage,
     elementsByPreset, elements, activePreset, selectedElement, isPreview,
     isEditingText, isPortrait, canUndo, canRedo, onClose, toast,
+    hasUnsavedChanges, lastAutoSavedAt, handleClose,
   ]);
 
   return (

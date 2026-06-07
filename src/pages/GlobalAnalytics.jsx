@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "../components/ToastContainer";
 import { superAdminAPI } from "../services/api";
-import PageHeader from "../components/ui/PageHeader";
 import {
   ResponsiveContainer,
   BarChart,
@@ -31,6 +30,7 @@ import {
 } from "lucide-react";
 import SummaryStatCard from "../components/SummaryStatCard";
 import RefreshButton from "../components/ui/RefreshButton";
+import Table from "../components/ui/Table";
 
 export default function GlobalAnalytics() {
   const toast = useToast();
@@ -142,11 +142,6 @@ export default function GlobalAnalytics() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Analytics"
-        description="System-wide certificate issuance and verification trends"
-        showSearch={true}
-      />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="relative">
@@ -175,7 +170,7 @@ export default function GlobalAnalytics() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <SummaryStatCard
           title="Total Issued"
           value={fmt(s.totalIssued)}
@@ -328,42 +323,40 @@ export default function GlobalAnalytics() {
         {/* <div className="px-5 py-4 border-b border-slate-100">
           <h2 className="text-base font-semibold text-white bg-brand">Department Breakdown</h2>
         </div> */}
-        <div className="overflow-x-auto rounded-xl">
-          <table className="min-w-full">
-            <thead className="bg-(--color-brand-dark)">
+        <Table>
+          <Table.Head>
+            <tr>
+              <Table.HeaderCell>Department</Table.HeaderCell>
+              <Table.HeaderCell>Issued</Table.HeaderCell>
+              <Table.HeaderCell>Verified</Table.HeaderCell>
+              <Table.HeaderCell>Rate</Table.HeaderCell>
+              <Table.HeaderCell>Growth</Table.HeaderCell>
+            </tr>
+          </Table.Head>
+          <Table.Body>
+            {analytics.departmentBreakdown.length === 0 && (
               <tr>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-wider">Department</th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-wider">Issued</th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-wider">Verified</th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-wider">Rate</th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-wider">Growth</th>
+                <td colSpan={5} className="px-5 py-8 text-center text-sm text-slate-400">No department data</td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {analytics.departmentBreakdown.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-5 py-8 text-center text-sm text-slate-400">No department data</td>
-                </tr>
-              )}
-              {analytics.departmentBreakdown.map((dept, i) => (
-                <tr key={i} className="hover:bg-slate-50/50 transition">
-                  <td className="px-5 py-2 text-sm font-medium text-slate-900">{dept.department}</td>
-                  <td className="px-5 py-2 text-sm text-slate-700">{fmt(dept.issued)}</td>
-                  <td className="px-5 py-2 text-sm text-slate-700">{fmt(dept.verified)}</td>
-                  <td className="px-5 py-2 text-sm text-slate-700">
-                    {dept.issued > 0 ? ((dept.verified / dept.issued) * 100).toFixed(1) : 0}%
-                  </td>
-                  <td className="px-5 py-2">
-                    <span className={`inline-flex items-center gap-1 text-xs font-medium ${dept.growth > 0 ? "text-emerald-600" : "text-red-500"}`}>
-                      {dept.growth > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                      {dept.growth > 0 ? "+" : ""}{dept.growth}%
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            )}
+            {analytics.departmentBreakdown.map((dept, i) => (
+              <Table.Row key={i}>
+                <Table.Cell className="text-sm font-medium text-slate-900">{dept.department}</Table.Cell>
+                <Table.Cell className="text-sm text-slate-700">{fmt(dept.issued)}</Table.Cell>
+                <Table.Cell className="text-sm text-slate-700">{fmt(dept.verified)}</Table.Cell>
+                <Table.Cell className="text-sm text-slate-700">
+                  {dept.issued > 0 ? ((dept.verified / dept.issued) * 100).toFixed(1) : 0}%
+                </Table.Cell>
+                <Table.Cell>
+                  <span className={`inline-flex items-center gap-1 text-xs font-medium ${dept.growth > 0 ? "text-emerald-600" : "text-red-500"}`}>
+                    {dept.growth > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                    {dept.growth > 0 ? "+" : ""}{dept.growth}%
+                  </span>
+                </Table.Cell>
+              </Table.Row>
+            ))}
+          </Table.Body>
+        </Table>
       </div>
     </div>
   );

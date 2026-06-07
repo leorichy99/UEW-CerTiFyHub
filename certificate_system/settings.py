@@ -29,7 +29,7 @@ INSTALLED_APPS = [
     # Local
     'core',
     'certificates',
-    'students',
+    'registry',
     'templates',
     'verification',
     'analytics',
@@ -112,9 +112,16 @@ USE_SSE_NOTIFICATIONS = config('USE_SSE_NOTIFICATIONS', default=True, cast=bool)
 USE_SSE_AUDIT_LOGS = config('USE_SSE_AUDIT_LOGS', default=True, cast=bool)
 SSE_AUDIT_LOG_LIMIT = config('SSE_AUDIT_LOG_LIMIT', default=50, cast=int)
 
+# Registry feature flags
+# Max number of sessions allowed per Congregation. UEW's standard pattern is 2;
+# override via env if a Super Admin needs to run an exceptional 3-session event.
+REGISTRY_MAX_SESSIONS_PER_CONGREGATION = config(
+    'REGISTRY_MAX_SESSIONS_PER_CONGREGATION', default=2, cast=int,
+)
+
 # Celery Configuration
 CELERY_BROKER_URL = _redis_url if _redis_url else 'memory://'
-CELERY_RESULT_BACKEND = _redis_url or 'cache+memory://'
+CELERY_RESULT_BACKEND = _redis_url if _redis_url else None
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -145,6 +152,10 @@ CELERY_BEAT_SCHEDULE = {
     'verify-audit-chain-integrity': {
         'task': 'notifications.tasks.verify_audit_chain_integrity',
         'schedule': crontab(minute=30, hour=2),  # daily at 02:30 UTC
+    },
+    'auto-close-expired-confirmation-windows': {
+        'task': 'registry.auto_close_expired_confirmation_windows',
+        'schedule': crontab(minute=15, hour=0),  # daily at 00:15 UTC
     },
 }
 

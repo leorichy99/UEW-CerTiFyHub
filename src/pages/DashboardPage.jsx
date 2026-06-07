@@ -1,6 +1,6 @@
 import { useCallback, useRef } from "react";
+import { Link } from "react-router-dom";
 import RefreshButton from "../components/ui/RefreshButton";
-import PageHeader from "../components/ui/PageHeader";
 import { useToast } from "../components/ToastContainer";
 import {
   PieChart,
@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import SummaryStatCard from "../components/SummaryStatCard";
 import { useDashboardStats } from "../hooks/dashboard/useDashboardStats.js";
+import Table from "../components/ui/Table";
 
 export default function DashboardPage() {
   const toast = useToast();
@@ -105,43 +106,28 @@ export default function DashboardPage() {
       value: data.counts.certificates,
       icon: Award,
       tone: "neutral",
-      trend: "+12%",
     },
     {
       title: "Registered Students",
       value: data.counts.students,
       icon: Users,
       tone: "info",
-      trend: "+5%",
     },
     {
       title: "Active Templates",
       value: data.counts.templates,
       icon: Library,
       tone: "info",
-      trend: "Static",
-    },
-    {
-      title: "Verification Requests",
-      value: "0",
-      icon: Activity,
-      tone: "positive",
-      trend: "+18%",
     },
   ];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
-      <PageHeader
-        title="Dashboard"
-        description="Overview of certificate issuance and verification metrics"
-        showSearch={true}
-      />
       <div className="flex items-center justify-end">
         <RefreshButton onClick={handleRefresh} spinning={isRefreshing} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {cards.map((card, i) => (
           <SummaryStatCard
             key={i}
@@ -149,19 +135,23 @@ export default function DashboardPage() {
             value={card.value}
             Icon={card.icon}
             tone={card.tone}
-            trend={card.trend}
-            trendPositive={card.trend !== "Static"}
           />
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-[2.5fr_1.5fr] gap-5">
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
           <div className="flex justify-between items-center mb-8">
             <h3 className="text-xl font-extrabold text-slate-900">Issuance Timeline</h3>
             <TrendingUp size={20} className="text-slate-400" />
           </div>
           <div className="h-80 w-full">
+            {(!data.timeline || data.timeline.length === 0) ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                <TrendingUp size={40} className="mb-3 opacity-30" />
+                <p className="text-sm">No issuance data yet</p>
+              </div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data.timeline}>
                 <defs>
@@ -197,6 +187,7 @@ export default function DashboardPage() {
                 />
               </AreaChart>
             </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -206,7 +197,12 @@ export default function DashboardPage() {
             <Activity size={20} className="text-slate-400" />
           </div>
           <div className="h-80 w-full">
-            {(() => {
+            {(!data.by_program || data.by_program.length === 0) ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                <Activity size={40} className="mb-3 opacity-30" />
+                <p className="text-sm">No program data yet</p>
+              </div>
+            ) : (() => {
               const PIE_COLORS = [
                 "#242576", "#4f46e5", "#0ea5e9", "#10b981", "#f59e0b",
                 "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316",
@@ -247,49 +243,54 @@ export default function DashboardPage() {
                 </ResponsiveContainer>
               );
             })()}
+            )}
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex justify-between items-center">
           <h3 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
             <Clock size={20} className="text-blue-600" />
             Recent Issuances
           </h3>
+          <Link
+            to="/certificates"
+            className="text-sm text-blue-600 hover:text-blue-800 font-medium transition"
+          >
+            View all &rarr;
+          </Link>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-(--color-brand-dark)">
-              <tr>
-                <th className="px-8 py-4 text-xs font-extrabold text-white uppercase tracking-widest">Student</th>
-                <th className="px-8 py-4 text-xs font-extrabold text-white uppercase tracking-widest">Certificate #</th>
-                <th className="px-8 py-4 text-xs font-extrabold text-white uppercase tracking-widest">Date</th>
-                <th className="px-8 py-4 text-xs font-extrabold text-white uppercase tracking-widest">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {data.recent_activity.map((item, i) => (
-                <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-8 py-4 font-extrabold text-slate-900">{item.student_name}</td>
-                  <td className="px-8 py-4 text-sm font-mono text-slate-500">{item.certificate_number}</td>
-                  <td className="px-8 py-4 text-sm text-slate-600">
-                    {new Date(item.generated_date).toLocaleDateString()}
-                  </td>
-                  <td className="px-8 py-4 text-sm">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-black uppercase ${
-                        item.status === "ISSUED" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-                      }`}
-                    >
-                      {item.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <Table.Head>
+            <tr>
+              <Table.HeaderCell>Student</Table.HeaderCell>
+              <Table.HeaderCell>Certificate #</Table.HeaderCell>
+              <Table.HeaderCell>Date</Table.HeaderCell>
+              <Table.HeaderCell>Status</Table.HeaderCell>
+            </tr>
+          </Table.Head>
+          <Table.Body>
+            {data.recent_activity.map((item, i) => (
+              <Table.Row key={i}>
+                <Table.Cell className="font-extrabold text-slate-900">{item.student_name}</Table.Cell>
+                <Table.Cell className="text-sm font-mono text-slate-500">{item.certificate_number}</Table.Cell>
+                <Table.Cell className="text-sm text-slate-600">
+                  {new Date(item.generated_date).toLocaleDateString()}
+                </Table.Cell>
+                <Table.Cell className="text-sm">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-black uppercase ${
+                      item.status === "ISSUED" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {item.status}
+                  </span>
+                </Table.Cell>
+              </Table.Row>
+            ))}
+          </Table.Body>
+        </Table>
       </div>
     </div>
   );

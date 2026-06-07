@@ -24,12 +24,14 @@ from .serializers import (
     UserSerializer, AccountDetailSerializer,
     AuthorisationReferenceSerializer, AuthorisationReferenceCreateSerializer,
     AccountProvisionSerializer, PermissionUpdateSerializer,
-    SetupAccountSerializer,
+    SetupAccountSerializer, ProfileUpdateSerializer, PasswordChangeSerializer,
 )
 from .permissions import IsSuperAdmin
 from .permission_constants import build_default_permissions, GRANTABLE_PERMISSIONS
 from . import credential_service
 from .services.account_lifecycle_service import AccountLifecycleService
+from .services.two_person_deactivation_service import TwoPersonDeactivationService
+from .repositories.login_attempt_repository import LoginAttemptTrackerRepository
 from analytics.utils import log_audit
 from notifications.services import notify
 
@@ -181,12 +183,34 @@ class AuditTokenObtainPairView(TokenObtainPairView):
 
 class CurrentUserView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
         if not request.user.is_active:
             return Response({'error': 'This account has been deactivated.'}, status=status.HTTP_403_FORBIDDEN)
-        serializer = UserSerializer(request.user)
+        serializer = UserSerializer(request.user, context={'request': request})
         return Response(serializer.data)
+
+    def patch(self, request):
+        if not request.user.is_active:
+            return Response({'error': 'This account has been deactivated.'}, status=status.HTTP_403_FORBIDDEN)
+        serializer = ProfileUpdateSerializer(request.user, data=request.data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(UserSerializer(request.user, context={'request': request}).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PasswordChangeView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = PasswordChangeSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            request.user.set_password(serializer.validated_data['new_password'])
+            request.user.save()
+            return Response({'message': 'Password changed successfully.'})
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -488,6 +512,11 @@ class AccountDeactivateView(APIView):
     """Deactivate an account. For SA accounts, initiates two-person flow."""
     permission_classes = [permissions.IsAuthenticated, IsSuperAdmin]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lifecycle_service = AccountLifecycleService()
+        self.deactivation_service = TwoPersonDeactivationService()
+
     def post(self, request, pk):
         try:
             target_user = User.objects.select_related('profile').get(pk=pk)
@@ -512,27 +541,15 @@ class AccountDeactivateView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Check for existing pending request
-            pending = SuperAdminDeactivationRequest.objects.filter(
-                target_account=target_user, status='pending'
-            ).first()
-            if pending:
-                return Response(
-                    {'error': 'A deactivation request is already pending for this account.'},
-                    status=status.HTTP_400_BAD_REQUEST,
+            # Use TwoPersonDeactivationService to initiate deactivation
+            try:
+                deactivation, confirmation_token = self.deactivation_service.initiate_deactivation(
+                    target_user_id=target_user.id,
+                    initiated_by=request.user,
+                    reason=reason
                 )
-
-            # Create two-person deactivation request
-            raw_token = secrets.token_urlsafe(48)
-            token_hash = hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
-
-            deactivation = SuperAdminDeactivationRequest.objects.create(
-                target_account=target_user,
-                initiated_by=request.user,
-                reason=reason,
-                confirmation_token_hash=token_hash,
-                confirmation_token_expires_at=timezone.now() + timedelta(hours=48),
-            )
+            except ValueError as e:
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
             # Find other active Super Admins to confirm
             other_sas = User.objects.filter(
@@ -540,7 +557,7 @@ class AccountDeactivateView(APIView):
             ).exclude(pk__in=[request.user.pk, target_user.pk])
 
             # Send confirmation email to all other SAs
-            confirm_url = f"{settings.FRONTEND_URL}/admin/confirm-deactivation/{raw_token}"
+            confirm_url = f"{settings.FRONTEND_URL}/admin/confirm-deactivation/{confirmation_token}"
             for sa in other_sas:
                 try:
                     send_mail(
@@ -553,7 +570,7 @@ class AccountDeactivateView(APIView):
                             f"Reason: {reason}\n\n"
                             f"To confirm or reject this request, click:\n{confirm_url}\n\n"
                             f"Or log in to the system and navigate to User Management.\n\n"
-                            f"This request expires in 48 hours.\n\n"
+                            f"This request expires in 24 hours.\n\n"
                             f"UEW CerTiFyHub System"
                         ),
                         from_email=settings.DEFAULT_FROM_EMAIL,
@@ -588,9 +605,8 @@ class AccountDeactivateView(APIView):
                 'deactivation_id': deactivation.id,
             })
 
-        # Non-SA accounts: direct deactivation
-        target_user.is_active = False
-        target_user.save(update_fields=['is_active'])
+        # Non-SA accounts: direct deactivation using AccountLifecycleService
+        self.lifecycle_service.deactivate_account(target_user.id, reason, request.user)
 
         log_audit(
             request=request, user=request.user,
@@ -618,14 +634,18 @@ class AccountReactivateView(APIView):
     """Reactivate a deactivated account."""
     permission_classes = [permissions.IsAuthenticated, IsSuperAdmin]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lifecycle_service = AccountLifecycleService()
+
     def post(self, request, pk):
         try:
             target_user = User.objects.select_related('profile').get(pk=pk)
         except User.DoesNotExist:
             return Response({'error': 'Account not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        target_user.is_active = True
-        target_user.save(update_fields=['is_active'])
+        # Use AccountLifecycleService to reactivate the account
+        profile = self.lifecycle_service.reactivate_account(target_user.id, request.user)
 
         log_audit(
             request=request, user=request.user,
@@ -642,18 +662,18 @@ class AccountUnlockView(APIView):
     """Unlock a locked account (after repeated failed login attempts)."""
     permission_classes = [permissions.IsAuthenticated, IsSuperAdmin]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.login_tracker_repo = LoginAttemptTrackerRepository()
+
     def post(self, request, pk):
         try:
             target_user = User.objects.get(pk=pk)
         except User.DoesNotExist:
             return Response({'error': 'Account not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        email_hash = LoginAttemptTracker.hash_email(target_user.email)
-        try:
-            tracker = LoginAttemptTracker.objects.get(email_hash=email_hash)
-            tracker.unlock()
-        except LoginAttemptTracker.DoesNotExist:
-            pass
+        # Use LoginAttemptTrackerRepository to unlock the account
+        self.login_tracker_repo.unlock_account(target_user.email)
 
         log_audit(
             request=request, user=request.user,
@@ -670,6 +690,10 @@ class AccountRegenerateCredentialView(APIView):
     """Regenerate one-time credential link and resend email."""
     permission_classes = [permissions.IsAuthenticated, IsSuperAdmin]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lifecycle_service = AccountLifecycleService()
+
     def post(self, request, pk):
         try:
             target_user = User.objects.select_related('profile').get(pk=pk)
@@ -683,7 +707,13 @@ class AccountRegenerateCredentialView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        raw_token, email_sent = credential_service.regenerate_credential(target_user)
+        # Use AccountLifecycleService to generate credential
+        profile, credential_token = self.lifecycle_service.generate_credential_for_existing_account(
+            target_user.id
+        )
+
+        # Send credential email using existing credential service
+        email_sent = credential_service.send_credential_email(target_user, credential_token)
 
         log_audit(
             request=request, user=request.user,

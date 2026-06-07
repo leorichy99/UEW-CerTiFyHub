@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import api from "../services/api";
+import api, { certificateAPI } from "../services/api";
+import { useToast } from "../components/ToastContainer";
 import {
   CheckCircle,
   XCircle,
@@ -8,14 +9,19 @@ import {
   Download,
   Search,
   Loader2,
+  Link2,
+  FileImage,
 } from "lucide-react";
 
 export default function VerificationPage() {
   const { id } = useParams();
+  const toast = useToast();
   const [searchId, setSearchId] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
     document.title = "Verify Certificate — UEW CerTiFyHub";
@@ -34,9 +40,25 @@ export default function VerificationPage() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setPreviewUrl(null);
     try {
       const response = await api.get(`/verify/${certId}/`);
-      setResult(response.data);
+      const data = response.data;
+      setResult(data);
+
+      // Fetch preview thumbnail for valid or revoked certificates
+      if (data.certificate?.id) {
+        setPreviewLoading(true);
+        try {
+          const previewRes = await certificateAPI.getPreview(data.certificate.id);
+          const blob = new Blob([previewRes.data], { type: "image/png" });
+          setPreviewUrl(window.URL.createObjectURL(blob));
+        } catch {
+          // Preview is optional; ignore errors
+        } finally {
+          setPreviewLoading(false);
+        }
+      }
     } catch (err) {
       setError(
         err.response?.data?.message || "Certificate not found or invalid.",
@@ -44,6 +66,15 @@ export default function VerificationPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCopyLink = () => {
+    const url = `${window.location.origin}/verify/${result?.certificate?.certificate_number || result?.certificate?.id || id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      toast.success("Verification link copied to clipboard");
+    }).catch(() => {
+      toast.error("Failed to copy link");
+    });
   };
 
   const handleSearch = (e) => {
@@ -68,7 +99,7 @@ export default function VerificationPage() {
         </div>
 
         <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 mb-8">
-          <form onSubmit={handleSearch} className="flex gap-4">
+          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3 sm:gap-4">
             <div className="relative flex-1">
               <label htmlFor="cert-search" className="sr-only">Certificate ID or UUID</label>
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -97,7 +128,7 @@ export default function VerificationPage() {
           <div className="text-center py-12" role="status" aria-label="Verifying certificate">
             <Loader2 className="h-10 w-10 animate-spin text-blue-600 mx-auto" />
             <p className="mt-4 text-slate-600">
-              Authenticating with blockchain records...
+              Verifying certificate authenticity...
             </p>
           </div>
         )}
@@ -161,6 +192,37 @@ export default function VerificationPage() {
               )}
             </div>
 
+            {/* Certificate Preview Thumbnail */}
+            {previewLoading && (
+              <div className="px-8 pt-6 flex justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+              </div>
+            )}
+            {previewUrl && (
+              <div className="px-8 pt-6 flex justify-center">
+                <div className="relative rounded-lg border border-slate-200 shadow-sm overflow-hidden max-w-md">
+                  <img
+                    src={previewUrl}
+                    alt="Certificate preview"
+                    className="w-full h-auto object-contain"
+                    loading="lazy"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Copy Verification Link */}
+            <div className="px-8 pt-4 flex justify-center">
+              <button
+                onClick={handleCopyLink}
+                className="inline-flex items-center gap-2 text-xs text-slate-500 hover:text-blue-600 transition"
+                aria-label="Copy verification link"
+              >
+                <Link2 size={14} />
+                Copy verification link
+              </button>
+            </div>
+
             {result.status === "VALID" && (
               <div className="px-8 py-8 grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div>
@@ -207,11 +269,53 @@ export default function VerificationPage() {
             )}
 
             {result.status === "REVOKED" && (
-              <div className="px-8 py-12 text-center">
-                <p className="text-lg text-slate-600 mb-4">{result.message}</p>
-                <div className="bg-red-50 p-4 rounded-lg text-red-800 text-sm italic">
+              <div className="px-8 py-8">
+                <p className="text-lg text-slate-600 mb-6 text-center">{result.message}</p>
+                <div className="bg-red-50 p-4 rounded-lg text-red-800 text-sm italic mb-6 text-center">
                   This certificate is no longer valid for official use and
                   should not be accepted.
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-slate-100 pt-8">
+                  <div>
+                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                      Student Name
+                    </h3>
+                    <p className="text-xl font-extrabold text-slate-900">
+                      {result.certificate.student_name}
+                    </p>
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                      Degree Awarded
+                    </h3>
+                    <p className="text-xl font-extrabold text-slate-900">
+                      {result.certificate.degree_type_display}
+                    </p>
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                      Program of Study
+                    </h3>
+                    <p className="text-lg font-medium text-slate-700">
+                      {result.certificate.program}
+                    </p>
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                      Date of Issuance
+                    </h3>
+                    <p className="text-lg font-medium text-slate-700">
+                      {result.certificate.date_awarded}
+                    </p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                      Certificate Number
+                    </h3>
+                    <p className="text-lg font-mono text-slate-600 bg-slate-100 px-3 py-1 rounded inline-block">
+                      {result.certificate.certificate_number}
+                    </p>
+                  </div>
                 </div>
               </div>
             )}

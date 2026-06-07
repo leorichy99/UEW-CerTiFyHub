@@ -3,6 +3,9 @@ export const CANVAS_PRESETS = [
   { id: "a4_landscape", label: "Canvas: A4 Landscape", width: 842, height: 595 },
 ];
 
+// Uniform margin in points (72 DPI). 72pt = 25.4mm = 1 inch.
+export const PAGE_MARGIN = 72;
+
 export const DYNAMIC_FIELDS = [
   { name: "student_name", label: "Student Name" },
   { name: "program", label: "Program" },
@@ -17,8 +20,13 @@ export const DYNAMIC_FIELDS = [
 export const BUNDLED_FONTS = [
   { family: "Baskervville", category: "Serif" },
   { family: "EB Garamond", category: "Serif" },
+  { family: "Times New Roman", category: "Serif" },
   { family: "Dancing Script", category: "Script" },
   { family: "William Duke", category: "Script" },
+  { family: "Blackadder ITC", category: "Script" },
+  { family: "ITC Zapf Chancery", category: "Script" },
+  { family: "Helvetica", category: "Sans-serif" },
+  { family: "Roboto", category: "Sans-serif" },
 ];
 
 export const TOOLS = [

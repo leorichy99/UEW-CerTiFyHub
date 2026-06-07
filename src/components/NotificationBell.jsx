@@ -112,7 +112,7 @@ export default function NotificationBell() {
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          className="relative flex h-9 w-9 items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition rounded-lg"
+          className="relative flex h-9 w-9 items-center justify-center text-slate-500 hover:-translate-y-0.5 text-white transition-all duration-200 rounded-lg"
           title="Notifications"
         >
           <Bell className="h-4.5 w-4.5" />

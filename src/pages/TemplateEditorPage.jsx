@@ -39,7 +39,7 @@ export default function TemplateEditorPage() {
     };
   }, [id]);
 
-  const handleSave = async (templateData) => {
+  const handleSave = async (templateData, opts = {}) => {
     const prevVersion = Number(template?.metadata?.version ?? 1);
     const nextVersion = template?.id
       ? Math.round((prevVersion + 0.1) * 10) / 10
@@ -59,11 +59,11 @@ export default function TemplateEditorPage() {
     if (template?.id) {
       const { data } = await templateAPI.update(template.id, payload);
       setTemplate(data);
-      toast.success("Template saved");
+      if (!opts.silent) toast.success("Template saved");
     } else {
       const { data } = await templateAPI.create(payload);
       setTemplate(data);
-      toast.success("Template created");
+      if (!opts.silent) toast.success("Template created");
       // Redirect to the edit URL so subsequent saves update instead of creating duplicates
       navigate(`/templates/${data.id}/edit`, {
         replace: true,

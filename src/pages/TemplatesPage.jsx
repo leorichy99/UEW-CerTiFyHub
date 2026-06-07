@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "../components/ToastContainer";
 import { useAuth } from "../context/AuthContext";
 import { templateAPI } from "../services/api";
-import PageHeader from "../components/ui/PageHeader";
 import { Plus, Search, Lock, Eye, FileText, LayoutGrid } from "lucide-react";
 import SummaryStatCard from "../components/SummaryStatCard";
 import Pagination from "../components/Pagination";
@@ -99,12 +98,6 @@ export default function TemplatesPage() {
   return (
     <div className="min-h-[calc(100vh-7rem)]">
       <div className="mx-auto max-w-6xl px-6 py-6">
-        <PageHeader
-          title="Templates"
-          description="Browse and manage certificate templates"
-          showSearch={false}
-        />
-
         {/* Summary stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <SummaryStatCard title="Total Templates" value={templateStats.total} Icon={LayoutGrid} tone="info" />

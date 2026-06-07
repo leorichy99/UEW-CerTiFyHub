@@ -11,12 +11,12 @@ import {
   Brush,
   FileCheck,
   Settings,
+  Plus,
 } from "lucide-react";
-import SummaryStatCard from "../components/SummaryStatCard";
 import QuickActionCard from "../components/QuickActionCard";
 import CertificateIssuanceTimeline from "../components/CertificateIssuanceTimeline";
 import AdminActivityTimeline from "../components/AdminActivityTimeline";
-import PageHeader from "../components/ui/PageHeader";
+import DashboardFirstRun from "../components/DashboardFirstRun";
 
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
@@ -27,6 +27,9 @@ export default function SuperAdminDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const initialLoadDoneRef = useRef(false);
   const [timeRange, setTimeRange] = useState("24h");
+  const [firstRunDismissed, setFirstRunDismissed] = useState(
+    () => localStorage.getItem("dashboard-firstrun-dismissed") === "true",
+  );
 
   const [overview, setOverview] = useState({
     totalStudents: 0,
@@ -100,31 +103,37 @@ export default function SuperAdminDashboard() {
   const fmt = (num) =>
     new Intl.NumberFormat().format(Number.isFinite(Number(num)) ? Number(num) : 0);
 
+  // Honest deltas: only show a percentage when there is activity AND real
+  // movement. No signed zero, no misleading swings off an empty baseline.
+  const deltaTrend = (pct, value) => {
+    if (!value) return { subtitle: "No activity yet" };
+    const rounded = Math.round(Number(pct) || 0);
+    if (rounded === 0) return { subtitle: "No change vs last month" };
+    return {
+      trend: `${rounded > 0 ? "+" : ""}${rounded}% vs last month`,
+      trendPositive: rounded > 0,
+    };
+  };
+
   const topCards = useMemo(
     () => [
       {
         label: "Total Certificates",
         value: overview.totalCertificates,
         icon: FileText,
-        tone: "neutral",
-        trend: `${analytics.summary.growthRate >= 0 ? "+" : ""}${analytics.summary.growthRate}% vs previous month`,
-        trendPositive: analytics.summary.growthRate >= 0,
+        ...deltaTrend(analytics.summary.growthRate, overview.totalCertificates),
       },
       {
         label: "Total Verifications",
         value: overview.totalVerifications,
         icon: Eye,
-        tone: "info",
-        trend: `${analytics.summary.verificationGrowth >= 0 ? "+" : ""}${analytics.summary.verificationGrowth}% vs previous month`,
-        trendPositive: analytics.summary.verificationGrowth >= 0,
+        ...deltaTrend(analytics.summary.verificationGrowth, overview.totalVerifications),
       },
       {
         label: "Active Admins",
         value: overview.activeAdmins,
         icon: Shield,
-        tone: "warning",
-        trend: overview.activeAdmins > 0 ? "~0% No change" : "No active admins",
-        trendPositive: overview.activeAdmins > 0,
+        subtitle: overview.activeAdmins > 0 ? "Active now" : "None active",
       },
     ],
     [analytics.summary, overview],
@@ -138,33 +147,80 @@ export default function SuperAdminDashboard() {
     );
   }
 
+  const isFirstRun = overview.totalCertificates === 0 && !firstRunDismissed;
+
+  const dismissFirstRun = () => {
+    localStorage.setItem("dashboard-firstrun-dismissed", "true");
+    setFirstRunDismissed(true);
+  };
+
+  if (isFirstRun) {
+    return (
+      <div className="space-y-6">
+        <DashboardFirstRun
+          totalStudents={overview.totalStudents}
+          onNavigate={navigate}
+          onDismiss={dismissFirstRun}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <PageHeader
-        title="Dashboard"
-        description="Overview of certificate system activity and metrics"
-        showSearch={true}
-      />
-{/* Summary stats, activity timeline and certificate issuance timeline */}
-<div className="flex flex-col md:flex-row gap-4 w-full">
-      {/* Stat Cards and Certificate Issuance Timeline */}
-  <div className="flex-1 space-y-6">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {topCards.map((card) => (
-          <SummaryStatCard
-            key={card.label}
-            title={card.label}
-            value={fmt(card.value)}
-            Icon={card.icon}
-            tone={card.tone}
-            trend={card.trend}
-            trendPositive={card.trendPositive}
-          />
-        ))}
-      </div>
+      {/* Header */}
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Dashboard</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Issuance, verification, and admin activity at a glance.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate("/admin/certificates")}
+          className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2"
+          style={{ backgroundColor: "#242576" }}
+        >
+          <Plus size={16} />
+          Issue certificate
+        </button>
+      </header>
 
-      <CertificateIssuanceTimeline
+      {/* Top-level figures — quiet inline strip, not floating cards */}
+      <dl className="grid grid-cols-1 divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        {topCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div key={card.label} className="px-5 py-4">
+              <div className="flex items-center gap-2 text-slate-500">
+                <Icon size={15} strokeWidth={1.75} />
+                <dt className="text-xs font-medium uppercase tracking-wide">{card.label}</dt>
+              </div>
+              <dd className="mt-1.5 flex items-baseline gap-2">
+                <span className="text-2xl font-bold tracking-tight text-slate-900">
+                  {fmt(card.value)}
+                </span>
+                {card.trend ? (
+                  <span
+                    className={`text-xs font-semibold ${
+                      card.trendPositive ? "text-emerald-600" : "text-red-600"
+                    }`}
+                  >
+                    {card.trend}
+                  </span>
+                ) : card.subtitle ? (
+                  <span className="text-xs font-medium text-slate-400">{card.subtitle}</span>
+                ) : null}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+
+      {/* Main grid: chart leads, activity in the rail (1.6fr / 0.9fr on xl) */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.6fr_0.9fr]">
+        <CertificateIssuanceTimeline
           overview={overview}
           analytics={analytics}
           timeRange={timeRange}
@@ -173,15 +229,8 @@ export default function SuperAdminDashboard() {
             else fetchAll({ silent: true });
           }}
         />
-</div>
-
-      {/* Timeline Panels */}
-      <div className="w-full md:w-[450px] h-full">
-        <AdminActivityTimeline
-          onViewAll={() => navigate("/admin/audit")}
-        />
+        <AdminActivityTimeline onViewAll={() => navigate("/admin/audit")} />
       </div>
-</div>
 
       {/* Quick Actions */}
       <div className="">
@@ -209,7 +258,7 @@ export default function SuperAdminDashboard() {
             Icon={Shield}
             tone="info"
             variant="muted"
-            onClick={() => navigate("/admin/users")}
+            onClick={() => navigate("/admin/accounts")}
           />
           <QuickActionCard
             title="System settings"

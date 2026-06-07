@@ -39,6 +39,9 @@ export default function TopControlBar() {
     setPreviewImage,
     setShowPreviewModal,
     onClose,
+    handleClose,
+    hasUnsavedChanges,
+    lastAutoSavedAt,
   } = useEditor();
 
   return (
@@ -106,6 +109,13 @@ export default function TopControlBar() {
             style={{ color: THEME.text }}
           >
             <span className="max-w-48 truncate">{templateTitle}</span>
+            {hasUnsavedChanges && (
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: "#ef4444" }}
+                title="Unsaved changes"
+              />
+            )}
             <Pencil
               className="h-3 w-3 opacity-40 transition-opacity group-hover:opacity-80"
               style={{ color: THEME.textMuted }}
@@ -183,15 +193,17 @@ export default function TopControlBar() {
               step={
                 Number.isInteger(selectedElement.fontSize) ? 1 : 0.1
               }
+              min={8}
+              max={200}
               value={
                 Math.round(selectedElement.fontSize * 10) / 10
               }
-              onChange={(e) =>
+              onChange={(e) => {
+                const val = Math.max(8, Math.min(200, Number(e.target.value)));
                 updateElement(selectedId, {
-                  fontSize:
-                    Math.round(Number(e.target.value) * 10) / 10,
-                })
-              }
+                  fontSize: Math.round(val * 10) / 10,
+                });
+              }}
               className="h-7 w-14 rounded px-1.5 text-xs outline-none"
               style={{
                 background: THEME.bgInput,
@@ -303,26 +315,27 @@ export default function TopControlBar() {
 
         <button
           type="button"
-          onClick={publishTemplate}
+          onClick={() => publishTemplate()}
           disabled={isSaving}
           className="flex h-7 items-center gap-1.5 rounded px-3.5 text-xs font-semibold shadow-sm transition-colors disabled:opacity-50"
           style={{
             background: THEME.accent,
             color: THEME.textBright,
           }}
+          title={lastAutoSavedAt ? `Auto-saved at ${new Date(lastAutoSavedAt).toLocaleTimeString()}` : undefined}
         >
           {isSaving ? (
             <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
           ) : (
             <SaveAll className="h-3.5 w-3.5" />
           )}
-          {isSaving ? "Saving..." : "Save"}
+          {isSaving ? "Saving..." : hasUnsavedChanges ? "Save*" : "Save"}
         </button>
 
         {typeof onClose === "function" && (
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="flex h-7 items-center rounded px-3 text-xs font-medium transition-colors"
             style={{
               background: THEME.bgInput,

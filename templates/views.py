@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from .models import CertificateTemplate
 from .serializers import CertificateTemplateSerializer
 from notifications.services import notify
-from core.permissions import HasPermission, IsActiveAccount, _is_super_admin
+from core.permissions import HasPermission, IsActiveAccount
 
 
 _cached_system_fonts = None

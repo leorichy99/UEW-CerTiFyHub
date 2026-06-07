@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { authAPI } from "../services/api";
 import { useToast } from "../components/ToastContainer";
+import StepIndicator from "../components/ui/StepIndicator";
 import {
   Mail,
   ArrowLeft,
@@ -55,6 +56,7 @@ export default function ForgotPasswordPage() {
             </div>
 
             <div className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm p-8">
+              <StepIndicator steps={["Email", "Verify", "Reset"]} currentStep={1} />
               <h1 className="text-xl font-extrabold text-slate-900">Forgot Password?</h1>
               <p className="mt-2 text-sm text-slate-600">
                 Enter your email address and we&apos;ll send you a 6-digit verification code.

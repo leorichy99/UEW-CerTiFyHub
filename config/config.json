@@ -1,5 +1,5 @@
 {
-  "BASE_URL": "http://41.74.80.63:8000",
-  "API_BASE": "http://41.74.80.63:8000/api",
+  "BASE_URL": "http://20.8.3.184:8000",
+  "API_BASE": "http://20.8.3.184:8000/api",
   "FRONTEND_URL": "http://localhost:5173"
 }

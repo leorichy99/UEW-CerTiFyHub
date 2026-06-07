@@ -9,7 +9,11 @@ urlpatterns = [
     path('api/', include('certificates.urls')),
     path('api/auth/', include('core.urls')),
     path('api/templates/', include('templates.urls')),
-    path('api/students/', include('students.urls')),
+    path('api/registry/', include('registry.urls')),
+    # Slice 1: dual-mount alias for the spec's `/api/admin/` namespace.
+    # The same router is reachable under both prefixes; we will deprecate
+    # `/api/registry/` once the frontend has fully migrated.
+    path('api/admin/', include(('registry.urls', 'registry'), namespace='admin_registry')),
     path('api/verify/', include('verification.urls')),
     path('api/analytics/', include('analytics.urls')),
     path('api/notifications/', include('notifications.urls')),

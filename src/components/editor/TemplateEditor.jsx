@@ -51,14 +51,20 @@ function EditorLayout() {
       <TopControlBar />
 
       <div className="flex flex-1 overflow-hidden">
-        <LeftToolbar />
+        {/* Left toolbar collapses on screens below lg */}
+        <div className="hidden lg:block">
+          <LeftToolbar />
+        </div>
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <Canvas />
           <StatusBar />
         </div>
 
-        <RightSidebar />
+        {/* Right sidebar collapses on screens below xl */}
+        <div className="hidden xl:block">
+          <RightSidebar />
+        </div>
       </div>
 
       <PreviewModal />

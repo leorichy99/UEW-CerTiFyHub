@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { authAPI } from "../services/api";
 import { useToast } from "../components/ToastContainer";
+import StepIndicator from "../components/ui/StepIndicator";
 import {
   ShieldCheck,
   ArrowLeft,
@@ -150,6 +151,7 @@ export default function VerifyResetPage() {
             </div>
 
             <div className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm p-8">
+              <StepIndicator steps={["Email", "Verify", "Reset"]} currentStep={2} />
               <h1 className="text-xl font-extrabold text-slate-900">Verify Your Identity</h1>
               <p className="mt-2 text-sm text-slate-600">
                 Enter the 6-digit code sent to{' '}

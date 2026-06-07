@@ -3,7 +3,10 @@ import { accountAPI, authorisationAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import ProvisionWizard from "../components/ProvisionWizard";
 import PermissionEditorDrawer from "../components/PermissionEditorDrawer";
-import PageHeader from "../components/ui/PageHeader";
+import Table from "../components/ui/Table";
+import Pagination from "../components/ui/Pagination";
+import usePagination from "../hooks/usePagination";
+import useSort from "../hooks/useSort";
 import {
   Loader2, Shield, ShieldOff, Unlock, UserCheck, AlertTriangle,
   Mail, CheckCircle,
@@ -12,7 +15,7 @@ import {
 const STATUS_BADGE = {
   active: "bg-green-100 text-green-700",
   deactivated: "bg-red-100 text-red-700",
-  locked: "bg-amber-100 text-amber-700",
+  locked: "bg-amber-100 text-amber-900",
 };
 
 const CREDENTIAL_BADGE = {
@@ -74,6 +77,9 @@ export default function AccountManagementPage() {
     }
   };
 
+  const sort = useSort(accounts, { defaultKey: "full_name" });
+  const pagination = usePagination(sort.sortedItems, { pageSize: 10 });
+
   const handleProvisionSuccess = async (result) => {
     setShowProvision(false);
     const banner = result.credentialEmailSent
@@ -102,12 +108,6 @@ export default function AccountManagementPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Account Management"
-        description="Provision and manage admin accounts"
-        showSearch={false}
-      />
-
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 flex items-center gap-2">
           <AlertTriangle size={16} /> {error}
@@ -157,87 +157,94 @@ export default function AccountManagementPage() {
       ) : accounts.length === 0 ? (
         <div className="text-center py-12 text-slate-500 text-sm">No accounts found.</div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="text-left px-4 py-3 font-semibold text-slate-600">Name</th>
-                <th className="text-left px-4 py-3 font-semibold text-slate-600">Email</th>
-                <th className="text-left px-4 py-3 font-semibold text-slate-600">Role</th>
-                <th className="text-left px-4 py-3 font-semibold text-slate-600">Status</th>
-                <th className="text-left px-4 py-3 font-semibold text-slate-600">Credential</th>
-                <th className="text-right px-4 py-3 font-semibold text-slate-600">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {accounts.map((acc) => {
-                const isActionLoading = actionLoading === acc.id;
-                const accountStatus = !acc.is_active ? "deactivated" : "active";
+        <Table className="table-cards">
+          <Table.Head>
+            <tr>
+              <Table.HeaderCell onSort={() => sort.toggleSort("full_name")} sortDirection={sort.getSortDirection("full_name")}>Name</Table.HeaderCell>
+              <Table.HeaderCell onSort={() => sort.toggleSort("email")} sortDirection={sort.getSortDirection("email")}>Email</Table.HeaderCell>
+              <Table.HeaderCell onSort={() => sort.toggleSort("role")} sortDirection={sort.getSortDirection("role")}>Role</Table.HeaderCell>
+              <Table.HeaderCell onSort={() => sort.toggleSort("is_active")} sortDirection={sort.getSortDirection("is_active")}>Status</Table.HeaderCell>
+              <Table.HeaderCell onSort={() => sort.toggleSort("credential_status")} sortDirection={sort.getSortDirection("credential_status")}>Credential</Table.HeaderCell>
+              <Table.HeaderCell className="text-right">Actions</Table.HeaderCell>
+            </tr>
+          </Table.Head>
+          <Table.Body>
+            {pagination.paginatedItems.map((acc) => {
+              const isActionLoading = actionLoading === acc.id;
+              const accountStatus = !acc.is_active ? "deactivated" : "active";
 
-                return (
-                  <tr key={acc.id} className="hover:bg-slate-50/50">
-                    <td className="px-4 py-3 font-medium text-slate-800">
-                      {acc.full_name || acc.username}
-                      {acc.is_legacy && <span className="ml-1.5 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">Legacy</span>}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">{acc.email}</td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs font-medium bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">
-                        {acc.role}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_BADGE[accountStatus] || ""}`}>
-                        {accountStatus}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${CREDENTIAL_BADGE[acc.credential_status] || ""}`}>
-                        {acc.credential_status || "n/a"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {acc.is_active ? (
-                          <button title="Deactivate" disabled={isActionLoading}
-                            onClick={() => handleAction(accountAPI.deactivate, acc.id, { reason: "Admin action" })}
-                            className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors disabled:opacity-30">
-                            <ShieldOff size={15} />
-                          </button>
-                        ) : (
-                          <button title="Reactivate" disabled={isActionLoading}
-                            onClick={() => handleAction(accountAPI.reactivate, acc.id, { authorisation_reference: "" })}
-                            className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 transition-colors disabled:opacity-30">
-                            <UserCheck size={15} />
-                          </button>
-                        )}
-                        {acc.is_locked && (
-                          <button title="Unlock" disabled={isActionLoading}
-                            onClick={() => handleAction(accountAPI.unlock, acc.id)}
-                            className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-30">
-                            <Unlock size={15} />
-                          </button>
-                        )}
-                        {!acc.first_login_completed && (
-                          <button title="Regenerate Credential" disabled={isActionLoading}
-                            onClick={() => handleAction(accountAPI.regenerateCredential, acc.id)}
-                            className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-30">
-                            <Mail size={15} />
-                          </button>
-                        )}
-                        <button title="Edit Permissions"
-                          onClick={() => setEditingAccount(acc)}
-                          className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 transition-colors">
-                          <Shield size={15} />
+              return (
+                <Table.Row key={acc.id}>
+                  <Table.Cell dataLabel="Name" className="font-medium text-slate-800">
+                    {acc.full_name || acc.username}
+                    {acc.is_legacy && <span className="ml-1.5 text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded-full">Legacy</span>}
+                  </Table.Cell>
+                  <Table.Cell dataLabel="Email" className="text-slate-600">{acc.email}</Table.Cell>
+                  <Table.Cell dataLabel="Role">
+                    <span className="text-xs font-medium bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">
+                      {acc.role}
+                    </span>
+                  </Table.Cell>
+                  <Table.Cell dataLabel="Status" aria-live="polite">
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_BADGE[accountStatus] || ""}`}>
+                      {accountStatus}
+                    </span>
+                  </Table.Cell>
+                  <Table.Cell dataLabel="Credential" aria-live="polite">
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${CREDENTIAL_BADGE[acc.credential_status] || ""}`}>
+                      {acc.credential_status || "n/a"}
+                    </span>
+                  </Table.Cell>
+                  <Table.Cell dataLabel="Actions" className="text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      {acc.is_active ? (
+                        <button aria-label="Deactivate account" title="Deactivate" disabled={isActionLoading}
+                          onClick={() => handleAction(accountAPI.deactivate, acc.id, { reason: "Admin action" })}
+                          className="inline-flex items-center justify-center min-w-[36px] min-h-[36px] rounded-lg text-red-500 hover:bg-red-50 transition-colors disabled:opacity-30">
+                          <ShieldOff size={16} />
                         </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      ) : (
+                        <button aria-label="Reactivate account" title="Reactivate" disabled={isActionLoading}
+                          onClick={() => handleAction(accountAPI.reactivate, acc.id, { authorisation_reference: "" })}
+                          className="inline-flex items-center justify-center min-w-[36px] min-h-[36px] rounded-lg text-green-600 hover:bg-green-50 transition-colors disabled:opacity-30">
+                          <UserCheck size={16} />
+                        </button>
+                      )}
+                      {acc.is_locked && (
+                        <button aria-label="Unlock account" title="Unlock" disabled={isActionLoading}
+                          onClick={() => handleAction(accountAPI.unlock, acc.id)}
+                          className="inline-flex items-center justify-center min-w-[36px] min-h-[36px] rounded-lg text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-30">
+                          <Unlock size={16} />
+                        </button>
+                      )}
+                      {!acc.first_login_completed && (
+                        <button aria-label="Regenerate credentials" title="Regenerate Credential" disabled={isActionLoading}
+                          onClick={() => handleAction(accountAPI.regenerateCredential, acc.id)}
+                          className="inline-flex items-center justify-center min-w-[36px] min-h-[36px] rounded-lg text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-30">
+                          <Mail size={16} />
+                        </button>
+                      )}
+                      <button aria-label="Edit permissions" title="Edit Permissions"
+                        onClick={() => setEditingAccount(acc)}
+                        className="inline-flex items-center justify-center min-w-[36px] min-h-[36px] rounded-lg text-indigo-600 hover:bg-indigo-50 transition-colors">
+                        <Shield size={16} />
+                      </button>
+                    </div>
+                  </Table.Cell>
+                </Table.Row>
+              );
+            })}
+          </Table.Body>
+        </Table>
+      )}
+      {accounts.length > 0 && (
+        <Pagination
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.totalItems}
+          pageSize={pagination.pageSize}
+          onChange={pagination.setPage}
+        />
       )}
 
       {/* Permission Editor Drawer */}

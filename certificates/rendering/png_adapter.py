@@ -52,8 +52,11 @@ class PNGRendererAdapter:
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         font_paths = [
             os.path.join(base_dir, 'fonts', f'{font_name}.ttf'),
+            os.path.join(base_dir, 'fonts', f'{font_name}.otf'),
             os.path.join(base_dir, 'public', 'fonts', f'{font_name}.ttf'),
+            os.path.join(base_dir, 'public', 'fonts', f'{font_name}.otf'),
             os.path.join(base_dir, 'static', 'fonts', f'{font_name}.ttf'),
+            os.path.join(base_dir, 'static', 'fonts', f'{font_name}.otf'),
         ]
         
         for path in font_paths:
@@ -98,7 +101,7 @@ class PNGRendererAdapter:
         wrap_limit = (max_width or 0) + max(2, font_size * 0.15)
         
         def _wrap_line(s):
-            if max_width <= 0:
+            if not max_width or max_width <= 0:
                 return [s]
             words = s.split(' ')
             out = []
@@ -121,12 +124,19 @@ class PNGRendererAdapter:
         
         for i, line in enumerate(lines):
             ly = y + i * line_height
-            if align == 'center' and max_width:
-                tw = _measure_line(line)
-                lx = x + (max_width - tw) / 2
-            elif align == 'right' and max_width:
-                tw = _measure_line(line)
-                lx = x + max_width - tw
+            tw = _measure_line(line)
+            if align == 'center':
+                if max_width:
+                    lx = x + (max_width - tw) / 2
+                else:
+                    # Konva: x is the center point when no width is set
+                    lx = x - tw / 2
+            elif align == 'right':
+                if max_width:
+                    lx = x + max_width - tw
+                else:
+                    # Konva: x is the right edge when no width is set
+                    lx = x - tw
             else:
                 lx = x
             draw.text((lx, ly), line, fill=rgb, font=font)

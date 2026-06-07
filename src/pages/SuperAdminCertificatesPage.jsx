@@ -5,7 +5,7 @@ import { certificateAPI } from "../services/api";
 import Pagination from "../components/Pagination";
 import SummaryStatCard from "../components/SummaryStatCard";
 import PageSkeleton from "../components/ui/PageSkeleton";
-import PageHeader from "../components/ui/PageHeader";
+import Table from "../components/ui/Table";
 import {
   FileText,
   Search,
@@ -24,6 +24,7 @@ import {
 import { useConfirmDialog } from '../context/ConfirmDialogContext';
 import CertificatePreview from '../components/CertificatePreview';
 import RefreshButton from '../components/ui/RefreshButton';
+import Breadcrumb from '../components/ui/Breadcrumb';
 
 export default function SuperAdminCertificatesPage() {
   const confirm = useConfirmDialog();
@@ -277,11 +278,7 @@ export default function SuperAdminCertificatesPage() {
 
   return (
     <div className="min-h-screen">
-      <PageHeader
-        title="Certificates"
-        description="Manage and monitor all issued certificates"
-        showSearch={false}
-      />
+      <Breadcrumb items={[{ label: "Home", to: "/" }, { label: "Certificates" }]} />
       <div className="">
         {/* Overview Metric Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -410,138 +407,120 @@ export default function SuperAdminCertificatesPage() {
         </div>
 
         {/* Certificate Registry Table */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-(--color-brand-dark)">
-                <tr>
-                  <th className="px-6 py-3.5 text-left text-[11px] font-semibold text-white uppercase tracking-wider">
-                    Certificate ID
-                  </th>
-                  <th className="px-6 py-3.5 text-left text-[11px] font-semibold text-white uppercase tracking-wider">
-                    Recipient
-                  </th>
-                  <th className="px-6 py-3.5 text-left text-[11px] font-semibold text-white uppercase tracking-wider">
-                    Department
-                  </th>
-                  <th className="px-6 py-3.5 text-left text-[11px] font-semibold text-white uppercase tracking-wider">
-                    Issued Date
-                  </th>
-                  <th className="px-6 py-3.5 text-left text-[11px] font-semibold text-white uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3.5 text-left text-[11px] font-semibold text-white uppercase tracking-wider">
-                    Blockchain
-                  </th>
-                  <th className="px-6 py-3.5 text-right text-[11px] font-semibold text-white uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {certificates.map((cert) => (
-                  <tr
-                    key={cert.id}
-                    className="hover:bg-slate-50/50 transition-colors"
-                  >
-                    {/* Certificate ID */}
-                    <td className="px-6 py-4">
-                      <span className="text-sm font-medium text-blue-600 inline-flex items-center gap-1">
-                        {formatCertId(cert.certificate_number)}
+        <div className="bg-white border border-slate-200 shadow-sm overflow-hidden">
+          <Table>
+            <Table.Head>
+              <tr>
+                <Table.HeaderCell>Certificate ID</Table.HeaderCell>
+                <Table.HeaderCell>Recipient</Table.HeaderCell>
+                <Table.HeaderCell>Department</Table.HeaderCell>
+                <Table.HeaderCell>Date Issued</Table.HeaderCell>
+                <Table.HeaderCell>Status</Table.HeaderCell>
+                <Table.HeaderCell>Blockchain</Table.HeaderCell>
+                <Table.HeaderCell className="text-right">Actions</Table.HeaderCell>
+              </tr>
+            </Table.Head>
+            <Table.Body>
+              {certificates.map((cert) => (
+                <Table.Row key={cert.id}>
+                  {/* Certificate ID */}
+                  <Table.Cell>
+                    <span className="text-sm font-medium text-blue-600 inline-flex items-center gap-1">
+                      {formatCertId(cert.certificate_number)}
+                      <button
+                        type="button"
+                        onClick={() => { navigator.clipboard.writeText(cert.certificate_number); toast.success('Certificate ID copied'); }}
+                        className="p-0.5 rounded hover:bg-blue-100 text-blue-400 hover:text-blue-600 transition"
+                        title="Copy certificate ID"
+                      >
+                        <Clipboard size={12} />
+                      </button>
+                    </span>
+                  </Table.Cell>
+
+                  {/* Recipient */}
+                  <Table.Cell>
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">
+                        {cert.student_name}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {cert.degree_type_display || cert.degree_type || ""}
+                        {cert.honors_display ? ` · ${cert.honors_display}` : ""}
+                      </p>
+                    </div>
+                  </Table.Cell>
+
+                  {/* Department */}
+                  <Table.Cell>
+                    <span className="text-sm text-slate-700">
+                      {cert.program || "—"}
+                    </span>
+                  </Table.Cell>
+
+                  {/* Issued Date */}
+                  <Table.Cell>
+                    <span className="text-sm text-slate-700">
+                      {formatDate(cert.generated_date || cert.date_awarded)}
+                    </span>
+                  </Table.Cell>
+
+                  {/* Status */}
+                  <Table.Cell>
+                    {cert.status === "ISSUED" ? (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-extrabold bg-emerald-100 text-emerald-700 uppercase tracking-wide">
+                        Active
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-extrabold bg-red-100 text-red-700 uppercase tracking-wide">
+                        Revoked
+                      </span>
+                    )}
+                  </Table.Cell>
+
+                  {/* Blockchain */}
+                  <Table.Cell>
+                    {cert.status === "REVOKED" ? (
+                      <span className="text-sm text-slate-400 italic flex items-center gap-1.5">
+                        <ShieldCheck size={14} className="text-slate-400" />
+                        Voided
+                      </span>
+                    ) : (
+                      <span className="text-sm text-emerald-600 font-medium flex items-center gap-1.5">
+                        <ShieldCheck size={14} className="text-emerald-500" />
+                        {truncateHash(cert.id)}
                         <button
                           type="button"
-                          onClick={() => { navigator.clipboard.writeText(cert.certificate_number); toast.success('Certificate ID copied'); }}
-                          className="p-0.5 rounded hover:bg-blue-100 text-blue-400 hover:text-blue-600 transition"
-                          title="Copy certificate ID"
+                          onClick={() => { navigator.clipboard.writeText(String(cert.id)); toast.success('Blockchain hash copied'); }}
+                          className="p-0.5 rounded hover:bg-emerald-100 text-emerald-400 hover:text-emerald-600 transition"
+                          title="Copy blockchain hash"
                         >
                           <Clipboard size={12} />
                         </button>
                       </span>
-                    </td>
+                    )}
+                  </Table.Cell>
 
-                    {/* Recipient */}
-                    <td className="px-6 py-4">
-                      <div>
-                        <p className="text-sm font-medium text-slate-900">
-                          {cert.student_name}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {cert.degree_type_display || cert.degree_type || ""}
-                          {cert.honors_display ? ` · ${cert.honors_display}` : ""}
-                        </p>
-                      </div>
-                    </td>
+                  {/* Actions */}
+                  <Table.Cell className="text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      {/* View Preview */}
+                      <button
+                        onClick={() => handlePreview(cert)}
+                        title="View certificate"
+                        className="rounded-lg p-2 text-slate-400 shadow-sm transition-colors duration-200 hover:bg-blue-50 hover:text-blue-600"
+                      >
+                        <Eye size={18} />
+                      </button>
 
-                    {/* Department */}
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-slate-700">
-                        {cert.program || "—"}
-                      </span>
-                    </td>
-
-                    {/* Issued Date */}
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-slate-700">
-                        {formatDate(cert.generated_date || cert.date_awarded)}
-                      </span>
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-6 py-4">
-                      {cert.status === "ISSUED" ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-extrabold bg-emerald-100 text-emerald-700 uppercase tracking-wide">
-                          Active
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-extrabold bg-red-100 text-red-700 uppercase tracking-wide">
-                          Revoked
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Blockchain */}
-                    <td className="px-6 py-4">
-                      {cert.status === "REVOKED" ? (
-                        <span className="text-sm text-slate-400 italic flex items-center gap-1.5">
-                          <ShieldCheck size={14} className="text-slate-400" />
-                          Voided
-                        </span>
-                      ) : (
-                        <span className="text-sm text-emerald-600 font-medium flex items-center gap-1.5">
-                          <ShieldCheck size={14} className="text-emerald-500" />
-                          {truncateHash(cert.id)}
-                          <button
-                            type="button"
-                            onClick={() => { navigator.clipboard.writeText(String(cert.id)); toast.success('Blockchain hash copied'); }}
-                            className="p-0.5 rounded hover:bg-emerald-100 text-emerald-400 hover:text-emerald-600 transition"
-                            title="Copy blockchain hash"
-                          >
-                            <Clipboard size={12} />
-                          </button>
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Actions */}
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-1">
-                        {/* View Preview */}
-                        <button
-                          onClick={() => handlePreview(cert)}
-                          title="View certificate"
-                          className="rounded-lg p-2 text-slate-400 shadow-sm transition-colors duration-200 hover:bg-blue-50 hover:text-blue-600"
-                        >
-                          <Eye size={18} />
-                        </button>
-
-                        {/* Verify / Log */}
-                        <button
-                          onClick={() => handleVerifyLog(cert)}
-                          title="View blockchain receipt"
-                          className="rounded-lg p-2 text-slate-400 shadow-sm transition-colors duration-200 hover:bg-blue-50 hover:text-blue-600"
-                        >
-                          <FileCheck size={18} />
-                        </button>
+                      {/* Verify / Log */}
+                      <button
+                        onClick={() => handleVerifyLog(cert)}
+                        title="View blockchain receipt"
+                        className="rounded-lg p-2 text-slate-400 shadow-sm transition-colors duration-200 hover:bg-blue-50 hover:text-blue-600"
+                      >
+                        <FileCheck size={18} />
+                      </button>
 
                         {/* Revoke / Reactivate */}
                         {cert.status === "ISSUED" ? (
@@ -572,12 +551,11 @@ export default function SuperAdminCertificatesPage() {
                           </button>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </Table.Cell>
+                  </Table.Row>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </Table.Body>
+            </Table>
 
           {/* Empty state */}
           {certificates.length === 0 && (

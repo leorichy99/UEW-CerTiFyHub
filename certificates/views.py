@@ -286,75 +286,17 @@ class CertificateViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def bulk_issue(self, request):
         """
-        Issue certificates to multiple students using a template.
-        Expected data: { template_id: 1, student_ids: [1, 2, 3], date_awarded: '2026-01-21' }
+        Legacy bulk-issue endpoint. The student-driven bulk path has been
+        retired in favour of the registry pipeline (CongregationSession →
+        StudentRecord → Issuance). Use the session issuance endpoints instead.
         """
-        template_id = request.data.get('template_id')
-        student_ids = request.data.get('student_ids', [])
-        date_awarded = request.data.get('date_awarded')
-
-        parsed_date_awarded = None
-        if date_awarded:
-            if isinstance(date_awarded, str):
-                parsed_date_awarded = parse_date(date_awarded)
-                if not parsed_date_awarded:
-                    return Response(
-                        {'error': 'Invalid date_awarded format. Use YYYY-MM-DD.'},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-            else:
-                parsed_date_awarded = date_awarded
-
-        if not template_id or not student_ids:
-            return Response({'error': 'template_id and student_ids are required'}, status=status.HTTP_400_BAD_REQUEST)
-
-        from templates.models import CertificateTemplate
-        from students.models import Student
-        
-        try:
-            template = CertificateTemplate.objects.get(id=template_id)
-        except CertificateTemplate.DoesNotExist:
-            return Response({'error': 'Template not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        students = Student.objects.filter(id__in=student_ids)
-        issued_certs = []
-
-        for student in students:
-            cert = Certificate.objects.create(
-                student=student,
-                template=template,
-                student_name=student.full_name,
-                program=student.program,
-                date_awarded=parsed_date_awarded or student.graduation_date,
-                degree_type=getattr(student, 'degree_type', '') or 'BSC',
-                honors=getattr(student, 'honors', '') or 'PASS',
-                created_by=request.user
-            )
-            try:
-                self.generate_pdf_for_certificate(cert)
-            except Exception as e:
-                print(f"Failed to generate PDF for {student.full_name}: {e}")
-            
-            issued_certs.append(cert)
-
-        log_audit(request=request, action='Bulk issued certificates',
-                  target=f'{len(issued_certs)} certificates',
-                  details=f'Bulk issued {len(issued_certs)} certificates using template {template.id}',
-                  category='admin')
-
-        # Notify issuing admin of bulk completion
-        notify(
-            recipient=request.user,
-            title='Bulk Issuance Complete',
-            message=f'{len(issued_certs)} certificates issued successfully using template "{template.name}"',
-            notification_type='bulk_issuance_complete',
-            priority='success',
-            related_object_type='certificate',
-            metadata={'count': len(issued_certs), 'template_id': template_id},
-            request=request,
+        return Response(
+            {
+                'error': 'bulk_issue has been retired. Issue certificates through a '
+                         'CongregationSession via the registry issuance endpoint.',
+            },
+            status=status.HTTP_410_GONE,
         )
-
-        return Response(CertificateSerializer(issued_certs, many=True, context={'request': request}).data)
 
     @action(detail=False, methods=['post'])
     def bulk_bundle(self, request):
@@ -475,8 +417,8 @@ class CertificateViewSet(viewsets.ModelViewSet):
                 if len(stops) >= 2:
                     c1 = self._hex_to_rgb(stops[0].get('color', '#ffffff'))
                     c2 = self._hex_to_rgb(stops[1].get('color', '#000000'))
-                    # Draw gradient line by line using PIL
-                    img = Image.new('RGB', (width, height))
+                    # Draw gradient line by line using PIL (RGBA for alpha support)
+                    img = Image.new('RGBA', (width, height))
                     draw_bg = ImageDraw.Draw(img)
                     rad = _math.radians(angle)
                     cos_a, sin_a = _math.cos(rad), _math.sin(rad)
@@ -487,13 +429,13 @@ class CertificateViewSet(viewsets.ModelViewSet):
                         r = int(c1[0] + (c2[0] - c1[0]) * t)
                         g = int(c1[1] + (c2[1] - c1[1]) * t)
                         b = int(c1[2] + (c2[2] - c1[2]) * t)
-                        draw_bg.line([(0, row), (width, row)], fill=(r, g, b))
+                        draw_bg.line([(0, row), (width, row)], fill=(r, g, b, 255))
                 else:
                     bg_rgb = self._resolve_background_rgb_from_value(background)
-                    img = Image.new('RGB', (width, height), bg_rgb)
+                    img = Image.new('RGBA', (width, height), (*bg_rgb, 255))
             else:
                 bg_rgb = self._resolve_background_rgb_from_value(background)
-                img = Image.new('RGB', (width, height), bg_rgb)
+                img = Image.new('RGBA', (width, height), (*bg_rgb, 255))
             draw = ImageDraw.Draw(img)
 
             # ── Helper: load a PIL font ──
@@ -512,7 +454,13 @@ class CertificateViewSet(viewsets.ModelViewSet):
                 return fill_c, stroke_c
 
             for el in elements:
+                # Skip hidden elements — Konva respects `visible`, backend must too.
+                if el.get('visible') is False:
+                    continue
+
                 el_type = el.get('type')
+                opacity = float(el.get('opacity', 1.0))
+                use_opacity = opacity < 0.99
                 try:
                     if el_type == 'text':
                         text = self._replace_placeholders(el.get('text', ''), certificate)
@@ -521,7 +469,8 @@ class CertificateViewSet(viewsets.ModelViewSet):
                         x = el.get('x', 0)
                         y = el.get('y', 0)
                         font_size = el.get('fontSize', 16)
-                        el_width = el.get('width', 0)
+                        el_width = el.get('width') or 0
+                        user_resized = bool(el.get('userResized'))
                         align = el.get('align', 'left')
                         wrap_mode = str(el.get('wrap', 'word')).lower()
                         fill_rgb = self._hex_to_rgb(el.get('fill', '#000000'), (0, 0, 0))
@@ -537,13 +486,30 @@ class CertificateViewSet(viewsets.ModelViewSet):
                                 bb = draw.textbbox((0, 0), s, font=font)
                                 return bb[2] - bb[0]
 
+                        # ── Anchor + wrap model (mirrors _pdf_draw_text) ──
+                        # `x` = left edge, `width` = box width. Anchor depends on
+                        # alignment so substituted values stay put as length changes.
+                        margin = 72  # PAGE_MARGIN
+                        if align == 'center':
+                            anchor_x = x + el_width / 2
+                            if user_resized and el_width:
+                                wrap_width = el_width
+                            else:
+                                half = min(anchor_x - margin, (width - margin) - anchor_x)
+                                wrap_width = max(2 * half, 40) if half > 0 else (width - 2 * margin)
+                        elif align == 'right':
+                            anchor_x = x + el_width
+                            wrap_width = el_width if (user_resized and el_width) else max(anchor_x - margin, 40)
+                        else:
+                            anchor_x = x
+                            wrap_width = el_width if (user_resized and el_width) else max((width - margin) - x, 40)
+
                         # Tolerance to absorb sub-pixel font metric differences
-                        # between PIL and Konva (browser canvas) so near-fit lines
-                        # don't get split into "Title" / "that".
-                        wrap_limit = (el_width or 0) + max(2, font_size * 0.15)
+                        # between PIL and Konva (browser canvas).
+                        wrap_limit = wrap_width + max(2, font_size * 0.15)
 
                         def _wrap_line(s):
-                            if wrap_mode == 'none' or not el_width or el_width <= 0:
+                            if wrap_mode == 'none' or wrap_width <= 0:
                                 return [s]
                             words = s.split(' ')
                             out = []
@@ -564,17 +530,28 @@ class CertificateViewSet(viewsets.ModelViewSet):
                         for para in text.split('\n'):
                             lines.extend(_wrap_line(para))
 
-                        for i, line in enumerate(lines):
-                            ly = y + i * line_height
-                            if align == 'center' and el_width:
-                                tw = _measure_line(line)
-                                lx = x + (el_width - tw) / 2
-                            elif align == 'right' and el_width:
-                                tw = _measure_line(line)
-                                lx = x + el_width - tw
-                            else:
-                                lx = x
-                            draw.text((lx, ly), line, fill=fill_rgb, font=font)
+                        def _line_x(tw):
+                            if align == 'center':
+                                return anchor_x - tw / 2
+                            if align == 'right':
+                                return anchor_x - tw
+                            return anchor_x
+
+                        if use_opacity:
+                            # Render text onto a transparent layer then alpha-composite
+                            layer = Image.new('RGBA', img.size, (0, 0, 0, 0))
+                            layer_draw = ImageDraw.Draw(layer)
+                            for i, line in enumerate(lines):
+                                ly = y + i * line_height
+                                lx = _line_x(_measure_line(line))
+                                layer_draw.text((lx, ly), line, fill=(*fill_rgb, int(opacity * 255)), font=font)
+                            img = Image.alpha_composite(img, layer)
+                            draw = ImageDraw.Draw(img)
+                        else:
+                            for i, line in enumerate(lines):
+                                ly = y + i * line_height
+                                lx = _line_x(_measure_line(line))
+                                draw.text((lx, ly), line, fill=fill_rgb, font=font)
 
                     elif el_type == 'image':
                         src = el.get('src', '')
@@ -585,7 +562,10 @@ class CertificateViewSet(viewsets.ModelViewSet):
                             el_w = el.get('width', el_img.width)
                             el_h = el.get('height', el_img.height)
                             el_img = el_img.resize((int(el_w), int(el_h)), Image.LANCZOS)
-                            # Convert main image to RGBA for compositing if needed
+                            if use_opacity:
+                                alpha = el_img.split()[3]
+                                alpha = alpha.point(lambda p: int(p * opacity))
+                                el_img.putalpha(alpha)
                             if img.mode != 'RGBA':
                                 img = img.convert('RGBA')
                                 draw = ImageDraw.Draw(img)
@@ -610,6 +590,10 @@ class CertificateViewSet(viewsets.ModelViewSet):
                             lw = int(el.get('width', 120))
                             lh = int(el.get('height', 120))
                             logo_img = logo_img.resize((lw, lh), Image.LANCZOS)
+                            if use_opacity:
+                                alpha = logo_img.split()[3]
+                                alpha = alpha.point(lambda p: int(p * opacity))
+                                logo_img.putalpha(alpha)
                             if img.mode != 'RGBA':
                                 img = img.convert('RGBA')
                                 draw = ImageDraw.Draw(img)
@@ -619,6 +603,10 @@ class CertificateViewSet(viewsets.ModelViewSet):
                         qr_w = max(1, int(el.get('width', 100)))
                         qr_h = max(1, int(el.get('height', 100)))
                         qr_img = self._make_qr_image(certificate, qr_w, qr_h)
+                        if use_opacity:
+                            alpha = qr_img.split()[3]
+                            alpha = alpha.point(lambda p: int(p * opacity))
+                            qr_img.putalpha(alpha)
                         if img.mode != 'RGBA':
                             img = img.convert('RGBA')
                             draw = ImageDraw.Draw(img)
@@ -629,6 +617,15 @@ class CertificateViewSet(viewsets.ModelViewSet):
                         ew, eh = el.get('width', 100), el.get('height', 100)
                         fill_c, stroke_c = _png_fill_stroke(el)
                         sw = el.get('strokeWidth', 1)
+
+                        def _apply_shape_opacity(c):
+                            if c is None:
+                                return None
+                            return (*c, int(opacity * 255))
+
+                        if use_opacity:
+                            fill_c = _apply_shape_opacity(fill_c)
+                            stroke_c = _apply_shape_opacity(stroke_c)
 
                         if el_type in ('shape_rect', 'shape_roundrect', 'shape_frame'):
                             draw.rectangle([ex, ey, ex + ew, ey + eh], fill=fill_c, outline=stroke_c, width=sw)
@@ -1061,7 +1058,18 @@ class CertificateViewSet(viewsets.ModelViewSet):
             p.rect(0, 0, width, height, fill=1)
 
         for el in elements:
+            # Skip hidden elements — Konva respects `visible`, backend must too.
+            if el.get('visible') is False:
+                continue
+
             el_type = el.get('type')
+            opacity = float(el.get('opacity', 1.0))
+            if opacity < 1.0:
+                try:
+                    p.setFillAlpha(opacity)
+                    p.setStrokeAlpha(opacity)
+                except Exception:
+                    pass  # Older ReportLab versions may not support alpha
             try:
                 if el_type == 'text':
                     self._pdf_draw_text(p, el, cert, width, height)
@@ -1075,6 +1083,13 @@ class CertificateViewSet(viewsets.ModelViewSet):
                 import traceback
                 print(f"Warning: could not render element {el.get('id')}: {e}")
                 traceback.print_exc()
+            finally:
+                if opacity < 1.0:
+                    try:
+                        p.setFillAlpha(1.0)
+                        p.setStrokeAlpha(1.0)
+                    except Exception:
+                        pass
 
     @staticmethod
     def _wrap_text(text, font_name, font_size, max_width):
@@ -1099,7 +1114,8 @@ class CertificateViewSet(viewsets.ModelViewSet):
         fill = el.get('fill', '#000000')
         rgb = self._hex_to_rgb(fill, (0, 0, 0))
         align = el.get('align', 'left')
-        el_width = el.get('width', 0)
+        width = el.get('width') or 0
+        user_resized = bool(el.get('userResized'))
         line_height = font_size * 1.2
 
         p.setFont(font_name, font_size)
@@ -1108,27 +1124,47 @@ class CertificateViewSet(viewsets.ModelViewSet):
         konva_x = el.get('x', 0)
         konva_y = el.get('y', 0)
 
-        # Handle explicit newlines, then word-wrap each paragraph
+        # ── Anchor + wrap model ──────────────────────────────────────
+        # `x` is the LEFT edge of the element box (Konva semantics) and
+        # `width` is the box width. The element's stable anchor depends on
+        # alignment, so substituted values stay put as text length changes.
+        #   left   → anchor at x          (grow right)
+        #   center → anchor at x+width/2  (grow symmetrically)
+        #   right  → anchor at x+width    (grow left)
+        # An explicit box (userResized) wraps to its own width; an auto box
+        # wraps within the page margins around its anchor.
+        margin = 72  # PAGE_MARGIN: 72pt = 1 inch printable margin
+
+        if align == 'center':
+            anchor_x = konva_x + width / 2
+            if user_resized and width:
+                wrap_width = width
+            else:
+                half = min(anchor_x - margin, (canvas_w - margin) - anchor_x)
+                wrap_width = max(2 * half, 40) if half > 0 else (canvas_w - 2 * margin)
+        elif align == 'right':
+            anchor_x = konva_x + width
+            wrap_width = width if (user_resized and width) else max(anchor_x - margin, 40)
+        else:
+            anchor_x = konva_x
+            wrap_width = width if (user_resized and width) else max((canvas_w - margin) - konva_x, 40)
+
+        # Handle explicit newlines, then word-wrap each paragraph.
         paragraphs = text.split('\n')
         wrapped_lines = []
         for para in paragraphs:
-            if el_width:
-                wrapped_lines.extend(self._wrap_text(para, font_name, font_size, el_width))
-            else:
-                wrapped_lines.append(para)
+            wrapped_lines.extend(self._wrap_text(para, font_name, font_size, wrap_width))
 
         for i, line in enumerate(wrapped_lines):
             y_offset = konva_y + font_size + i * line_height
             pdf_y = canvas_h - y_offset
 
-            if align == 'center' and el_width:
-                center_x = konva_x + el_width / 2
-                p.drawCentredString(center_x, pdf_y, line)
-            elif align == 'right' and el_width:
-                right_x = konva_x + el_width
-                p.drawRightString(right_x, pdf_y, line)
+            if align == 'center':
+                p.drawCentredString(anchor_x, pdf_y, line)
+            elif align == 'right':
+                p.drawRightString(anchor_x, pdf_y, line)
             else:
-                p.drawString(konva_x, pdf_y, line)
+                p.drawString(anchor_x, pdf_y, line)
 
     def _pdf_draw_image(self, p, el, canvas_w, canvas_h):
         """Render a base64 data-URI image element."""

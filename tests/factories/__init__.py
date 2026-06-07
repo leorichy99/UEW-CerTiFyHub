@@ -8,7 +8,13 @@ from tests.factories.core import (
 )
 from tests.factories.certificates import CertificateFactory
 from tests.factories.templates import CertificateTemplateFactory
-from tests.factories.students import StudentFactory
+from tests.factories.registry import (
+    FacultyFactory,
+    DepartmentFactory,
+    CongregationFactory,
+    CongregationSessionFactory,
+    StudentRecordFactory,
+)
 from tests.factories.builders import (
     TestCertificateBuilder,
     TestUserBuilder,
@@ -22,7 +28,11 @@ __all__ = [
     'SuperAdminDeactivationRequestFactory',
     'CertificateFactory',
     'CertificateTemplateFactory',
-    'StudentFactory',
+    'FacultyFactory',
+    'DepartmentFactory',
+    'CongregationFactory',
+    'CongregationSessionFactory',
+    'StudentRecordFactory',
     'TestCertificateBuilder',
     'TestUserBuilder',
     'TestTemplateBuilder',

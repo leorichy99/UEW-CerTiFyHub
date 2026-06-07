@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle, X, CheckCircle, Info } from "lucide-react";
 
 const ConfirmDialogContext = createContext(null);
 
@@ -32,6 +32,13 @@ const COLOR_MAP = {
     iconColor: "text-blue-600",
     btnText: "text-white",
   },
+};
+
+const ICON_MAP = {
+  danger: AlertTriangle,
+  warning: AlertTriangle,
+  success: CheckCircle,
+  primary: Info,
 };
 
 export function ConfirmDialogProvider({ children }) {
@@ -119,11 +126,16 @@ export function ConfirmDialogProvider({ children }) {
                     COLOR_MAP[dialog.variant || "danger"].iconBg
                   }`}
                 >
-                  <AlertTriangle
-                    className={`w-6 h-6 ${
-                      COLOR_MAP[dialog.variant || "danger"].iconColor
-                    }`}
-                  />
+                  {(() => {
+                    const Icon = ICON_MAP[dialog.variant || "danger"] || AlertTriangle;
+                    return (
+                      <Icon
+                        className={`w-6 h-6 ${
+                          COLOR_MAP[dialog.variant || "danger"].iconColor
+                        }`}
+                      />
+                    );
+                  })()}
                 </div>
               </div>
               <div className="flex-1 min-w-0">

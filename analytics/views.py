@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import permissions, status
 from rest_framework.pagination import PageNumberPagination
 from certificates.models import Certificate
-from students.models import Student
+from registry.models import StudentRecord
 from templates.models import CertificateTemplate
 from django.contrib.auth.models import User
 from django.db.models import Count, Avg, F, Q
@@ -20,7 +20,7 @@ class AdminStatsView(APIView):
 
     def get(self, request):
         total_certs = Certificate.objects.count()
-        total_students = Student.objects.count()
+        total_students = StudentRecord.objects.count()
         total_templates = CertificateTemplate.objects.count()
 
         last_30_days = timezone.now() - timedelta(days=30)
@@ -58,7 +58,7 @@ class SuperAdminStatsView(APIView):
         now = timezone.now()
 
         # Core counts
-        total_students = Student.objects.count()
+        total_students = StudentRecord.objects.count()
         total_certificates = Certificate.objects.count()
         total_verifications = AuditLog.objects.filter(category='verification').count()
         active_admins = User.objects.filter(

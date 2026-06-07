@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { authAPI } from "../services/api";
 import { useToast } from "../components/ToastContainer";
+import StepIndicator from "../components/ui/StepIndicator";
 import {
   Lock,
   ArrowLeft,
@@ -93,6 +94,7 @@ export default function ResetPasswordPage() {
           </div>
           
           <div className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm p-8 text-center">
+            <StepIndicator steps={["Email", "Verify", "Reset"]} currentStep={4} />
             <div className="flex justify-center mb-4">
               <div className="h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center">
                 <CheckCircle size={32} className="text-emerald-600" />
@@ -128,6 +130,7 @@ export default function ResetPasswordPage() {
             </div>
 
             <div className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm p-8">
+              <StepIndicator steps={["Email", "Verify", "Reset"]} currentStep={3} />
               <h1 className="text-xl font-extrabold text-slate-900">Reset Password</h1>
               <p className="mt-2 text-sm text-slate-600">
                 Create your new password

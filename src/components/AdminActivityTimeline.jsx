@@ -323,7 +323,7 @@ export default function AdminActivityTimeline({ onViewAll }) {
       </div>
 
       {/* Sticky Filter Bar - Segmented Control */}
-      <div className="sticky top-[61px] z-10 border-b border-slate-100 px-5 py-2.5 bg-white/95 backdrop-blur-sm">
+      <div className="sticky top-[61px] z-[1] border-b border-slate-100 px-5 py-2.5 bg-white/95">
         <div className="inline-flex rounded-lg bg-slate-100/70 p-0.5">
           {FILTERS.map((f) => (
             <button

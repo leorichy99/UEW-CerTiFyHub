@@ -22,6 +22,7 @@ export default function CertificatePreview({ certificate, onClose }) {
   const modalRef = useRef(null);
   const stageRef = useRef(null);
   const imgRef = useRef(null);
+  const closeBtnRef = useRef(null);
 
   // Fetch preview
   useEffect(() => {
@@ -135,6 +136,39 @@ export default function CertificatePreview({ certificate, onClose }) {
     }
   }, []);
 
+  // Focus trap + initial focus
+  useEffect(() => {
+    const modal = modalRef.current;
+    if (!modal) return;
+
+    // Focus close button on open
+    setTimeout(() => closeBtnRef.current?.focus(), 50);
+
+    function trapFocus(e) {
+      if (e.key !== 'Tab') return;
+      const focusable = modal.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      const elements = Array.from(focusable).filter((el) => !el.disabled);
+      if (elements.length === 0) return;
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    modal.addEventListener('keydown', trapFocus);
+    return () => modal.removeEventListener('keydown', trapFocus);
+  }, []);
+
   // Keyboard shortcuts
   useEffect(() => {
     const onKey = (e) => {
@@ -227,6 +261,7 @@ export default function CertificatePreview({ certificate, onClose }) {
                 </button>
                 <div className="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" />
                 <button
+                  ref={closeBtnRef}
                   onClick={onClose}
                   className="rounded-md p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
                   title="Close"
