@@ -560,7 +560,7 @@ function RecordsTab({ sessionId, isDraft }) {
         `/api/registry/sessions/${sessionId}/records/${record.id}/`,
         {
           method: "DELETE",
-          headers: { Authorization: `Bearer ${localStorage.getItem("access_token") || ""}` },
+          headers: { Authorization: `Bearer ${localStorage.getItem("accessToken") || ""}` },
         },
       );
       if (!res.ok) throw new Error("Failed");

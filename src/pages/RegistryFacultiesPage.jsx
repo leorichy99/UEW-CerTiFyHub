@@ -89,7 +89,7 @@ export default function RegistryFacultiesPage() {
       await fetch(`/api/registry/faculties/${faculty.id}/`, {
         method: "DELETE",
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("access_token") || ""}`,
+          Authorization: `Bearer ${localStorage.getItem("accessToken") || ""}`,
         },
       });
       toast.success("Faculty deleted");

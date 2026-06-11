@@ -15,7 +15,7 @@ export default function useNotificationSSE({ onMessage, enabled = true }) {
     if (!mountedRef.current || !enabled) return;
 
     // Get token from localStorage
-    const token = localStorage.getItem('access_token');
+    const token = localStorage.getItem('accessToken');
     if (!token) {
       console.warn('No access token found for SSE connection');
       return;

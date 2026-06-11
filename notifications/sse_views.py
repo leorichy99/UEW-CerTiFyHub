@@ -1,17 +1,28 @@
 """
 SSE (Server-Sent Events) views for real-time notifications and audit logs.
-Custom implementation using Django's StreamingHttpResponse.
+
+Async implementation: each request opens a dedicated channel-layer channel,
+joins the relevant groups, and streams live events (with periodic keep-alives)
+using Django's StreamingHttpResponse under ASGI. Producers push events via
+`channel_layer.group_send` from `notifications.services` and the AuditLog
+post_save signal in `analytics.models`.
 """
 
+import asyncio
 import json
 import logging
-import time
+
+from asgiref.sync import sync_to_async
+from channels.layers import get_channel_layer
 from django.http import StreamingHttpResponse
 from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import TokenError
 from django.contrib.auth.models import AnonymousUser, User
 
 logger = logging.getLogger('notifications')
+
+# Seconds between keep-alive comments when no event arrives.
+KEEP_ALIVE_INTERVAL = 30
 
 
 def authenticate_sse_request(request):
@@ -46,304 +57,177 @@ def authenticate_sse_request(request):
         return AnonymousUser()
 
 
-class SSEView:
-    """
-    Base class for SSE views with common functionality.
-    """
-    
-    def __init__(self, request):
-        self.request = request
-        self.user = authenticate_sse_request(request)
-        self.last_event_id = request.META.get('HTTP_LAST_EVENT_ID', '')
-    
-    def format_sse(self, data, event_type='message', event_id=None):
-        """
-        Format data as SSE event.
-        
-        Args:
-            data: Data to send (will be JSON serialized)
-            event_type: Event type (default: 'message')
-            event_id: Event ID for reconnection support
-            
-        Returns:
-            Formatted SSE string
-        """
-        lines = []
-        if event_id:
-            lines.append(f'id: {event_id}')
-        lines.append(f'event: {event_type}')
-        lines.append(f'data: {json.dumps(data)}')
-        lines.append('')  # Empty line to end event
-        return '\n'.join(lines)
-    
-    def keep_alive(self):
-        """
-        Generate keep-alive comment to keep connection open.
-        """
-        return ': keep-alive\n\n'
-    
-    def is_authenticated(self):
-        """Check if user is authenticated."""
-        return self.user.is_authenticated
-    
-    def has_permission(self):
-        """
-        Override this method in subclasses to implement custom permissions.
-        """
-        return True
+def _sse_event(data, event_type='message', event_id=None):
+    """Serialize `data` as a spec-compliant SSE event terminated by a blank line."""
+    prefix = f'id: {event_id}\n' if event_id is not None else ''
+    return f'{prefix}event: {event_type}\ndata: {json.dumps(data)}\n\n'
 
 
-class SSEGenerator:
-    """
-    Generator for SSE events with keep-alive support.
-    """
-    
-    def __init__(self, sse_view):
-        self.sse_view = sse_view
-        self.last_keep_alive = time.time()
-        self.keep_alive_interval = 30  # seconds
-    
-    def __iter__(self):
-        return self
-    
-    def __next__(self):
-        """
-        Yield SSE events or keep-alive messages.
-        Subclasses should override this to yield actual events.
-        """
-        # Keep-alive check
-        if time.time() - self.last_keep_alive > self.keep_alive_interval:
-            self.last_keep_alive = time.time()
-            return self.sse_view.keep_alive()
-        
-        # Subclasses should override to yield actual events
-        # This is a placeholder that yields keep-alive
-        return self.sse_view.keep_alive()
+def _keep_alive():
+    """SSE comment line that keeps the connection (and proxies) from timing out."""
+    return ': keep-alive\n\n'
 
 
-class NotificationSSEView(SSEView):
-    """
-    SSE view for streaming notifications to authenticated users.
-    """
-    
-    def has_permission(self):
-        """User must be authenticated."""
-        return self.is_authenticated()
-    
-    def get_user_group(self):
-        """Get the user's notification group name."""
-        return f'notifications_user_{self.user.id}'
-    
-    def get_role_group(self):
-        """Get the user's role notification group name."""
-        try:
-            role = self.user.profile.role
-            return f'notifications_role_{role}'
-        except Exception:
-            return None
+@sync_to_async
+def _get_notification_groups(user):
+    """Return (user_group, role_group) for the given user. role_group may be None."""
+    user_group = f'notifications_user_{user.id}'
+    role_group = None
+    try:
+        role = user.profile.role
+        if role:
+            role_group = f'notifications_role_{role}'
+    except Exception:
+        pass
+    return user_group, role_group
 
 
-class NotificationSSEGenerator(SSEGenerator):
-    """
-    Generator for notification SSE events using Redis pub/sub.
-    """
-    
-    def __init__(self, sse_view):
-        super().__init__(sse_view)
-        self.channel_layer = None
-        self.subscribed = False
-        self.message_queue = []
-        
-        try:
-            from channels.layers import get_channel_layer
-            self.channel_layer = get_channel_layer()
-        except Exception as e:
-            logger.error(f'Failed to get channel layer: {e}')
-    
-    def __iter__(self):
-        # Subscribe to user's notification group
-        if self.channel_layer and self.sse_view.is_authenticated():
-            try:
-                from asgiref.sync import async_to_sync
-                user_group = self.sse_view.get_user_group()
-                role_group = self.sse_view.get_role_group()
-                
-                # Subscribe to user group
-                if user_group:
-                    self.channel_layer.group_add(user_group, 'sse')
-                
-                # Subscribe to role group
-                if role_group:
-                    self.channel_layer.group_add(role_group, 'sse')
-                
-                self.subscribed = True
-                logger.info(f'Subscribed to notification groups: {user_group}, {role_group}')
-            except Exception as e:
-                logger.error(f'Failed to subscribe to notification groups: {e}')
-        
-        return self
-    
-    def __next__(self):
-        # Keep-alive check
-        if time.time() - self.last_keep_alive > self.keep_alive_interval:
-            self.last_keep_alive = time.time()
-            return self.sse_view.keep_alive()
-        
-        # For now, just return keep-alive
-        # In a real implementation, we'd poll Redis or use a different mechanism
-        # Since Django Channels is async and we're in a sync view, we need a different approach
-        return self.sse_view.keep_alive()
+@sync_to_async
+def _get_unread_count(user):
+    """Count the user's unread, unarchived notifications (personal + role broadcasts)."""
+    from .models import Notification
+    from django.db.models import Q
+
+    role = ''
+    try:
+        role = user.profile.role
+    except Exception:
+        pass
+
+    return Notification.objects.filter(
+        Q(recipient=user) | Q(role_target=role),
+        is_read=False, is_archived=False,
+    ).count()
 
 
-def notification_sse(request):
+@sync_to_async
+def _is_super_admin(user):
+    """True if the user's profile role is SUPER_ADMIN."""
+    try:
+        return user.profile.role == 'SUPER_ADMIN'
+    except Exception:
+        return False
+
+
+async def notification_sse(request):
     """
-    SSE endpoint for streaming notifications to authenticated users.
-    GET /api/sse/notifications/?token=<JWT>
+    SSE endpoint streaming live notifications to the authenticated user.
+    GET /api/notifications/sse/notifications/  (JWT via Authorization header or ?token=)
+
+    Emits an initial `unread_count` event, then a `notification` event for every
+    message published to the user's personal/role groups, with keep-alives in
+    between. Mirrors the WebSocket consumer's payload shape so the frontend
+    handler in NotificationContext works for both transports.
     """
     from django.conf import settings
-    
-    # Check feature flag
+
     if not getattr(settings, 'USE_SSE_NOTIFICATIONS', True):
-        # Return 503 if SSE is disabled
         return StreamingHttpResponse(
             'event: error\ndata: {"message": "SSE notifications disabled"}\n\n',
-            content_type='text/event-stream',
-            status=503
+            content_type='text/event-stream', status=503,
         )
-    
-    sse_view = NotificationSSEView(request)
-    
-    # Check authentication
-    if not sse_view.is_authenticated():
+
+    user = await sync_to_async(authenticate_sse_request)(request)
+    if not user.is_authenticated:
         return StreamingHttpResponse(
             'event: error\ndata: {"message": "Unauthorized"}\n\n',
-            content_type='text/event-stream',
-            status=401
+            content_type='text/event-stream', status=401,
         )
-    
-    # Check permissions
-    if not sse_view.has_permission():
-        return StreamingHttpResponse(
-            'event: error\ndata: {"message": "Forbidden"}\n\n',
-            content_type='text/event-stream',
-            status=403
-        )
-    
-    # Create generator
-    generator = NotificationSSEGenerator(sse_view)
-    
-    # Return SSE response
-    response = StreamingHttpResponse(
-        generator,
-        content_type='text/event-stream'
-    )
+
+    user_group, role_group = await _get_notification_groups(user)
+    groups = [g for g in (user_group, role_group) if g]
+
+    async def event_stream():
+        channel_layer = get_channel_layer()
+        channel_name = await channel_layer.new_channel()
+        for group in groups:
+            await channel_layer.group_add(group, channel_name)
+        try:
+            count = await _get_unread_count(user)
+            yield _sse_event({'type': 'unread_count', 'count': count}, event_type='unread_count')
+
+            while True:
+                try:
+                    message = await asyncio.wait_for(
+                        channel_layer.receive(channel_name),
+                        timeout=KEEP_ALIVE_INTERVAL,
+                    )
+                except asyncio.TimeoutError:
+                    yield _keep_alive()
+                    continue
+
+                if message.get('type') == 'notification.message':
+                    yield _sse_event(
+                        {'type': 'notification', 'data': message['data']},
+                        event_type='notification',
+                    )
+        finally:
+            for group in groups:
+                try:
+                    await channel_layer.group_discard(group, channel_name)
+                except Exception:
+                    pass
+
+    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
     response['Cache-Control'] = 'no-cache'
-    response['Connection'] = 'keep-alive'
     response['X-Accel-Buffering'] = 'no'  # Disable nginx buffering
-    
     return response
 
 
-class AuditLogSSEView(SSEView):
+async def audit_log_sse(request):
     """
-    SSE view for streaming audit logs to super admins.
-    """
-    
-    def has_permission(self):
-        """User must be super admin."""
-        if not self.is_authenticated():
-            return False
-        try:
-            return self.user.profile.role == 'SUPER_ADMIN'
-        except Exception:
-            return False
+    SSE endpoint streaming live audit-log entries to super admins.
+    GET /api/notifications/sse/audit-logs/  (JWT via Authorization header or ?token=)
 
-
-class AuditLogSSEGenerator(SSEGenerator):
-    """
-    Generator for audit log SSE events.
-    """
-    
-    def __init__(self, sse_view):
-        super().__init__(sse_view)
-        self.channel_layer = None
-        self.subscribed = False
-        self.last_event_id = 0
-        
-        try:
-            from channels.layers import get_channel_layer
-            self.channel_layer = get_channel_layer()
-        except Exception as e:
-            logger.error(f'Failed to get channel layer: {e}')
-    
-    def __iter__(self):
-        # Subscribe to audit log channel
-        if self.channel_layer and self.sse_view.is_authenticated():
-            try:
-                from asgiref.sync import async_to_sync
-                self.channel_layer.group_add('audit_logs', 'sse')
-                self.subscribed = True
-                logger.info('Subscribed to audit_logs channel')
-            except Exception as e:
-                logger.error(f'Failed to subscribe to audit_logs channel: {e}')
-        
-        return self
-    
-    def __next__(self):
-        # Keep-alive check
-        if time.time() - self.last_keep_alive > self.keep_alive_interval:
-            self.last_keep_alive = time.time()
-            return self.sse_view.keep_alive()
-        
-        # For now, just return keep-alive
-        # In a real implementation, we'd poll Redis or use a different mechanism
-        return self.sse_view.keep_alive()
-
-
-def audit_log_sse(request):
-    """
-    SSE endpoint for streaming audit logs to super admins.
-    GET /api/sse/audit-logs/?token=<JWT>
+    Streams the raw audit-log payload (shape produced by the AuditLog post_save
+    signal in analytics.models) for each new entry, which the AdminActivityTimeline
+    parser consumes directly via interpretLog(parsed).
     """
     from django.conf import settings
-    
-    # Check feature flag
+
     if not getattr(settings, 'USE_SSE_AUDIT_LOGS', True):
-        # Return 503 if SSE is disabled
         return StreamingHttpResponse(
             'event: error\ndata: {"message": "SSE audit logs disabled"}\n\n',
-            content_type='text/event-stream',
-            status=503
+            content_type='text/event-stream', status=503,
         )
-    
-    sse_view = AuditLogSSEView(request)
-    
-    # Check authentication
-    if not sse_view.is_authenticated():
+
+    user = await sync_to_async(authenticate_sse_request)(request)
+    if not user.is_authenticated:
         return StreamingHttpResponse(
             'event: error\ndata: {"message": "Unauthorized"}\n\n',
-            content_type='text/event-stream',
-            status=401
+            content_type='text/event-stream', status=401,
         )
-    
-    # Check permissions
-    if not sse_view.has_permission():
+
+    if not await _is_super_admin(user):
         return StreamingHttpResponse(
             'event: error\ndata: {"message": "Forbidden - Super Admin only"}\n\n',
-            content_type='text/event-stream',
-            status=403
+            content_type='text/event-stream', status=403,
         )
-    
-    # Create generator
-    generator = AuditLogSSEGenerator(sse_view)
-    
-    # Return SSE response
-    response = StreamingHttpResponse(
-        generator,
-        content_type='text/event-stream'
-    )
+
+    async def event_stream():
+        channel_layer = get_channel_layer()
+        channel_name = await channel_layer.new_channel()
+        await channel_layer.group_add('audit_logs', channel_name)
+        try:
+            while True:
+                try:
+                    message = await asyncio.wait_for(
+                        channel_layer.receive(channel_name),
+                        timeout=KEEP_ALIVE_INTERVAL,
+                    )
+                except asyncio.TimeoutError:
+                    yield _keep_alive()
+                    continue
+
+                if message.get('type') == 'audit_log.message':
+                    yield _sse_event(message['data'], event_type='audit_log')
+        finally:
+            try:
+                await channel_layer.group_discard('audit_logs', channel_name)
+            except Exception:
+                pass
+
+    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
     response['Cache-Control'] = 'no-cache'
-    response['Connection'] = 'keep-alive'
     response['X-Accel-Buffering'] = 'no'  # Disable nginx buffering
-    
     return response

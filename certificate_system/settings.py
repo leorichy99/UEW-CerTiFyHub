@@ -38,6 +38,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Serve static files in production
     'corsheaders.middleware.CorsMiddleware',  # Add CORS
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -52,7 +53,7 @@ ROOT_URLCONF = 'certificate_system.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'dist'],  # Built React app (index.html)
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -176,6 +177,21 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Serve the built frontend (dist/) at the site root, matching Vite's default
+# base of '/'. WhiteNoise serves /assets/*, /uew-logo.png, etc. directly.
+if (BASE_DIR / 'dist').exists():
+    WHITENOISE_ROOT = BASE_DIR / 'dist'
+
+# Compressed, cache-friendly static serving in production (WhiteNoise).
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage',
+    },
+}
 
 # Media files
 MEDIA_URL = '/media/'
