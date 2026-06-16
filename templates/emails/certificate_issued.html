@@ -1,0 +1,20 @@
+{% extends "emails/base_email.html" %}
+
+{% block content %}
+  <h1 style="margin: 0 0 16px; font-size: 20px; font-weight: 700; color: #242576; text-align: center;">Your Certificate Has Been Issued</h1>
+
+  <p style="margin: 0 0 16px;">Hello <strong>{{ student_name }}</strong>,</p>
+
+  <p style="margin: 0 0 24px;">
+    Your certificate from <strong>{{ batch_name }}</strong> has been issued.
+    Certificate number: <strong>{{ certificate_number }}</strong>.
+  </p>
+
+  <p style="margin: 0 0 24px;">
+    You will be able to download it from your account or via the verification portal.
+  </p>
+
+  <p style="margin: 0; color: #64748b; font-size: 13px;">
+    If you have any questions, please contact the Academic Registry.
+  </p>
+{% endblock %}

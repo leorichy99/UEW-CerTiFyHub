@@ -16,15 +16,15 @@ GRANTABLE_PERMISSIONS = {
     "certificates.view_all": "View all certificates",
     "certificates.download": "Download certificates",
 
-    # Category 2 — Student Registry (congregation sessions + records)
-    "registry.sessions.create": "Create congregation sessions",
+    # Category 2 — Student Registry (batches + records)
+    "registry.sessions.create": "Create issuance batches",
     "registry.records.upload": "Upload student records",
     "registry.records.manage": "Manage student records (edit/delete in Draft)",
-    "registry.sessions.publish": "Publish sessions and dispatch confirmation emails",
+    "registry.sessions.publish": "Publish batches and dispatch confirmation emails",
     "registry.confirmation.view": "View confirmation status",
     "registry.disputes.resolve": "Resolve student disputes",
     "registry.issuance.initiate": "Initiate certificate issuance",
-    "registry.export": "Export session data",
+    "registry.export": "Export batch data",
 
     # Category 3 — Verification
     "verification.verify": "Verify certificates",
@@ -41,7 +41,7 @@ GRANTABLE_PERMISSIONS = {
 # ── Super-Admin-only permissions (never grantable via letter) ────────────
 
 SUPER_ADMIN_ONLY_PERMISSIONS = {
-    "registry.sessions.archive": "Archive congregation sessions",
+    "registry.sessions.archive": "Archive issuance batches",
     "registry.faculties.manage": "Manage faculties and departments",
     "accounts.view_list": "View account list",
     "accounts.deactivate": "Deactivate accounts",

@@ -1,7 +1,7 @@
 """
-Filter expressions for ``IssuanceBatch``.
+Filter expressions for ``IssuanceRun``.
 
-Filters are deliberately stored as a JSON dict on the batch so the API can
+Filters are deliberately stored as a JSON dict on the run so the API can
 evolve without schema migrations. ``apply_batch_filters()`` is the *only*
 place that translates that dict into a queryset filter — keeping the
 translation in one place stops divergence between the validation in views
@@ -84,7 +84,7 @@ def validate_filter_criteria(criteria):
 def apply_batch_filters(queryset, criteria):
     """Apply the validated filter dict to a StudentRecord queryset.
 
-    Caller is responsible for the base queryset (typically ``session``-scoped
+    Caller is responsible for the base queryset (typically ``batch``-scoped
     and restricted to CONF_CONFIRMED). This helper only adds filter clauses.
     """
     if criteria.get('faculty_ids'):
@@ -100,7 +100,7 @@ def apply_batch_filters(queryset, criteria):
     if criteria.get('honors'):
         # The dataset stores free-text class_of_degree; we materialise the
         # mapping here. For datasets larger than a few thousand records this
-        # could be denormalised, but at congregation scale (<10k) it's fine.
+        # could be denormalised, but at batch scale (<10k) it's fine.
         wanted = set(criteria['honors'])
         ids = [
             r.id for r in queryset.only('id', 'class_of_degree')
@@ -110,15 +110,15 @@ def apply_batch_filters(queryset, criteria):
     return queryset
 
 
-def issuable_records_for_batch(session, criteria):
-    """Return the StudentRecord queryset a batch will operate on.
+def issuable_records_for_batch(batch, criteria):
+    """Return the StudentRecord queryset a run will operate on.
 
     By default we target only records that are CONFIRMED and not yet ISSUED.
     With ``retry_failed=True`` we also include records that previously
     failed — useful when re-running after a template fix.
     """
     base = StudentRecord.objects.filter(
-        session=session,
+        batch=batch,
         confirmation_status=StudentRecord.CONF_CONFIRMED,
     )
     if criteria.get('retry_failed'):

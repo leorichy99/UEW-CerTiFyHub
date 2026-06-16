@@ -162,33 +162,45 @@ class PDFRendererAdapter:
     
     def draw_qr_code(self, canvas, data, x, y, size=100):
         """
-        Draw a QR code on the canvas.
+        Draw a QR code on the canvas using native vector rectangles.
+        Completely resolution-independent — no raster embedding.
         
         Args:
             canvas: ReportLab canvas
             data: Data to encode in QR code
             x: X coordinate
-            y: Y coordinate
+            y: Y coordinate (PDF bottom-up)
             size: Size of QR code in points
         """
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
+            box_size=1,
             border=4,
         )
         qr.add_data(data)
         qr.make(fit=True)
         
-        img = qr.make_image(fill_color="black", back_color="white")
+        modules_count = qr.modules_count
+        modules_with_border = modules_count + 8  # 4-module quiet zone each side
+        module_size = size / modules_with_border
         
-        # Convert PIL image to ReportLab compatible format
-        from io import BytesIO
-        buffer = BytesIO()
-        img.save(buffer, format='PNG')
-        buffer.seek(0)
-        
-        canvas.drawImage(img, x, y, size, size, mask='auto')
+        for row in range(modules_with_border):
+            for col in range(modules_with_border):
+                qr_row = row - 4
+                qr_col = col - 4
+                is_dark = (
+                    0 <= qr_row < modules_count and
+                    0 <= qr_col < modules_count and
+                    qr.modules[qr_row][qr_col]
+                )
+                if is_dark:
+                    canvas.rect(
+                        x + col * module_size,
+                        y + (modules_with_border - 1 - row) * module_size,
+                        module_size, module_size,
+                        fill=1, stroke=0
+                    )
     
     def save_canvas(self, canvas, buffer=None):
         """Save the canvas to a buffer."""

@@ -12,7 +12,7 @@ import logging
 logger = logging.getLogger('registry')
 
 ROLE_SUPER_ADMIN = 'SUPER_ADMIN'
-RELATED_TYPE = 'congregation_session'
+RELATED_TYPE = 'issuance_batch'
 
 
 def _safe_notify(**kwargs):
@@ -24,69 +24,69 @@ def _safe_notify(**kwargs):
         logger.exception('registry notifier: notify() failed (kwargs=%s)', kwargs)
 
 
-def session_published(session, *, sent, failed, total):
+def batch_published(batch, *, sent, failed, total):
     _safe_notify(
         role_target=ROLE_SUPER_ADMIN,
-        title=f'Session published: {session.name}',
+        title=f'Batch published: {batch.name}',
         message=(
             f'{total} record(s) published, {sent} email(s) sent, '
             f'{failed} failed.'
         ),
         notification_type='system',
-        related_object_id=session.id,
+        related_object_id=batch.id,
         related_object_type=RELATED_TYPE,
         priority='info',
-        metadata={'event': 'session_published', 'total': total,
+        metadata={'event': 'batch_published', 'total': total,
                   'sent': sent, 'failed': failed},
     )
 
 
-def confirmation_closed(session, *, flagged):
+def confirmation_closed(batch, *, flagged):
     _safe_notify(
         role_target=ROLE_SUPER_ADMIN,
-        title=f'Confirmation closed: {session.name}',
+        title=f'Confirmation closed: {batch.name}',
         message=(
             f'{flagged} record(s) auto-flagged for review.'
             if flagged else 'All records confirmed in time.'
         ),
         notification_type='system',
-        related_object_id=session.id,
+        related_object_id=batch.id,
         related_object_type=RELATED_TYPE,
         priority='warning' if flagged else 'info',
         metadata={'event': 'confirmation_closed', 'flagged': flagged},
     )
 
 
-def issuance_finished(session, *, issued, failed):
+def issuance_finished(batch, *, issued, failed):
     _safe_notify(
         role_target=ROLE_SUPER_ADMIN,
-        title=f'Issuance complete: {session.name}',
+        title=f'Issuance complete: {batch.name}',
         message=(
             f'{issued} certificate(s) issued, {failed} failed.'
         ),
         notification_type='bulk_issuance_complete',
-        related_object_id=session.id,
+        related_object_id=batch.id,
         related_object_type=RELATED_TYPE,
         priority='critical' if failed else 'success',
         metadata={'event': 'issuance_finished', 'issued': issued, 'failed': failed},
     )
 
 
-def deadline_extended(session, *, previous_deadline, new_deadline, actor, reason=''):
+def deadline_extended(batch, *, previous_deadline, new_deadline, actor, reason=''):
     _safe_notify(
         role_target=ROLE_SUPER_ADMIN,
-        title=f'Deadline extended: {session.name}',
+        title=f'Deadline extended: {batch.name}',
         message=(
             f'Confirmation deadline moved from '
             f'{previous_deadline:%Y-%m-%d %H:%M} to '
             f'{new_deadline:%Y-%m-%d %H:%M}.'
         ),
         notification_type='system',
-        related_object_id=session.id,
+        related_object_id=batch.id,
         related_object_type=RELATED_TYPE,
         priority='warning',
         metadata={
-            'event': 'session.deadline_extended',
+            'event': 'batch.deadline_extended',
             'previous_deadline': previous_deadline.isoformat() if previous_deadline else None,
             'new_deadline': new_deadline.isoformat() if new_deadline else None,
             'actor_id': getattr(actor, 'id', None),
@@ -95,17 +95,54 @@ def deadline_extended(session, *, previous_deadline, new_deadline, actor, reason
     )
 
 
-def dispute_raised(session, record):
+def dispute_raised(batch, record):
     _safe_notify(
         role_target=ROLE_SUPER_ADMIN,
-        title=f'New dispute: {session.name}',
+        title=f'New dispute: {batch.name}',
         message=(
             f'{record.full_name} ({record.index_number}) flagged their '
             f'record for review.'
         ),
         notification_type='system',
-        related_object_id=session.id,
+        related_object_id=batch.id,
         related_object_type=RELATED_TYPE,
         priority='warning',
         metadata={'event': 'dispute_raised', 'record_id': str(record.id)},
+    )
+
+
+def delivery_failures_detected(batch, *, sent, failed, bounced):
+    total_failed = failed + bounced
+    _safe_notify(
+        role_target=ROLE_SUPER_ADMIN,
+        title=f'{batch.name} — {total_failed} confirmation emails failed to deliver',
+        message=(
+            f'{sent} sent successfully, {failed} failed, {bounced} bounced. '
+            f'Review the failed deliveries on the batch Overview tab and resend where needed.'
+        ),
+        notification_type='system',
+        related_object_id=batch.id,
+        related_object_type=RELATED_TYPE,
+        priority='critical',
+        metadata={'event': 'delivery_failures_detected', 'sent': sent,
+                  'failed': failed, 'bounced': bounced},
+    )
+
+
+def resend_complete(batch, *, sent, still_failing, hit_cap, actor):
+    _safe_notify(
+        recipient=actor,
+        title=f'{batch.name} — Resend complete: {sent} sent, {still_failing} still failing',
+        message=(
+            f'{sent} resend(s) succeeded. '
+            f'{still_failing} record(s) still failing.'
+            + (f' {hit_cap} record(s) reached the maximum resend limit.' if hit_cap else '')
+            + ' Review email addresses before further attempts.'
+        ),
+        notification_type='system',
+        related_object_id=batch.id,
+        related_object_type=RELATED_TYPE,
+        priority='warning' if still_failing else 'info',
+        metadata={'event': 'resend_complete', 'sent': sent,
+                  'still_failing': still_failing, 'hit_cap': hit_cap},
     )

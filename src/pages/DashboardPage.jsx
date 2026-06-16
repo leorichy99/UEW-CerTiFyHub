@@ -24,6 +24,7 @@ import {
   Calendar,
   Clock,
 } from "lucide-react";
+import PageTitle from "../components/PageTitle";
 import SummaryStatCard from "../components/SummaryStatCard";
 import { useDashboardStats } from "../hooks/dashboard/useDashboardStats.js";
 import Table from "../components/ui/Table";
@@ -123,6 +124,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
+      <PageTitle>Dashboard</PageTitle>
       <div className="flex items-center justify-end">
         <RefreshButton onClick={handleRefresh} spinning={isRefreshing} />
       </div>
@@ -243,7 +245,6 @@ export default function DashboardPage() {
                 </ResponsiveContainer>
               );
             })()}
-            )}
           </div>
         </div>
       </div>

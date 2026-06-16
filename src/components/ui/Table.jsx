@@ -8,7 +8,7 @@ const Table = ({
   ...props 
 }) => {
   return (
-    <div className="overflow-x-auto border" style={{ borderColor: 'var(--color-table-border)' }}>
+    <div className="overflow-x-auto border-0" style={{ borderColor: 'var(--color-table-border)' }}>
       <table 
         className={`min-w-full text-sm ${className}`}
         {...props}
@@ -22,7 +22,7 @@ const Table = ({
 const TableHead = ({ children, className = '', ...props }) => {
   return (
     <thead 
-      className={`text-xs font-semibold uppercase tracking-wider sticky top-0 z-[1] ${className}`}
+      className={`text-xs font-semibold uppercase tracking-wider sticky top-0 z-1 ${className}`}
       style={{ backgroundColor: 'var(--color-table-head-bg)', color: 'var(--color-table-head-text)' }}
       {...props}
     >
@@ -34,7 +34,7 @@ const TableHead = ({ children, className = '', ...props }) => {
 const TableBody = ({ children, className = '', showZebra = true, ...props }) => {
   return (
     <tbody 
-      className={`divide-y ${className}`}
+      className={`divide-y-0.5 ${className}`}
       style={{ borderColor: 'var(--color-table-border)' }}
       {...props}
     >
@@ -53,7 +53,7 @@ const TableBody = ({ children, className = '', showZebra = true, ...props }) => 
 const TableRow = ({ children, className = '', isAlt = false, ...props }) => {
   return (
     <tr
-      className={`transition-colors hover:bg-slate-100 ${className}`}
+      className={`transition-colors hover:bg-(--color-table-row-hover) ${className}`}
       style={{ 
         backgroundColor: isAlt ? 'var(--color-table-row-alt)' : 'var(--color-table-row-default)'
       }}
@@ -76,7 +76,7 @@ const TableHeaderCell = ({ children, className = '', onSort, sortDirection, ...p
       scope="col"
       aria-sort={sortDirection || "none"}
       className={`px-4 py-3 text-left font-semibold ${
-        isSortable ? "cursor-pointer select-none hover:bg-slate-100/50" : ""
+        isSortable ? "cursor-pointer select-none hover:bg-(--color-table-row-hover)" : ""
       } ${className}`}
       onClick={isSortable ? onSort : undefined}
       {...props}

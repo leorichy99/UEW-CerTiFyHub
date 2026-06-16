@@ -21,7 +21,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from registry.models import (
-    CongregationSession, StudentRecord, EmailDeliveryLog, ConfirmationAuditLog,
+    IssuanceBatch, StudentRecord, EmailDeliveryLog, ConfirmationAuditLog,
 )
 from registry.services.token_service import (
     generate_token, hash_token, default_expiry,
@@ -40,10 +40,10 @@ class DisputeResolutionError(Exception):
 
 
 class DisputeService:
-    def list_disputes(self, session):
+    def list_disputes(self, batch):
         return (
             StudentRecord.objects
-            .filter(session=session, confirmation_status=StudentRecord.CONF_DISPUTED)
+            .filter(batch=batch, confirmation_status=StudentRecord.CONF_DISPUTED)
             .select_related('faculty', 'department')
             .order_by('dispute_submitted_at')
         )
@@ -56,7 +56,7 @@ class DisputeService:
         raw_token = generate_token()
         record.confirmation_token_hash = hash_token(raw_token)
         record.confirmation_token_expires_at = default_expiry(
-            record.session.confirmation_deadline,
+            record.batch.confirmation_deadline,
         )
         record.confirmation_status = StudentRecord.CONF_PENDING
         record.confirmation_email_status = StudentRecord.DELIVERY_PENDING
@@ -67,7 +67,7 @@ class DisputeService:
 
         self._email_correction(record, raw_token)
         ConfirmationAuditLog.objects.create(
-            session=record.session, student_record=record,
+            batch=record.batch, student_record=record,
             event_type='TOKEN_GENERATED',
             metadata={'reason': 'dispute_corrected', 'by': actor.id if actor else None},
         )
@@ -94,7 +94,7 @@ class DisputeService:
 
         self._email_rejection(record)
         ConfirmationAuditLog.objects.create(
-            session=record.session, student_record=record,
+            batch=record.batch, student_record=record,
             event_type='CONFIRMED',
             metadata={'reason': 'dispute_rejected', 'by': actor.id if actor else None},
         )
@@ -107,13 +107,13 @@ class DisputeService:
             raise DisputeResolutionError(
                 'Only records in DISPUTED status can be resolved.'
             )
-        if record.session.status not in {
-            CongregationSession.STATUS_PUBLISHED,
-            CongregationSession.STATUS_CONFIRMATION_OPEN,
-            CongregationSession.STATUS_CONFIRMATION_CLOSED,
+        if record.batch.status not in {
+            IssuanceBatch.STATUS_PUBLISHED,
+            IssuanceBatch.STATUS_CONFIRMATION_OPEN,
+            IssuanceBatch.STATUS_CONFIRMATION_CLOSED,
         }:
             raise DisputeResolutionError(
-                'Disputes can only be resolved while the session is in a '
+                'Disputes can only be resolved while the batch is in a '
                 'confirmation phase.'
             )
 
@@ -127,34 +127,41 @@ class DisputeService:
             setattr(record, k, v)
 
     def _email_correction(self, record, raw_token):
+        from registry.services.email_renderer import render_email
+
         url = self._confirmation_url(record, raw_token)
-        body = (
-            f"Dear {record.full_name},\n\n"
-            f"Your record for {record.session.name} has been updated based on "
-            f"your dispute. Please review and re-confirm your details using "
-            f"the link below:\n\n{url}\n\n— UEW CerTiFyHub"
+        subject = 'Your record has been updated — please re-confirm'
+        subject, html_body, plain_body = render_email(
+            'emails/record_corrected.html',
+            {
+                'subject': subject,
+                'student_name': record.full_name,
+                'batch_name': record.batch.name,
+                'confirmation_link': url,
+            },
         )
-        self._send(record, EmailDeliveryLog.TYPE_RECORD_CORRECTED,
-                   subject='Your record has been updated — please re-confirm',
-                   body=body)
+        self._send_html(record, EmailDeliveryLog.TYPE_RECORD_CORRECTED,
+                        subject=subject, html_body=html_body, plain_body=plain_body)
 
     def _email_rejection(self, record):
-        body = (
-            f"Dear {record.full_name},\n\n"
-            f"Following review by the registrar's office, your record for "
-            f"{record.session.name} will stand as previously shown.\n\n"
-            f"Resolution note from the registrar:\n"
-            f"  {record.dispute_resolution_note}\n\n"
-            f"If you believe this is in error, please contact your faculty "
-            f"office directly.\n\n— UEW CerTiFyHub"
+        from registry.services.email_renderer import render_email
+
+        subject = 'Update on your record dispute'
+        subject, html_body, plain_body = render_email(
+            'emails/dispute_rejected.html',
+            {
+                'subject': subject,
+                'student_name': record.full_name,
+                'batch_name': record.batch.name,
+                'resolution_note': record.dispute_resolution_note,
+            },
         )
-        self._send(record, EmailDeliveryLog.TYPE_DISPUTE_REJECTED,
-                   subject='Update on your record dispute',
-                   body=body)
+        self._send_html(record, EmailDeliveryLog.TYPE_DISPUTE_REJECTED,
+                        subject=subject, html_body=html_body, plain_body=plain_body)
 
     def _send(self, record, email_type, *, subject, body):
         log = EmailDeliveryLog.objects.create(
-            student_record=record, session=record.session,
+            student_record=record, batch=record.batch,
             email_type=email_type, recipient=record.institutional_email,
             status=EmailDeliveryLog.STATUS_QUEUED,
         )
@@ -163,6 +170,30 @@ class DisputeService:
                 subject=subject, message=body,
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[record.institutional_email],
+                fail_silently=False,
+            )
+            log.status = EmailDeliveryLog.STATUS_SENT
+            log.sent_at = timezone.now()
+            log.save(update_fields=['status', 'sent_at'])
+            return True
+        except Exception as e:  # noqa: BLE001
+            log.status = EmailDeliveryLog.STATUS_FAILED
+            log.error_message = str(e)[:1000]
+            log.save(update_fields=['status', 'error_message'])
+            return False
+
+    def _send_html(self, record, email_type, *, subject, html_body, plain_body):
+        log = EmailDeliveryLog.objects.create(
+            student_record=record, batch=record.batch,
+            email_type=email_type, recipient=record.institutional_email,
+            status=EmailDeliveryLog.STATUS_QUEUED,
+        )
+        try:
+            send_mail(
+                subject=subject, message=plain_body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[record.institutional_email],
+                html_message=html_body,
                 fail_silently=False,
             )
             log.status = EmailDeliveryLog.STATUS_SENT

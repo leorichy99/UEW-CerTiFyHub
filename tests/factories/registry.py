@@ -6,7 +6,7 @@ import factory
 from django.utils import timezone
 
 from registry.models import (
-    Faculty, Department, Congregation, CongregationSession, StudentRecord,
+    Faculty, Department, IssuanceBatch, StudentRecord,
 )
 
 
@@ -31,37 +31,16 @@ class DepartmentFactory(factory.django.DjangoModelFactory):
     is_active = True
 
 
-class CongregationFactory(factory.django.DjangoModelFactory):
+class IssuanceBatchFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = Congregation
-        django_get_or_create = ('year',)
+        model = IssuanceBatch
 
-    name = factory.Sequence(lambda n: f"Test Congregation {n}")
-    # Sequence offset keeps each factory call in its own year. Tests that need
-    # multiple sessions in one congregation should pass `congregation=...`
-    # explicitly when calling CongregationSessionFactory.
+    name = factory.Sequence(lambda n: f"Test Batch {n}")
     year = factory.Sequence(lambda n: 2024 + n)
-    ceremony_month = factory.LazyFunction(
-        lambda: (date.today() + timedelta(days=30)).replace(day=1)
-    )
-    description = ''
-    created_by = factory.SubFactory('tests.factories.core.UserFactory')
-
-
-class CongregationSessionFactory(factory.django.DjangoModelFactory):
-    class Meta:
-        model = CongregationSession
-
-    congregation = factory.SubFactory(CongregationFactory)
-    session_number = 1
-    name = factory.Sequence(lambda n: f"Test Session {n}")
-    academic_year = '2024/2025'
-    ceremony_start_date = factory.LazyAttribute(lambda o: o.congregation.ceremony_month)
-    ceremony_end_date = factory.LazyAttribute(lambda o: o.congregation.ceremony_month)
-    scope_type = CongregationSession.SCOPE_INSTITUTION
-    confirmation_deadline = factory.LazyAttribute(
-        lambda o: timezone.make_aware(
-            datetime.combine(o.ceremony_start_date - timedelta(days=7), time(23, 59))
+    status = IssuanceBatch.STATUS_DRAFT
+    confirmation_deadline = factory.LazyFunction(
+        lambda: timezone.make_aware(
+            datetime.combine(date.today() + timedelta(days=30), time(23, 59))
         )
     )
     confirmation_deadline_original = factory.LazyAttribute(
@@ -77,7 +56,7 @@ class StudentRecordFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = StudentRecord
 
-    session = factory.SubFactory(CongregationSessionFactory)
+    batch = factory.SubFactory(IssuanceBatchFactory)
     index_number = factory.Sequence(lambda n: f"UEW/2024/{n:04d}")
     full_name = factory.Faker('name')
     institutional_email = factory.LazyAttribute(

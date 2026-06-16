@@ -1,5 +1,6 @@
 /* eslint-disable react/prop-types */
 import React, { useState } from "react";
+import Konva from "konva";
 import {
   Stage,
   Layer,
@@ -26,6 +27,13 @@ import ShapeArcNode from "./nodes/ShapeArcNode";
 import ShapeWedgeNode from "./nodes/ShapeWedgeNode";
 import ShapePathNode from "./nodes/ShapePathNode";
 import ShapeSpiralNode from "./nodes/ShapeSpiralNode";
+
+// Force HiDPI scene-canvas rendering. Konva creates each Layer's scene canvas
+// using `Konva.pixelRatio || window.devicePixelRatio`, so on standard 1x
+// monitors the live canvas would otherwise render at 1 backing pixel per CSS
+// pixel and look soft. Pinning to >=2 matches the preview modal's
+// toDataURL({ pixelRatio: 2 }) and keeps logos/signatures crisp.
+Konva.pixelRatio = Math.max(2, window.devicePixelRatio || 1);
 
 export default function Canvas() {
   const ctx = useEditor();

@@ -9,7 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from registry.models import (
-    CongregationSession, StudentRecord, ConfirmationAuditLog,
+    IssuanceBatch, StudentRecord, ConfirmationAuditLog,
 )
 from registry.services.token_service import hash_token
 
@@ -22,13 +22,13 @@ class TokenExpired(Exception):
     """The token matched a record but is past its expiry timestamp."""
 
 
-class SessionNotAccepting(Exception):
-    """The session is not in a status that accepts public actions."""
+class BatchNotAccepting(Exception):
+    """The batch is not in a status that accepts public actions."""
 
 
 ACTIVE_STATUSES = {
-    CongregationSession.STATUS_PUBLISHED,
-    CongregationSession.STATUS_CONFIRMATION_OPEN,
+    IssuanceBatch.STATUS_PUBLISHED,
+    IssuanceBatch.STATUS_CONFIRMATION_OPEN,
 }
 
 
@@ -40,7 +40,7 @@ class ConfirmationService:
         digest = hash_token(raw_token)
         record = (
             StudentRecord.objects
-            .select_related('session', 'faculty', 'department')
+            .select_related('batch', 'faculty', 'department')
             .filter(
                 confirmation_token_hash=digest,
                 index_number=index_number,
@@ -49,27 +49,27 @@ class ConfirmationService:
         )
         if not record:
             self._log_validation_failure(
-                session=None, index_number=index_number, ip=ip,
+                batch=None, index_number=index_number, ip=ip,
                 user_agent=user_agent, reason='no_match',
             )
             raise TokenInvalid('Confirmation link is invalid.')
 
-        if record.session.status not in ACTIVE_STATUSES:
-            raise SessionNotAccepting(
+        if record.batch.status not in ACTIVE_STATUSES:
+            raise BatchNotAccepting(
                 'This confirmation page is no longer accepting submissions.'
             )
 
         if record.confirmation_token_expires_at and \
                 record.confirmation_token_expires_at < timezone.now():
             ConfirmationAuditLog.objects.create(
-                session=record.session, student_record=record,
+                batch=record.batch, student_record=record,
                 event_type='TOKEN_EXPIRED',
                 ip_address=ip, user_agent=user_agent[:512] if user_agent else '',
             )
             raise TokenExpired('Your confirmation link has expired.')
 
         ConfirmationAuditLog.objects.create(
-            session=record.session, student_record=record,
+            batch=record.batch, student_record=record,
             event_type='PAGE_VIEWED',
             ip_address=ip, user_agent=user_agent[:512] if user_agent else '',
         )
@@ -84,7 +84,7 @@ class ConfirmationService:
             'confirmation_status', 'confirmed_at', 'confirmation_ip',
         ])
         ConfirmationAuditLog.objects.create(
-            session=record.session, student_record=record,
+            batch=record.batch, student_record=record,
             event_type='CONFIRMED',
             ip_address=ip, user_agent=user_agent[:512] if user_agent else '',
         )
@@ -101,20 +101,20 @@ class ConfirmationService:
             'confirmation_status', 'dispute_note', 'dispute_submitted_at',
         ])
         ConfirmationAuditLog.objects.create(
-            session=record.session, student_record=record,
+            batch=record.batch, student_record=record,
             event_type='DISPUTED',
             ip_address=ip, user_agent=user_agent[:512] if user_agent else '',
             metadata={'note_excerpt': note.strip()[:200]},
         )
         from registry.services import notifier
-        notifier.dispute_raised(record.session, record)
+        notifier.dispute_raised(record.batch, record)
         return record
 
-    def _log_validation_failure(self, *, session, index_number, ip,
+    def _log_validation_failure(self, *, batch, index_number, ip,
                                 user_agent, reason):
-        if session:
+        if batch:
             ConfirmationAuditLog.objects.create(
-                session=session, student_record=None,
+                batch=batch, student_record=None,
                 event_type='VALIDATION_FAILED',
                 ip_address=ip, user_agent=user_agent[:512] if user_agent else '',
                 metadata={'index_number': index_number, 'reason': reason},

@@ -39,10 +39,10 @@ export default function DashboardFirstRun({ totalStudents = 0, onNavigate, onDis
       {
         key: "students",
         title: "Add student records",
-        description: "Set up a congregation and import the students you will certify.",
+        description: "Create a certificate batch and import the students you will certify.",
         cta: "Add students",
         Icon: Users,
-        route: "/admin/congregations",
+        route: "/admin/batches",
         done: totalStudents > 0,
       },
       {

@@ -4,12 +4,12 @@ from registry.models import ImportBatch
 
 
 class ImportBatchRepository:
-    def for_session(self, session_id):
-        return ImportBatch.objects.filter(session_id=session_id).order_by('-uploaded_at')
+    def for_batch(self, batch_id):
+        return ImportBatch.objects.filter(batch_id=batch_id).order_by('-uploaded_at')
 
     def get(self, batch_id):
         return ImportBatch.objects.filter(pk=batch_id).select_related(
-            'session', 'uploaded_by'
+            'batch', 'uploaded_by'
         ).first()
 
     def create(self, **fields):

@@ -113,12 +113,12 @@
   --color-primary-hover: var(--color-brand);
   --color-success: #10B981;
   --color-success-hover: #059669;
-  --color-danger: #DA291C;
+  --color-danger: #E11D48;
   --color-danger-hover: #b41004;
-  --color-warning: #f59e0b;
+  --color-warning: #D97706;
 
   /* Surfaces */
-  --color-bg-page: #fcfafa;
+  --color-bg-page: #FAFAFA;
   --color-bg-card: #ffffff;
   --color-bg-subtle: #f8fafc;
   --color-border: #e2e8f0;
@@ -137,12 +137,12 @@
   --color-nav-hover-text: #0f172a;
 
   /* Table colors */
-  --color-table-head-bg: #F1F5F9;
+  --color-table-head-bg: #F5F5F5;
   --color-table-head-text: #1E293B;
-  --color-table-row-alt: #F8FAFC;
+  --color-table-row-alt: #FAFAFA;
   --color-table-row-default: #FFFFFF;
-  --color-table-row-hover: #F1F5F9;
-  --color-table-border: #E2E8F0;
+  --color-table-row-hover: #FAFAFA;
+  --color-table-border: #FEFEFE;
 
   /* Border-radius scale */
   --radius-sm: 0.25rem;

@@ -18,6 +18,7 @@ import {
 import { useApiQuery } from "../hooks/api/useApiQuery.js";
 import { useToast } from "../components/ToastContainer";
 import { useConfirmDialog } from "../context/ConfirmDialogContext";
+import PageTitle from "../components/PageTitle";
 import Table from "../components/ui/Table";
 
 const inputClass =
@@ -43,6 +44,7 @@ export default function CongregationTemplatesPage() {
 
   return (
     <div className="space-y-6">
+      <PageTitle>Congregation Templates</PageTitle>
       <div className="flex justify-between items-center">
         <div className="text-sm text-slate-500">
           {templates.length} template{templates.length === 1 ? "" : "s"}

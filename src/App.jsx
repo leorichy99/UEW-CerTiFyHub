@@ -32,9 +32,6 @@ const ConfirmationPage = lazy(() => import("./pages/ConfirmationPage"));
 const RegistryFacultiesPage = lazy(() => import("./pages/RegistryFacultiesPage"));
 const RegistrySessionDetailPage = lazy(() => import("./pages/RegistrySessionDetailPage"));
 const BatchesListPage = lazy(() => import("./pages/BatchesListPage"));
-const CongregationsListPage = lazy(() => import("./pages/CongregationsListPage"));
-const CongregationDetailPage = lazy(() => import("./pages/CongregationDetailPage"));
-const CongregationTemplatesPage = lazy(() => import("./pages/CongregationTemplatesPage"));
 const TemplatesPage = lazy(() => import("./pages/TemplatesPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const AccountManagementPage = lazy(() => import("./pages/AccountManagementPage"));
@@ -47,6 +44,7 @@ const GlobalAnalytics = lazy(() => import("./pages/GlobalAnalytics"));
 const SuperAdminTemplatesPage = lazy(() => import("./pages/SuperAdminTemplatesPage"));
 const TemplateEditorPage = lazy(() => import("./pages/TemplateEditorPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 
 function DashboardLayout({ children }) {
   return <Layout>{children}</Layout>;
@@ -99,13 +97,10 @@ const ROUTE_TITLES = [
   { path: "/admin/settings", title: "System Settings" },
   { path: "/admin/audit", title: "Audit Logs" },
   { path: "/admin/analytics", title: "Analytics" },
+  { path: "/notifications", title: "Notifications" },
   { path: "/admin/batches", title: "Certificate Batches" },
   { path: "/admin/batches/:id", title: "Batch" },
-  { path: "/admin/congregations", title: "Congregations" },
-  { path: "/admin/congregations/:id", title: "Congregation" },
-  { path: "/admin/congregation-templates", title: "Congregation Templates" },
   { path: "/registry/faculties-departments", title: "Faculties & Departments" },
-  { path: "/registry/congregations/:congregation_id/sessions/:session_id", title: "Session" },
   { path: "/settings/faculties-departments", title: "Faculties & Departments" },
   { path: "/authorisation-letters", title: "Authorisation Letters" },
 ];
@@ -308,36 +303,6 @@ function AnimatedRoutes() {
       <Route path="/admin/congregation-templates" element={<Navigate to="/admin/batches" replace />} />
       <Route path="/registry/congregations/:congregation_id/sessions/:session_id" element={<Navigate to="/admin/batches/:session_id" replace />} />
 
-      {/* Slice 5: Congregation-centric navigation (kept for direct access but redirects above) */}
-      <Route
-        path="/admin/congregations-legacy"
-        element={
-          <ProtectedRoute roles={["SUPER_ADMIN"]}>
-            <DashboardLayout>
-              <RouteShell fallback={<div className="min-h-[60vh] flex items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-              </div>}>
-                <CongregationsListPage />
-              </RouteShell>
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/congregations-legacy/:id"
-        element={
-          <ProtectedRoute roles={["SUPER_ADMIN"]}>
-            <DashboardLayout>
-              <RouteShell fallback={<div className="min-h-[60vh] flex items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-              </div>}>
-                <CongregationDetailPage />
-              </RouteShell>
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-
       {/* Legacy route redirects */}
       <Route path="/students" element={<Navigate to="/" replace />} />
       <Route path="/registry/sessions" element={<Navigate to="/admin/batches" replace />} />
@@ -516,6 +481,21 @@ function AnimatedRoutes() {
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>}>
                 <GlobalAnalytics />
+              </RouteShell>
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/notifications"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <RouteShell fallback={<div className="min-h-[60vh] flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              </div>}>
+                <NotificationsPage />
               </RouteShell>
             </DashboardLayout>
           </ProtectedRoute>

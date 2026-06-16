@@ -6,10 +6,10 @@ from registry.models import StudentRecord
 
 
 class StudentRecordRepository:
-    def for_session(self, session_id, *, confirmation_status=None,
+    def for_batch(self, batch_id, *, confirmation_status=None,
                     issuance_status=None, faculty_id=None, department_id=None,
                     search=None):
-        qs = StudentRecord.objects.filter(session_id=session_id).select_related(
+        qs = StudentRecord.objects.filter(batch_id=batch_id).select_related(
             'faculty', 'department', 'import_batch'
         )
         if confirmation_status:
@@ -30,12 +30,12 @@ class StudentRecordRepository:
 
     def get(self, record_id):
         return StudentRecord.objects.filter(pk=record_id).select_related(
-            'session', 'faculty', 'department'
+            'batch', 'faculty', 'department'
         ).first()
 
-    def get_by_session_index(self, session_id, index_number):
+    def get_by_batch_index(self, batch_id, index_number):
         return StudentRecord.objects.filter(
-            session_id=session_id, index_number=index_number,
+            batch_id=batch_id, index_number=index_number,
         ).first()
 
     def create(self, **fields):
@@ -48,12 +48,12 @@ class StudentRecordRepository:
     def delete(self, record_id):
         StudentRecord.objects.filter(pk=record_id).delete()
 
-    def disputed_for_session(self, session_id):
-        return self.for_session(session_id, confirmation_status=StudentRecord.CONF_DISPUTED)
+    def disputed_for_batch(self, batch_id):
+        return self.for_batch(batch_id, confirmation_status=StudentRecord.CONF_DISPUTED)
 
-    def eligible_for_issuance(self, session_id):
+    def eligible_for_issuance(self, batch_id):
         return StudentRecord.objects.filter(
-            session_id=session_id,
+            batch_id=batch_id,
             confirmation_status=StudentRecord.CONF_CONFIRMED,
             issuance_status=StudentRecord.ISSUE_NOT_ISSUED,
         )

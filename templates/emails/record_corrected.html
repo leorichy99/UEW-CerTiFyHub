@@ -1,0 +1,26 @@
+{% extends "emails/base_email.html" %}
+
+{% block content %}
+  <h1 style="margin: 0 0 16px; font-size: 20px; font-weight: 700; color: #242576; text-align: center;">Your Record Has Been Updated</h1>
+
+  <p style="margin: 0 0 16px;">Hello <strong>{{ student_name }}</strong>,</p>
+
+  <p style="margin: 0 0 24px;">
+    Your record for <strong>{{ batch_name }}</strong> has been updated based on your dispute.
+    Please review and re-confirm your details using the link below.
+  </p>
+
+  <p style="margin: 0 0 24px; text-align: center;">
+    <a href="{{ confirmation_link }}"
+       style="display: inline-block; padding: 14px 32px; background-color: #242576; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px;">
+      Re-Confirm Details
+    </a>
+  </p>
+
+  <p style="margin: 0 0 8px; color: #64748b; font-size: 13px; text-align: center;">
+    Or copy and paste this link into your browser:
+  </p>
+  <p style="margin: 0; word-break: break-all; text-align: center; font-size: 12px; color: #475569;">
+    {{ confirmation_link }}
+  </p>
+{% endblock %}

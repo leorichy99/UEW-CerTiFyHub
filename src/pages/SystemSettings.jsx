@@ -5,6 +5,7 @@ import {
   Save, 
   Shield
 } from "lucide-react";
+import PageTitle from "../components/PageTitle";
 
 export default function SystemSettings() {
   const toast = useToast();
@@ -64,6 +65,7 @@ export default function SystemSettings() {
 
   return (
     <div className="p-6">
+      <PageTitle>System Settings</PageTitle>
 
       {/* Tab Navigation */}
       <div className="border-b border-slate-200 mb-8">

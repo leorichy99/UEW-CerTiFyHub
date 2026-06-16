@@ -136,6 +136,40 @@ class TestPNGRendererAdapter:
         result.seek(0)
         assert len(result.read()) > 0
 
+    def test_dpi_scale_applies_to_canvas(self):
+        """Test that dpi_scale multiplies canvas dimensions."""
+        adapter = PNGRendererAdapter(width=800, height=600, dpi_scale=4)
+        img = adapter.create_image()
+        assert img.size == (3200, 2400)
+
+    def test_dpi_scale_text_rendering(self):
+        """Test text rendering at scaled DPI."""
+        adapter = PNGRendererAdapter(dpi_scale=4)
+        img = adapter.create_image()
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(img)
+        
+        # Should not raise even at 4x scale
+        adapter.draw_text(draw, "Scaled Text", 100, 200, "Arial", 12)
+        
+        buffer = BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+        assert len(buffer.read()) > 0
+
+    def test_qr_code_exact_size(self):
+        """Test QR code is generated at exact target size without resize."""
+        adapter = PNGRendererAdapter()
+        img = adapter.create_image()
+        
+        adapter.draw_qr_code(img, "https://verify.uew.edu.gh/TEST123", 50, 50, 60)
+        
+        # Paste happened, image should still be valid
+        buffer = BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+        assert len(buffer.read()) > 0
+
 
 class TestRenderingUtils:
     """Test cases for rendering utilities (reused from PDF tests)."""

@@ -287,13 +287,13 @@ class CertificateViewSet(viewsets.ModelViewSet):
     def bulk_issue(self, request):
         """
         Legacy bulk-issue endpoint. The student-driven bulk path has been
-        retired in favour of the registry pipeline (CongregationSession →
-        StudentRecord → Issuance). Use the session issuance endpoints instead.
+        retired in favour of the registry pipeline (IssuanceBatch →
+        StudentRecord → Issuance). Use the batch issuance endpoints instead.
         """
         return Response(
             {
                 'error': 'bulk_issue has been retired. Issue certificates through a '
-                         'CongregationSession via the registry issuance endpoint.',
+                         'IssuanceBatch via the registry issuance endpoint.',
             },
             status=status.HTTP_410_GONE,
         )
@@ -383,12 +383,14 @@ class CertificateViewSet(viewsets.ModelViewSet):
         """Generate PNG preview of certificate using template data."""
         try:
             certificate = self.get_object()
+            dpi = min(300, max(72, int(request.GET.get('dpi', 72))))
+            scale = dpi / 72.0
 
             if not certificate.template:
                 width, height = self._get_page_size(certificate)
-                img = self._generate_default_preview_image(certificate, width, height)
+                img = self._generate_default_preview_image(certificate, width, height, dpi_scale=scale)
                 buffer = BytesIO()
-                img.save(buffer, format='PNG')
+                img.save(buffer, format='PNG', dpi=(dpi, dpi))
                 buffer.seek(0)
                 response = HttpResponse(buffer.read(), content_type='image/png')
                 response['Content-Disposition'] = f'inline; filename="certificate_{certificate.id}_preview.png"'
@@ -405,8 +407,8 @@ class CertificateViewSet(viewsets.ModelViewSet):
             import base64
 
             width, height = self._get_page_size(certificate)
-            width = int(width)
-            height = int(height)
+            width = int(round(width * scale))
+            height = int(round(height * scale))
 
             # ── Background ──
             import math as _math
@@ -466,10 +468,10 @@ class CertificateViewSet(viewsets.ModelViewSet):
                         text = self._replace_placeholders(el.get('text', ''), certificate)
                         if not text:
                             continue
-                        x = el.get('x', 0)
-                        y = el.get('y', 0)
-                        font_size = el.get('fontSize', 16)
-                        el_width = el.get('width') or 0
+                        x = el.get('x', 0) * scale
+                        y = el.get('y', 0) * scale
+                        font_size = el.get('fontSize', 16) * scale
+                        el_width = (el.get('width') or 0) * scale
                         user_resized = bool(el.get('userResized'))
                         align = el.get('align', 'left')
                         wrap_mode = str(el.get('wrap', 'word')).lower()
@@ -489,24 +491,24 @@ class CertificateViewSet(viewsets.ModelViewSet):
                         # ── Anchor + wrap model (mirrors _pdf_draw_text) ──
                         # `x` = left edge, `width` = box width. Anchor depends on
                         # alignment so substituted values stay put as length changes.
-                        margin = 72  # PAGE_MARGIN
+                        margin = 72 * scale  # PAGE_MARGIN
                         if align == 'center':
                             anchor_x = x + el_width / 2
                             if user_resized and el_width:
                                 wrap_width = el_width
                             else:
                                 half = min(anchor_x - margin, (width - margin) - anchor_x)
-                                wrap_width = max(2 * half, 40) if half > 0 else (width - 2 * margin)
+                                wrap_width = max(2 * half, 40 * scale) if half > 0 else (width - 2 * margin)
                         elif align == 'right':
                             anchor_x = x + el_width
-                            wrap_width = el_width if (user_resized and el_width) else max(anchor_x - margin, 40)
+                            wrap_width = el_width if (user_resized and el_width) else max(anchor_x - margin, 40 * scale)
                         else:
                             anchor_x = x
-                            wrap_width = el_width if (user_resized and el_width) else max((width - margin) - x, 40)
+                            wrap_width = el_width if (user_resized and el_width) else max((width - margin) - x, 40 * scale)
 
                         # Tolerance to absorb sub-pixel font metric differences
                         # between PIL and Konva (browser canvas).
-                        wrap_limit = wrap_width + max(2, font_size * 0.15)
+                        wrap_limit = wrap_width + max(2 * scale, font_size * 0.15)
 
                         def _wrap_line(s):
                             if wrap_mode == 'none' or wrap_width <= 0:
@@ -559,8 +561,8 @@ class CertificateViewSet(viewsets.ModelViewSet):
                             _, b64data = src.split(',', 1)
                             img_bytes = base64.b64decode(b64data)
                             el_img = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
-                            el_w = el.get('width', el_img.width)
-                            el_h = el.get('height', el_img.height)
+                            el_w = el.get('width', el_img.width) * scale
+                            el_h = el.get('height', el_img.height) * scale
                             el_img = el_img.resize((int(el_w), int(el_h)), Image.LANCZOS)
                             if use_opacity:
                                 alpha = el_img.split()[3]
@@ -569,7 +571,7 @@ class CertificateViewSet(viewsets.ModelViewSet):
                             if img.mode != 'RGBA':
                                 img = img.convert('RGBA')
                                 draw = ImageDraw.Draw(img)
-                            img.paste(el_img, (int(el.get('x', 0)), int(el.get('y', 0))), el_img)
+                            img.paste(el_img, (int(round(el.get('x', 0) * scale)), int(round(el.get('y', 0) * scale))), el_img)
 
                     elif el_type == 'logo':
                         logo_path = None
@@ -587,8 +589,8 @@ class CertificateViewSet(viewsets.ModelViewSet):
                                     break
                         if logo_path and os.path.exists(logo_path):
                             logo_img = Image.open(logo_path).convert('RGBA')
-                            lw = int(el.get('width', 120))
-                            lh = int(el.get('height', 120))
+                            lw = int(round(el.get('width', 120) * scale))
+                            lh = int(round(el.get('height', 120) * scale))
                             logo_img = logo_img.resize((lw, lh), Image.LANCZOS)
                             if use_opacity:
                                 alpha = logo_img.split()[3]
@@ -597,11 +599,11 @@ class CertificateViewSet(viewsets.ModelViewSet):
                             if img.mode != 'RGBA':
                                 img = img.convert('RGBA')
                                 draw = ImageDraw.Draw(img)
-                            img.paste(logo_img, (int(el.get('x', 0)), int(el.get('y', 0))), logo_img)
+                            img.paste(logo_img, (int(round(el.get('x', 0) * scale)), int(round(el.get('y', 0) * scale))), logo_img)
 
                     elif el_type == 'qr_placeholder':
-                        qr_w = max(1, int(el.get('width', 100)))
-                        qr_h = max(1, int(el.get('height', 100)))
+                        qr_w = max(1, int(round(el.get('width', 100) * scale)))
+                        qr_h = max(1, int(round(el.get('height', 100) * scale)))
                         qr_img = self._make_qr_image(certificate, qr_w, qr_h)
                         if use_opacity:
                             alpha = qr_img.split()[3]
@@ -610,13 +612,15 @@ class CertificateViewSet(viewsets.ModelViewSet):
                         if img.mode != 'RGBA':
                             img = img.convert('RGBA')
                             draw = ImageDraw.Draw(img)
-                        img.paste(qr_img, (int(el.get('x', 0)), int(el.get('y', 0))), qr_img)
+                        img.paste(qr_img, (int(round(el.get('x', 0) * scale)), int(round(el.get('y', 0) * scale))), qr_img)
 
                     elif el_type and el_type.startswith('shape_'):
-                        ex, ey = el.get('x', 0), el.get('y', 0)
-                        ew, eh = el.get('width', 100), el.get('height', 100)
+                        ex = el.get('x', 0) * scale
+                        ey = el.get('y', 0) * scale
+                        ew = el.get('width', 100) * scale
+                        eh = el.get('height', 100) * scale
                         fill_c, stroke_c = _png_fill_stroke(el)
-                        sw = el.get('strokeWidth', 1)
+                        sw = int(round(el.get('strokeWidth', 1) * scale))
 
                         def _apply_shape_opacity(c):
                             if c is None:
@@ -674,7 +678,7 @@ class CertificateViewSet(viewsets.ModelViewSet):
 
             # Convert to PNG
             buffer = io.BytesIO()
-            img.save(buffer, format='PNG')
+            img.save(buffer, format='PNG', dpi=(dpi, dpi))
             buffer.seek(0)
 
             response = HttpResponse(buffer.read(), content_type='image/png')
@@ -757,18 +761,40 @@ class CertificateViewSet(viewsets.ModelViewSet):
 
     def _make_qr_image(self, cert, width=None, height=None):
         from PIL import Image
+        import qrcode as _qrcode
 
         verify_url = self._get_verification_url(cert)
-        qr = qrcode.QRCode(version=1, box_size=10, border=4)
+        target = int(min(width or 100, height or 100))
+
+        # Probe to determine module count
+        probe = _qrcode.QRCode(
+            version=1, error_correction=_qrcode.constants.ERROR_CORRECT_L, box_size=1, border=4
+        )
+        probe.add_data(verify_url)
+        probe.make(fit=True)
+        modules_count = probe.modules_count
+        modules_with_border = modules_count + 8
+
+        box_size = max(1, target // modules_with_border)
+
+        qr = _qrcode.QRCode(
+            version=1, error_correction=_qrcode.constants.ERROR_CORRECT_L, box_size=box_size, border=4
+        )
         qr.add_data(verify_url)
         qr.make(fit=True)
+
         img = qr.make_image(fill_color="black", back_color="white")
         if hasattr(img, 'get_image'):
             img = img.get_image()
         img = img.convert('RGBA')
 
-        if width and height:
-            img = img.resize((int(width), int(height)), Image.LANCZOS)
+        # Pad to exact target if needed (no resize / no anti-aliasing blur)
+        actual_size = modules_with_border * box_size
+        if actual_size != target:
+            padded = Image.new('RGBA', (target, target), (255, 255, 255, 255))
+            offset = (target - actual_size) // 2
+            padded.paste(img, (offset, offset))
+            img = padded
 
         return img
 
@@ -958,14 +984,17 @@ class CertificateViewSet(viewsets.ModelViewSet):
         }
         return paper_map.get(certificate.paper_size, A4)
 
-    def _generate_default_preview_image(self, certificate, width, height):
+    def _generate_default_preview_image(self, certificate, width, height, dpi_scale=1):
         from PIL import Image, ImageDraw
 
-        width = int(width)
-        height = int(height)
+        scale = dpi_scale
+        width = int(round(width * scale))
+        height = int(round(height * scale))
         img = Image.new('RGB', (width, height), (250, 247, 240))
         draw = ImageDraw.Draw(img)
-        draw.rectangle([30, 30, width - 30, height - 30], outline=(51, 51, 51), width=4)
+        margin = int(round(30 * scale))
+        stroke = int(round(4 * scale))
+        draw.rectangle([margin, margin, width - margin, height - margin], outline=(51, 51, 51), width=stroke)
 
         def center_text(text, y, font_size, bold=False, italic=False):
             font = self._load_preview_font(
@@ -974,11 +1003,11 @@ class CertificateViewSet(viewsets.ModelViewSet):
                     'bold': bold,
                     'italic': italic,
                 },
-                font_size,
+                font_size * scale,
             )
             bbox = draw.textbbox((0, 0), text, font=font)
             text_width = bbox[2] - bbox[0]
-            draw.text(((width - text_width) / 2, y), text, fill=(51, 51, 51), font=font)
+            draw.text(((width - text_width) / 2, y * scale), text, fill=(51, 51, 51), font=font)
 
         center_text("UNIVERSITY OF EDUCATION, WINNEBA", 65, 24, bold=True)
         center_text("This is to Certify that", 255, 24, italic=True)
@@ -1406,14 +1435,10 @@ class CertificateViewSet(viewsets.ModelViewSet):
             qr_h = 60
             label_y = 40
 
-        img = self._make_qr_image(cert, qr_w, qr_h)
-
-        qr_buffer = BytesIO()
-        img.save(qr_buffer, format='PNG')
-        qr_buffer.seek(0)
-
         pdf_y = height - qr_y - qr_h
-        p.drawImage(ImageReader(qr_buffer), qr_x, pdf_y, qr_w, qr_h)
+        from .rendering.pdf_adapter import PDFRendererAdapter
+        adapter = PDFRendererAdapter()
+        adapter.draw_qr_code(p, self._get_verification_url(cert), qr_x, pdf_y, min(qr_w, qr_h))
 
         if label_y is not None:
             p.setFont("Helvetica", 7)

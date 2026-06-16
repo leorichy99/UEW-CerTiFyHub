@@ -10,10 +10,11 @@ import { Link } from "react-router-dom";
 import { Package, Plus, Loader2, X, FileText } from "lucide-react";
 
 import {
-  useSessions, useCreateBatch,
-} from "../hooks/registry/useSessions.js";
+  useBatches, useCreateBatch,
+} from "../hooks/registry/useBatches.js";
 import { useTemplates } from "../hooks/templates/useTemplates.js";
 import { useToast } from "../components/ToastContainer";
+import PageTitle from "../components/PageTitle";
 import Table from "../components/ui/Table";
 
 const inputClass =
@@ -48,17 +49,15 @@ function readArray(data) {
 
 export default function BatchesListPage() {
   const [showCreate, setShowCreate] = useState(false);
-  const query = useSessions();
+  const query = useBatches();
   const items = useMemo(() => readArray(query.data), [query.data]);
 
   return (
     <div className="space-y-6">
+      <PageTitle>Certificate Batches</PageTitle>
       <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-800">Certificate Batches</h1>
-          <p className="text-sm text-slate-500">
-            {items.length} batch{items.length === 1 ? "" : "es"}
-          </p>
+        <div className="text-sm text-slate-500">
+          {items.length} batch{items.length === 1 ? "" : "es"}
         </div>
         <button
           onClick={() => setShowCreate(true)}
@@ -105,7 +104,7 @@ export default function BatchesListPage() {
                   {s.name}
                 </Link>
               </Table.Cell>
-              <Table.Cell className="text-sm text-slate-700">{s.academic_year}</Table.Cell>
+              <Table.Cell className="text-sm text-slate-700">{s.year}</Table.Cell>
               <Table.Cell className="text-sm">
                 <span
                   className={`inline-block px-2 py-0.5 rounded-full text-xs ${

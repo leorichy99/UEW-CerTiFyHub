@@ -20,11 +20,12 @@ import {
 import {
   useCongregationTemplates, useApplyCongregationTemplate,
 } from "../hooks/registry/useCongregationTemplates.js";
-import { useCreateSession } from "../hooks/registry/useSessions.js";
+import { useCreateBatch } from "../hooks/registry/useBatches.js";
 import { useFaculties, useDepartments } from "../hooks/registry/useFaculties.js";
 import { templateAPI } from "../services/api";
 import { useToast } from "../components/ToastContainer";
 import { useConfirmDialog } from "../context/ConfirmDialogContext";
+import PageTitle from "../components/PageTitle";
 import Table from "../components/ui/Table";
 import Breadcrumb from "../components/ui/Breadcrumb";
 
@@ -109,6 +110,7 @@ export default function CongregationDetailPage() {
 
   return (
     <div className="space-y-6">
+      <PageTitle>Congregation</PageTitle>
       <Breadcrumb
         items={[
           { label: "Home", to: "/" },
@@ -418,7 +420,7 @@ function ApplyTemplateModal({ congregation, onClose, onApplied }) {
 
 function CreateSessionModal({ congregation, onClose, onCreated }) {
   const toast = useToast();
-  const create = useCreateSession();
+  const create = useCreateBatch();
   const facultiesQuery = useFaculties({ active_only: 1 });
   const departmentsQuery = useDepartments({ active_only: 1 });
   const faculties = useMemo(() => {

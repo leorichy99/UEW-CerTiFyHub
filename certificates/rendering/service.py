@@ -52,7 +52,7 @@ class CertificateRenderingService:
         canvas.showPage()
         return self.pdf_adapter.save_canvas(canvas, output_buffer)
     
-    def render_png(self, template_data, certificate_data, output_buffer=None):
+    def render_png(self, template_data, certificate_data, output_buffer=None, dpi_scale=1):
         """
         Render a certificate as PNG.
         
@@ -60,6 +60,7 @@ class CertificateRenderingService:
             template_data: Template metadata and elements
             certificate_data: Certificate data for placeholder replacement
             output_buffer: Optional BytesIO buffer for output
+            dpi_scale: Scale factor for target DPI (1 = 72 DPI, 4.167 = 300 DPI)
         
         Returns:
             BytesIO buffer containing the PNG
@@ -68,6 +69,7 @@ class CertificateRenderingService:
         height = template_data.get('canvas_height', 600)
         self.png_adapter.width = width
         self.png_adapter.height = height
+        self.png_adapter.dpi_scale = dpi_scale
         
         # Render background
         background = template_data.get('background', {})

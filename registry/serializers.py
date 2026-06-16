@@ -1,54 +1,21 @@
 from rest_framework import serializers
 
 from .models import (
-    Faculty, Department, Congregation, CongregationSession, StudentRecord,
-    ImportBatch, EmailDeliveryLog, DeadlineExtensionLog, IssuanceBatch,
-    CongregationTemplate, CongregationTemplateSessionDef,
+    Faculty, Department, IssuanceBatch, StudentRecord,
+    ImportBatch, EmailDeliveryLog, DeadlineExtensionLog, IssuanceRun,
 )
 
 
-class CongregationTemplateSessionDefSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CongregationTemplateSessionDef
-        fields = (
-            'id', 'session_number', 'name_pattern', 'scope_type',
-            'ceremony_day_offset', 'confirmation_window_days',
-            'issuance_instructions',
-            'default_faculty', 'default_department', 'default_certificate_template',
-        )
-        read_only_fields = ('id',)
-
-
-class CongregationTemplateSerializer(serializers.ModelSerializer):
-    session_defs = CongregationTemplateSessionDefSerializer(many=True, read_only=True)
-    sourced_from_congregation_name = serializers.CharField(
-        source='sourced_from_congregation.name', read_only=True, default=None,
-    )
-
-    class Meta:
-        model = CongregationTemplate
-        fields = (
-            'id', 'name', 'description', 'is_active',
-            'sourced_from_congregation', 'sourced_from_congregation_name',
-            'created_by', 'created_at', 'updated_at',
-            'session_defs',
-        )
-        read_only_fields = (
-            'id', 'sourced_from_congregation', 'sourced_from_congregation_name',
-            'created_by', 'created_at', 'updated_at', 'session_defs',
-        )
-
-
-class IssuanceBatchSerializer(serializers.ModelSerializer):
-    """Read-only view of an IssuanceBatch + audit info."""
+class IssuanceRunSerializer(serializers.ModelSerializer):
+    """Read-only view of an IssuanceRun + audit info."""
 
     requested_by_name = serializers.SerializerMethodField()
-    session_name = serializers.CharField(source='session.name', read_only=True)
+    batch_name = serializers.CharField(source='batch.name', read_only=True)
 
     class Meta:
-        model = IssuanceBatch
+        model = IssuanceRun
         fields = (
-            'id', 'session', 'session_name', 'congregation',
+            'id', 'batch', 'batch_name',
             'status', 'filter_criteria', 'notes',
             'total_targeted', 'succeeded_count', 'failed_count',
             'requested_by', 'requested_by_name',
@@ -72,7 +39,7 @@ class DeadlineExtensionLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeadlineExtensionLog
         fields = (
-            'id', 'session', 'congregation',
+            'id', 'batch',
             'previous_deadline', 'new_deadline',
             'extended_by', 'extended_by_name',
             'extended_at', 'reason',
@@ -85,44 +52,6 @@ class DeadlineExtensionLogSerializer(serializers.ModelSerializer):
         u = obj.extended_by
         full = (u.get_full_name() or '').strip()
         return full or u.username
-
-
-class CongregationSerializer(serializers.ModelSerializer):
-    """Read/write serializer for the Congregation umbrella entity.
-
-    `status` and `counts` are computed by ``CongregationService`` and injected
-    by the view; this serializer carries the schema but does not compute them.
-    """
-
-    status = serializers.SerializerMethodField()
-    session_count = serializers.IntegerField(read_only=True)
-    counts = serializers.JSONField(read_only=True)
-    sourced_from_congregation_name = serializers.CharField(
-        source='sourced_from_congregation.name', read_only=True, default=None,
-    )
-
-    class Meta:
-        model = Congregation
-        fields = (
-            'id', 'name', 'year', 'description',
-            'sourced_from_congregation', 'sourced_from_congregation_name',
-            'created_by', 'created_at', 'updated_at',
-            'status', 'session_count', 'counts',
-        )
-        read_only_fields = (
-            'id', 'sourced_from_congregation', 'sourced_from_congregation_name',
-            'created_by', 'created_at', 'updated_at',
-            'status', 'session_count', 'counts',
-        )
-
-    def get_status(self, obj):
-        # The view annotates `_derived_status` to avoid recomputing per row;
-        # fall back to a fresh call if it's missing (e.g. raw object access).
-        cached = getattr(obj, '_derived_status', None)
-        if cached is not None:
-            return cached
-        from registry.services import CongregationService
-        return CongregationService().get_status(obj)
 
 
 class FacultySerializer(serializers.ModelSerializer):
@@ -145,31 +74,15 @@ class DepartmentSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at', 'updated_at')
 
 
-class CongregationSessionSerializer(serializers.ModelSerializer):
-    faculty_name = serializers.CharField(source='faculty.name', read_only=True, default=None)
-    department_name = serializers.CharField(source='department.name', read_only=True, default=None)
+class IssuanceBatchSerializer(serializers.ModelSerializer):
     template_name = serializers.CharField(source='certificate_template.name', read_only=True, default=None)
-    congregation_name = serializers.CharField(
-        source='congregation.name', read_only=True, default=None,
-    )
-    congregation_year = serializers.IntegerField(
-        source='congregation.year', read_only=True, default=None,
-    )
-    generated_name = serializers.CharField(read_only=True)
-    # Optional — auto-assigned by SessionLifecycleService when omitted/null.
-    session_number = serializers.IntegerField(
-        required=False, allow_null=True, min_value=1,
-    )
     counts = serializers.SerializerMethodField()
 
     class Meta:
-        model = CongregationSession
+        model = IssuanceBatch
         fields = (
-            'id', 'congregation', 'congregation_name', 'congregation_year',
-            'session_number', 'generated_name',
-            'name', 'slug', 'academic_year',
-            'scope_type', 'faculty', 'faculty_name',
-            'department', 'department_name',
+            'id',
+            'name', 'year',
             'status', 'confirmation_deadline', 'confirmation_opens_at',
             'confirmation_deadline_original',
             'confirmation_deadline_extended_at',
@@ -183,9 +96,7 @@ class CongregationSessionSerializer(serializers.ModelSerializer):
             'counts',
         )
         read_only_fields = (
-            'id', 'slug', 'status', 'created_by', 'created_at',
-            'congregation_name', 'congregation_year', 'generated_name',
-            'name', 'academic_year',
+            'id', 'year', 'status', 'created_by', 'created_at',
             'confirmation_deadline_original',
             'confirmation_deadline_extended_at',
             'confirmation_deadline_extended_by',
@@ -206,7 +117,7 @@ class StudentRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentRecord
         fields = (
-            'id', 'session', 'import_batch',
+            'id', 'batch', 'import_batch',
             'index_number', 'full_name', 'gender', 'institutional_email',
             'programme', 'class_of_degree',
             'date_of_admission', 'date_of_completion',
@@ -220,7 +131,7 @@ class StudentRecordSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         )
         read_only_fields = (
-            'id', 'session', 'import_batch',
+            'id', 'batch', 'import_batch',
             'confirmation_status', 'confirmation_email_status',
             'confirmation_email_sent_at', 'confirmed_at',
             'dispute_note', 'dispute_submitted_at',
@@ -234,9 +145,10 @@ class ImportBatchSerializer(serializers.ModelSerializer):
     class Meta:
         model = ImportBatch
         fields = (
-            'id', 'session', 'uploaded_by', 'uploaded_at', 'file_name',
+            'id', 'batch', 'uploaded_by', 'uploaded_at', 'file_name',
             'total_rows', 'success_count', 'skipped_count', 'error_count',
             'status', 'error_log', 'email_summary', 'completed_at',
+            'mapping_configuration',
         )
         read_only_fields = fields
 
@@ -245,8 +157,22 @@ class EmailDeliveryLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmailDeliveryLog
         fields = (
-            'id', 'student_record', 'session', 'email_type', 'recipient',
+            'id', 'student_record', 'batch', 'email_type', 'recipient',
             'status', 'provider_message_id', 'error_message',
             'sent_at', 'updated_at', 'created_at',
         )
         read_only_fields = fields
+
+
+class EmailDeliveryFailureSerializer(serializers.Serializer):
+    """Read-only flattened view of a failed/bounced delivery."""
+
+    record_id = serializers.UUIDField()
+    student_name = serializers.CharField()
+    index_number = serializers.CharField()
+    institutional_email = serializers.EmailField()
+    status = serializers.CharField()
+    failure_reason = serializers.CharField()
+    last_attempt = serializers.DateTimeField()
+    resend_attempts = serializers.IntegerField()
+    can_resend = serializers.BooleanField()

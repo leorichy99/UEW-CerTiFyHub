@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from registry.services import (
-    ConfirmationService, TokenInvalid, TokenExpired, SessionNotAccepting,
+    ConfirmationService, TokenInvalid, TokenExpired, BatchNotAccepting,
 )
 
 
@@ -19,12 +19,12 @@ def _client_ip(request):
 
 def _serialise_record(record):
     return {
-        'session': {
-            'id': str(record.session.id),
-            'name': record.session.name,
-            'academic_year': record.session.academic_year,
-            'confirmation_deadline': record.session.confirmation_deadline.isoformat(),
-            'status': record.session.status,
+        'batch': {
+            'id': str(record.batch.id),
+            'name': record.batch.name,
+            'year': record.batch.year,
+            'confirmation_deadline': record.batch.confirmation_deadline.isoformat(),
+            'status': record.batch.status,
         },
         'record': {
             'id': str(record.id),
@@ -67,7 +67,7 @@ class PublicConfirmationLookupView(APIView):
         except TokenExpired as e:
             return Response({'detail': str(e), 'code': 'expired'},
                             status=status.HTTP_410_GONE)
-        except SessionNotAccepting as e:
+        except BatchNotAccepting as e:
             return Response({'detail': str(e), 'code': 'closed'},
                             status=status.HTTP_409_CONFLICT)
         return Response(_serialise_record(record))
@@ -97,7 +97,7 @@ class PublicConfirmView(APIView):
         except TokenExpired as e:
             return Response({'detail': str(e), 'code': 'expired'},
                             status=status.HTTP_410_GONE)
-        except SessionNotAccepting as e:
+        except BatchNotAccepting as e:
             return Response({'detail': str(e), 'code': 'closed'},
                             status=status.HTTP_409_CONFLICT)
 
@@ -133,7 +133,7 @@ class PublicDisputeView(APIView):
         except TokenExpired as e:
             return Response({'detail': str(e), 'code': 'expired'},
                             status=status.HTTP_410_GONE)
-        except SessionNotAccepting as e:
+        except BatchNotAccepting as e:
             return Response({'detail': str(e), 'code': 'closed'},
                             status=status.HTTP_409_CONFLICT)
 

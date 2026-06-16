@@ -4,6 +4,7 @@ import { useToast } from "../components/ToastContainer";
 import { useAuth } from "../context/AuthContext";
 import { templateAPI } from "../services/api";
 import { Plus, Search, Lock, Eye, FileText, LayoutGrid } from "lucide-react";
+import PageTitle from "../components/PageTitle";
 import SummaryStatCard from "../components/SummaryStatCard";
 import Pagination from "../components/Pagination";
 
@@ -98,6 +99,7 @@ export default function TemplatesPage() {
   return (
     <div className="min-h-[calc(100vh-7rem)]">
       <div className="mx-auto max-w-6xl px-6 py-6">
+        <PageTitle>Templates</PageTitle>
         {/* Summary stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <SummaryStatCard title="Total Templates" value={templateStats.total} Icon={LayoutGrid} tone="info" />

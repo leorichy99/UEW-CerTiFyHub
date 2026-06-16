@@ -8,6 +8,7 @@ import {
   Loader2, Search, Plus, FileX, Upload, CheckCircle,
   Clock, AlertTriangle, Eye,
 } from "lucide-react";
+import PageTitle from "../components/PageTitle";
 
 const STATUS_BADGE = {
   pending: { className: "bg-amber-100 text-amber-900", icon: Clock, label: "Pending" },
@@ -96,6 +97,7 @@ export default function AuthorisationLettersPage() {
 
   return (
     <div className="space-y-6">
+      <PageTitle>Authorisation Letters</PageTitle>
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 flex items-center gap-2">
           <AlertTriangle size={16} /> {error}

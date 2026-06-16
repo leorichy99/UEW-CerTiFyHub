@@ -6,22 +6,22 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.permissions import IsActiveAccount, IsSuperAdmin
-from registry.models import CongregationSession, StudentRecord
+from registry.models import IssuanceBatch, StudentRecord
 from registry.serializers import StudentRecordSerializer
 from registry.services import DisputeService, DisputeResolutionError
 
 
-class SessionDisputesView(APIView):
-    """List records in DISPUTED status for a session."""
+class BatchDisputesView(APIView):
+    """List records in DISPUTED status for a batch."""
 
     permission_classes = [permissions.IsAuthenticated, IsActiveAccount, IsSuperAdmin]
 
-    def get(self, request, session_pk):
+    def get(self, request, batch_pk):
         try:
-            session = CongregationSession.objects.get(pk=session_pk)
-        except CongregationSession.DoesNotExist:
-            raise NotFound('Session not found.')
-        qs = DisputeService().list_disputes(session)
+            batch = IssuanceBatch.objects.get(pk=batch_pk)
+        except IssuanceBatch.DoesNotExist:
+            raise NotFound('Batch not found.')
+        qs = DisputeService().list_disputes(batch)
         data = StudentRecordSerializer(qs, many=True).data
         return Response(data)
 
@@ -31,15 +31,15 @@ class ResolveDisputeView(APIView):
 
     permission_classes = [permissions.IsAuthenticated, IsActiveAccount, IsSuperAdmin]
 
-    def post(self, request, session_pk, record_pk):
+    def post(self, request, batch_pk, record_pk):
         try:
             record = (
                 StudentRecord.objects
-                .select_related('session')
-                .get(pk=record_pk, session_id=session_pk)
+                .select_related('batch')
+                .get(pk=record_pk, batch_id=batch_pk)
             )
         except StudentRecord.DoesNotExist:
-            raise NotFound('Record not found in this session.')
+            raise NotFound('Record not found in this batch.')
 
         mode = request.data.get('mode')
         note = request.data.get('resolution_note', '')

@@ -1,0 +1,27 @@
+{% extends "emails/base_email.html" %}
+
+{% block content %}
+  <h1 style="margin: 0 0 16px; font-size: 20px; font-weight: 700; color: #242576; text-align: center;">Update on Your Record Dispute</h1>
+
+  <p style="margin: 0 0 16px;">Hello <strong>{{ student_name }}</strong>,</p>
+
+  <p style="margin: 0 0 24px;">
+    Following review by the registrar's office, your record for
+    <strong>{{ batch_name }}</strong> will stand as previously shown.
+  </p>
+
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 24px;">
+    <tr>
+      <td style="padding: 16px 20px;">
+        <p style="margin: 0 0 4px; font-weight: 600; color: #475569; font-size: 13px;">Resolution note from the registrar:</p>
+        <p style="margin: 0; color: #0f172a; font-size: 14px; line-height: 1.5;">
+          {{ resolution_note|linebreaksbr }}
+        </p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="margin: 0; color: #64748b; font-size: 13px;">
+    If you believe this is in error, please contact your faculty office directly.
+  </p>
+{% endblock %}

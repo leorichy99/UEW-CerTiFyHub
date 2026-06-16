@@ -1,20 +1,22 @@
 """
-Registry models: faculties, departments, congregation sessions, student records,
+Registry models: faculties, departments, issuance batches, student records,
 import batches, confirmation audit log, email delivery log.
 
-Sessions are the primary organisational unit. Student records belong to exactly
-one session. Public student confirmation is scoped to a session via a single-use
-token sent to the student's institutional email.
+An ``IssuanceBatch`` is the primary organisational unit and the aggregate root
+for the registry pipeline. It is self-contained: it owns its own student
+records, its own confirmation deadline and status, and produces its own
+certificates. There is no parent container and no ceiling on how many batches
+may be created. Student records belong to exactly one batch. Public student
+confirmation is scoped to a batch via a single-use token sent to the student's
+institutional email.
 """
 
-import secrets
 import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
-from django.utils.text import slugify
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -55,67 +57,19 @@ class Department(models.Model):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Congregation (umbrella event)
+#  Issuance batch (self-contained pipeline container)
 # ─────────────────────────────────────────────────────────────────────────────
 
-class Congregation(models.Model):
+class IssuanceBatch(models.Model):
     """
-    Institutional graduation event umbrella. Owns one or more sessions.
+    A self-contained container for a set of student records moving through the
+    confirmation and certificate-generation pipeline.
 
-    Status is *derived* from child sessions (see ``CongregationService.get_status``)
-    — not stored on this model.
+    A batch holds its own student records, its own confirmation deadline, its
+    own status, and produces its own certificates. Batches are grouped by
+    ``year`` for archival and reporting. There is no parent container required
+    to create one, and no limit on how many may exist.
     """
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=255)
-    year = models.PositiveIntegerField(
-        unique=True,
-        help_text='Academic/calendar year of the congregation. Only one per year.',
-    )
-    description = models.CharField(max_length=500, blank=True)
-    sourced_from_congregation = models.ForeignKey(
-        'self', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='derived_congregations',
-        help_text='Populated when this congregation was cloned from a previous year.',
-    )
-    sourced_from_template = models.ForeignKey(
-        'CongregationTemplate', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='applied_congregations',
-        help_text='Populated when this congregation was instantiated from a template.',
-    )
-    created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
-        related_name='created_congregations',
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['-year']
-        indexes = [models.Index(fields=['year'])]
-
-    def __str__(self):
-        return f"{self.name} ({self.year})"
-
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Congregation session
-# ─────────────────────────────────────────────────────────────────────────────
-
-class CongregationSession(models.Model):
-    """
-    A graduation/issuance event. The aggregate root for the registry pipeline.
-    """
-
-    SCOPE_INSTITUTION = 'INSTITUTION'
-    SCOPE_FACULTY = 'FACULTY'
-    SCOPE_DEPARTMENT = 'DEPARTMENT'
-    SCOPE_CHOICES = [
-        (SCOPE_INSTITUTION, 'Institution-wide'),
-        (SCOPE_FACULTY, 'Faculty'),
-        (SCOPE_DEPARTMENT, 'Department'),
-    ]
 
     STATUS_DRAFT = 'DRAFT'
     STATUS_PUBLISHED = 'PUBLISHED'
@@ -147,26 +101,10 @@ class CongregationSession(models.Model):
     }
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    congregation = models.ForeignKey(
-        Congregation, on_delete=models.PROTECT, related_name='sessions',
-        help_text='Parent congregation. Backfilled and made non-null by migrations 0002-0004.',
-    )
-    session_number = models.PositiveSmallIntegerField(
-        default=1,
-        help_text='Ordinal position of this session within its congregation.',
-    )
     name = models.CharField(max_length=255)
-    slug = models.SlugField(max_length=255, unique=True, blank=True)
-    academic_year = models.CharField(max_length=20)
-
-    scope_type = models.CharField(max_length=20, choices=SCOPE_CHOICES)
-    faculty = models.ForeignKey(
-        Faculty, on_delete=models.PROTECT, null=True, blank=True,
-        related_name='sessions',
-    )
-    department = models.ForeignKey(
-        Department, on_delete=models.PROTECT, null=True, blank=True,
-        related_name='sessions',
+    year = models.PositiveIntegerField(
+        blank=True,
+        help_text='Calendar year this batch belongs to, for archival/reporting grouping. Auto-populated from confirmation_deadline if omitted.',
     )
 
     status = models.CharField(
@@ -178,7 +116,7 @@ class CongregationSession(models.Model):
         help_text='Optional delayed open. If null, confirmation opens at publish.',
     )
 
-    # Deadline extension audit fields (Slice 2 wires the service that updates them).
+    # Deadline extension audit fields.
     confirmation_deadline_original = models.DateTimeField(
         null=True, blank=True,
         help_text='Original confirmation deadline at creation. Never updated after first extension.',
@@ -186,23 +124,23 @@ class CongregationSession(models.Model):
     confirmation_deadline_extended_at = models.DateTimeField(null=True, blank=True)
     confirmation_deadline_extended_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
-        null=True, blank=True, related_name='extended_session_deadlines',
+        null=True, blank=True, related_name='extended_batch_deadlines',
     )
     confirmation_deadline_extension_count = models.PositiveSmallIntegerField(default=0)
 
     certificate_template = models.ForeignKey(
         'templates.CertificateTemplate', on_delete=models.PROTECT,
-        related_name='sessions',
+        related_name='issuance_batches',
     )
 
     issuance_instructions = models.TextField(
         blank=True,
-        help_text='Per-session message included in the issuance notification email.',
+        help_text='Per-batch message included in the issuance notification email.',
     )
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
-        related_name='created_sessions',
+        related_name='created_batches',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     published_at = models.DateTimeField(null=True, blank=True)
@@ -215,61 +153,21 @@ class CongregationSession(models.Model):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['status']),
-            models.Index(fields=['academic_year']),
-            models.Index(fields=['congregation']),
+            models.Index(fields=['year']),
         ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=['congregation', 'session_number'],
-                name='registry_session_unique_number_per_congregation',
-            ),
-            models.UniqueConstraint(
-                fields=['congregation', 'name'],
-                name='registry_session_unique_name_per_congregation',
-            ),
-        ]
-
-    @property
-    def generated_name(self):
-        ordinals = {
-            1: 'First', 2: 'Second', 3: 'Third', 4: 'Fourth',
-            5: 'Fifth', 6: 'Sixth', 7: 'Seventh', 8: 'Eighth',
-            9: 'Ninth', 10: 'Tenth', 11: 'Eleventh', 12: 'Twelfth',
-        }
-        ordinal = ordinals.get(self.session_number, f'{self.session_number}th')
-        return f'{ordinal} Session'
 
     def __str__(self):
         return f"{self.name} [{self.get_status_display()}]"
 
     def clean(self):
-        if self.scope_type == self.SCOPE_FACULTY:
-            if not self.faculty:
-                raise ValidationError({'faculty': 'Faculty is required for faculty scope.'})
-            if self.department:
-                raise ValidationError({'department': 'Department must be empty for faculty scope.'})
-        elif self.scope_type == self.SCOPE_DEPARTMENT:
-            if not self.faculty or not self.department:
-                raise ValidationError('Faculty and department are required for department scope.')
-            if self.department.faculty_id != self.faculty_id:
-                raise ValidationError({'department': 'Department must belong to the selected faculty.'})
-        elif self.scope_type == self.SCOPE_INSTITUTION:
-            if self.faculty or self.department:
-                raise ValidationError('Faculty and department must be empty for institution scope.')
         if self.confirmation_deadline and self.confirmation_deadline <= timezone.now():
             # Only enforce on creation/draft. Updates may keep a past deadline.
             if not self.pk:
                 raise ValidationError({'confirmation_deadline': 'Deadline must be in the future.'})
 
     def save(self, *args, **kwargs):
-        if not self.slug:
-            base = slugify(f"{self.academic_year}-{self.name}")[:240]
-            slug = base
-            i = 2
-            while CongregationSession.objects.filter(slug=slug).exclude(pk=self.pk).exists():
-                slug = f"{base}-{i}"
-                i += 1
-            self.slug = slug
+        if not self.year and self.confirmation_deadline:
+            self.year = self.confirmation_deadline.year
         super().save(*args, **kwargs)
 
     # ── Aggregated counts (computed via queries; cached here for hot reads) ──
@@ -303,8 +201,8 @@ class ImportBatch(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    session = models.ForeignKey(
-        CongregationSession, on_delete=models.CASCADE,
+    batch = models.ForeignKey(
+        IssuanceBatch, on_delete=models.CASCADE,
         related_name='import_batches',
     )
     uploaded_by = models.ForeignKey(
@@ -327,7 +225,7 @@ class ImportBatch(models.Model):
         help_text='List of {row, field, message} dicts.',
     )
 
-    # Email delivery summary populated after publication of the parent session.
+    # Email delivery summary populated after publication of the parent batch.
     email_summary = models.JSONField(
         default=dict, blank=True,
         help_text='{sent, failed, pending} counts captured post-publish.',
@@ -335,11 +233,16 @@ class ImportBatch(models.Model):
 
     completed_at = models.DateTimeField(null=True, blank=True)
 
+    mapping_configuration = models.JSONField(
+        null=True, blank=True,
+        help_text='Column-to-field mapping used for this import.',
+    )
+
     class Meta:
         ordering = ['-uploaded_at']
 
     def __str__(self):
-        return f"Batch {self.id} ({self.session_id}) - {self.status}"
+        return f"Import {self.id} ({self.batch_id}) - {self.status}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -387,24 +290,18 @@ class StudentRecord(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    session = models.ForeignKey(
-        CongregationSession, on_delete=models.CASCADE,
+    batch = models.ForeignKey(
+        IssuanceBatch, on_delete=models.CASCADE,
         related_name='student_records',
-    )
-    congregation = models.ForeignKey(
-        Congregation, on_delete=models.PROTECT,
-        null=True, blank=True,
-        related_name='student_records',
-        help_text='Denormalised from session.congregation. Auto-set on save.',
     )
     import_batch = models.ForeignKey(
         ImportBatch, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='student_records',
     )
-    last_issuance_batch = models.ForeignKey(
-        'IssuanceBatch', on_delete=models.SET_NULL, null=True, blank=True,
+    last_issuance_run = models.ForeignKey(
+        'IssuanceRun', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='records',
-        help_text='Most recent issuance batch this record was included in.',
+        help_text='Most recent issuance run this record was included in.',
     )
 
     index_number = models.CharField(max_length=50)
@@ -465,22 +362,14 @@ class StudentRecord(models.Model):
 
     class Meta:
         ordering = ['index_number']
-        unique_together = [('session', 'index_number')]
+        unique_together = [('batch', 'index_number')]
         indexes = [
-            models.Index(fields=['session', 'confirmation_status']),
-            models.Index(fields=['session', 'issuance_status']),
+            models.Index(fields=['batch', 'confirmation_status']),
+            models.Index(fields=['batch', 'issuance_status']),
         ]
 
     def __str__(self):
         return f"{self.index_number} - {self.full_name}"
-
-    def save(self, *args, **kwargs):
-        # Keep the denormalised ``congregation`` FK in sync with the session's
-        # congregation. The session FK is always set; the congregation FK on
-        # the session may be null only for pre-migration legacy rows.
-        if self.session_id and not self.congregation_id:
-            self.congregation_id = self.session.congregation_id
-        super().save(*args, **kwargs)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -512,8 +401,8 @@ class ConfirmationAuditLog(models.Model):
         StudentRecord, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='audit_events',
     )
-    session = models.ForeignKey(
-        CongregationSession, on_delete=models.CASCADE,
+    batch = models.ForeignKey(
+        IssuanceBatch, on_delete=models.CASCADE,
         related_name='audit_events',
     )
     event_type = models.CharField(max_length=40, choices=EVENT_CHOICES)
@@ -524,7 +413,7 @@ class ConfirmationAuditLog(models.Model):
     class Meta:
         ordering = ['-timestamp']
         indexes = [
-            models.Index(fields=['session', 'event_type']),
+            models.Index(fields=['batch', 'event_type']),
             models.Index(fields=['student_record', 'timestamp']),
         ]
 
@@ -566,8 +455,8 @@ class EmailDeliveryLog(models.Model):
     student_record = models.ForeignKey(
         StudentRecord, on_delete=models.CASCADE, related_name='email_logs',
     )
-    session = models.ForeignKey(
-        CongregationSession, on_delete=models.CASCADE, related_name='email_logs',
+    batch = models.ForeignKey(
+        IssuanceBatch, on_delete=models.CASCADE, related_name='email_logs',
     )
     email_type = models.CharField(max_length=30, choices=TYPE_CHOICES)
     recipient = models.EmailField()
@@ -583,7 +472,7 @@ class EmailDeliveryLog(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['session', 'email_type', 'status']),
+            models.Index(fields=['batch', 'email_type', 'status']),
             models.Index(fields=['student_record', 'email_type']),
         ]
 
@@ -592,12 +481,12 @@ class EmailDeliveryLog(models.Model):
 #  Status transition log
 # ─────────────────────────────────────────────────────────────────────────────
 
-class SessionStatusTransition(models.Model):
-    """Records each session status transition for audit."""
+class BatchStatusTransition(models.Model):
+    """Records each batch status transition for audit."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    session = models.ForeignKey(
-        CongregationSession, on_delete=models.CASCADE, related_name='transitions',
+    batch = models.ForeignKey(
+        IssuanceBatch, on_delete=models.CASCADE, related_name='transitions',
     )
     from_status = models.CharField(max_length=30)
     to_status = models.CharField(max_length=30)
@@ -612,15 +501,14 @@ class SessionStatusTransition(models.Model):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Deadline extension log (Slice 2)
+#  Issuance runs (filtered certificate-generation runs within a batch)
 # ─────────────────────────────────────────────────────────────────────────────
 
-class IssuanceBatch(models.Model):
-    """A filtered run of certificate issuance within one session.
+class IssuanceRun(models.Model):
+    """A filtered run of certificate issuance within one batch.
 
-    Replaces the "issue everything confirmed in one shot" model: each batch
-    captures the filter that was applied, the totals, and the actor — so
-    admins can run multiple batches (e.g. by faculty, or to retry failures)
+    Each run captures the filter that was applied, the totals, and the actor —
+    so admins can run multiple runs (e.g. by faculty, or to retry failures)
     while preserving a full audit trail.
     """
 
@@ -638,14 +526,9 @@ class IssuanceBatch(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    session = models.ForeignKey(
-        CongregationSession, on_delete=models.CASCADE,
-        related_name='issuance_batches',
-    )
-    # Denormalised mirror of session.congregation for cross-session reporting.
-    congregation = models.ForeignKey(
-        Congregation, on_delete=models.PROTECT,
-        related_name='issuance_batches',
+    batch = models.ForeignKey(
+        IssuanceBatch, on_delete=models.CASCADE,
+        related_name='issuance_runs',
     )
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default=STATUS_QUEUED,
@@ -661,7 +544,7 @@ class IssuanceBatch(models.Model):
 
     requested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
-        related_name='issuance_batches_requested',
+        related_name='issuance_runs_requested',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)
@@ -670,26 +553,24 @@ class IssuanceBatch(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['session', '-created_at']),
-            models.Index(fields=['congregation', '-created_at']),
+            models.Index(fields=['batch', '-created_at']),
             models.Index(fields=['status']),
         ]
 
     def __str__(self):
-        return f'Batch {self.id} ({self.status})'
+        return f'Run {self.id} ({self.status})'
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Deadline extension log
+# ─────────────────────────────────────────────────────────────────────────────
 
 class DeadlineExtensionLog(models.Model):
     """One row per confirmation-deadline extension. Append-only audit trail."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    session = models.ForeignKey(
-        CongregationSession, on_delete=models.CASCADE,
-        related_name='deadline_extensions',
-    )
-    # Denormalised for congregation-level audit queries (mirrors session.congregation).
-    congregation = models.ForeignKey(
-        Congregation, on_delete=models.PROTECT,
+    batch = models.ForeignKey(
+        IssuanceBatch, on_delete=models.CASCADE,
         related_name='deadline_extensions',
     )
     previous_deadline = models.DateTimeField()
@@ -704,116 +585,11 @@ class DeadlineExtensionLog(models.Model):
     class Meta:
         ordering = ['-extended_at']
         indexes = [
-            models.Index(fields=['session', '-extended_at']),
-            models.Index(fields=['congregation', '-extended_at']),
+            models.Index(fields=['batch', '-extended_at']),
         ]
 
     def __str__(self):
         return (
-            f'Extension on {self.session_id}: '
+            f'Extension on {self.batch_id}: '
             f'{self.previous_deadline:%Y-%m-%d} → {self.new_deadline:%Y-%m-%d}'
         )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Congregation templates (Slice 4)
-# ─────────────────────────────────────────────────────────────────────────────
-
-class CongregationTemplate(models.Model):
-    """Reusable session-creation scaffold for a congregation.
-
-    A template captures the *shape* of a congregation (how many sessions,
-    their scope, day offsets from the ceremony month, and confirmation
-    window length) so each year's congregation can be instantiated with
-    one click rather than rebuilt by hand.
-
-    Templates are versioned by name+is_active rather than by revision number
-    — older inactive templates are kept for audit but hidden from the picker.
-    """
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=255, unique=True)
-    description = models.CharField(max_length=500, blank=True)
-    is_active = models.BooleanField(default=True)
-
-    sourced_from_congregation = models.ForeignKey(
-        Congregation, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='derived_templates',
-        help_text='Populated when this template was snapshotted from a congregation.',
-    )
-    created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
-        related_name='created_congregation_templates',
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [models.Index(fields=['is_active'])]
-
-    def __str__(self):
-        return self.name
-
-
-class CongregationTemplateSessionDef(models.Model):
-    """One session blueprint inside a CongregationTemplate."""
-
-    SCOPE_INSTITUTION = CongregationSession.SCOPE_INSTITUTION
-    SCOPE_FACULTY = CongregationSession.SCOPE_FACULTY
-    SCOPE_DEPARTMENT = CongregationSession.SCOPE_DEPARTMENT
-    SCOPE_CHOICES = CongregationSession.SCOPE_CHOICES
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    template = models.ForeignKey(
-        CongregationTemplate, on_delete=models.CASCADE,
-        related_name='session_defs',
-    )
-    session_number = models.PositiveSmallIntegerField()
-    name_pattern = models.CharField(
-        max_length=255,
-        help_text=(
-            "Used to derive the session's name when applied. "
-            "Supports placeholders: {year}, {n} (session number)."
-        ),
-    )
-    scope_type = models.CharField(max_length=20, choices=SCOPE_CHOICES)
-    # Offset (days) from the congregation's ceremony_month (day 1) to this
-    # session's ceremony_start_date. Allow negative — some sessions precede the
-    # nominal congregation month start by a few days.
-    ceremony_day_offset = models.IntegerField(
-        help_text='Days from congregation.ceremony_month (day 1) to ceremony_start_date.',
-    )
-    # How many days *before* the ceremony_start_date the confirmation deadline
-    # should fall. e.g. 7 means "deadline = ceremony_start_date - 7 days, 23:59 UTC".
-    confirmation_window_days = models.PositiveSmallIntegerField(
-        default=14,
-        help_text='Days before ceremony_start_date that the confirmation deadline lands.',
-    )
-    issuance_instructions = models.TextField(blank=True)
-
-    # Optional bindings — letting the template pre-fill these saves clicks.
-    default_faculty = models.ForeignKey(
-        Faculty, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='+',
-    )
-    default_department = models.ForeignKey(
-        Department, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='+',
-    )
-    default_certificate_template = models.ForeignKey(
-        'templates.CertificateTemplate', on_delete=models.SET_NULL,
-        null=True, blank=True, related_name='+',
-    )
-
-    class Meta:
-        ordering = ['session_number']
-        constraints = [
-            models.UniqueConstraint(
-                fields=['template', 'session_number'],
-                name='registry_tmpl_unique_session_number',
-            ),
-        ]
-
-    def __str__(self):
-        return f'{self.template.name} · session {self.session_number}'

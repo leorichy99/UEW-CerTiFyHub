@@ -14,6 +14,7 @@ import {
   useCongregations, useCreateCongregation,
 } from "../hooks/registry/useCongregations.js";
 import { useToast } from "../components/ToastContainer";
+import PageTitle from "../components/PageTitle";
 import Table from "../components/ui/Table";
 
 const inputClass =
@@ -47,6 +48,7 @@ export default function CongregationsListPage() {
 
   return (
     <div className="space-y-6">
+      <PageTitle>Congregations</PageTitle>
       <div className="flex justify-between items-center">
         <div className="text-sm text-slate-500">
           {items.length} congregation{items.length === 1 ? "" : "s"}

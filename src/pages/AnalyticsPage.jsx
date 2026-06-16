@@ -21,6 +21,7 @@ import {
   TrendingUp,
   Clock,
 } from "lucide-react";
+import PageTitle from "../components/PageTitle";
 import SummaryStatCard from "../components/SummaryStatCard";
 import Table from "../components/ui/Table";
 
@@ -132,6 +133,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
+      <PageTitle>Analytics</PageTitle>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {cards.map((card, i) => (
           <SummaryStatCard

@@ -28,6 +28,7 @@ import {
   ChevronDown,
   Loader2,
 } from "lucide-react";
+import PageTitle from "../components/PageTitle";
 import SummaryStatCard from "../components/SummaryStatCard";
 import RefreshButton from "../components/ui/RefreshButton";
 import Table from "../components/ui/Table";
@@ -142,6 +143,7 @@ export default function GlobalAnalytics() {
 
   return (
     <div className="space-y-6">
+      <PageTitle>Analytics</PageTitle>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="relative">

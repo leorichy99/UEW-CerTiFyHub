@@ -19,6 +19,7 @@ import {
 } from "../hooks/registry/useFaculties.js";
 import { useToast } from "../components/ToastContainer";
 import { useConfirmDialog } from "../context/ConfirmDialogContext";
+import PageTitle from "../components/PageTitle";
 import Table from "../components/ui/Table";
 
 const _inputClass = "w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400";
@@ -130,6 +131,7 @@ export default function RegistryFacultiesPage() {
 
   return (
     <div className="space-y-6">
+      <PageTitle>Faculties &amp; Departments</PageTitle>
       <div className="flex gap-2 border-b border-slate-200">
         {[
           ["faculties", "Faculties"],

@@ -3,7 +3,7 @@ Certificate issuance engine.
 
 Walks confirmed StudentRecords and produces real Certificate rows.
 
-State flow (all enforced by SessionLifecycleService):
+State flow (all enforced by BatchLifecycleService):
 
     PUBLISHED ── close_confirmation() ──▶ CONFIRMATION_CLOSED
         └── still-PENDING records auto-flag to FLAGGED.
@@ -11,9 +11,6 @@ State flow (all enforced by SessionLifecycleService):
         └── each CONFIRMED record produces a Certificate (sync).
     ISSUANCE_IN_PROGRESS ── complete() ──▶ COMPLETED
         └── only when every CONFIRMED record is ISSUED or FAILED.
-
-Slice 5 runs all of this synchronously. Slice 6 moves the per-record
-loop into a Celery task without changing the public service contract.
 """
 
 import re
@@ -24,9 +21,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from registry.models import (
-    CongregationSession, StudentRecord, EmailDeliveryLog,
+    IssuanceBatch, StudentRecord, EmailDeliveryLog,
 )
-from registry.services.session_lifecycle_service import SessionLifecycleService
+from registry.services.batch_lifecycle_service import BatchLifecycleService
 from certificates.models import Certificate
 
 
@@ -75,16 +72,16 @@ class IssuanceError(Exception):
 
 class IssuanceService:
     def __init__(self, lifecycle=None):
-        self.lifecycle = lifecycle or SessionLifecycleService()
+        self.lifecycle = lifecycle or BatchLifecycleService()
 
     # ── Stage 1: close confirmation ──────────────────────────────────────
 
     @transaction.atomic
-    def close_confirmation(self, session, *, actor):
+    def close_confirmation(self, batch, *, actor):
         """Transition to CONFIRMATION_CLOSED and flag any still-pending records."""
-        if session.status not in {
-            CongregationSession.STATUS_PUBLISHED,
-            CongregationSession.STATUS_CONFIRMATION_OPEN,
+        if batch.status not in {
+            IssuanceBatch.STATUS_PUBLISHED,
+            IssuanceBatch.STATUS_CONFIRMATION_OPEN,
         }:
             raise IssuanceError(
                 'Confirmation can only be closed from PUBLISHED or '
@@ -92,53 +89,53 @@ class IssuanceService:
             )
         flagged = (
             StudentRecord.objects
-            .filter(session=session, confirmation_status=StudentRecord.CONF_PENDING)
+            .filter(batch=batch, confirmation_status=StudentRecord.CONF_PENDING)
             .update(confirmation_status=StudentRecord.CONF_FLAGGED)
         )
         self.lifecycle.transition(
-            session, CongregationSession.STATUS_CONFIRMATION_CLOSED,
+            batch, IssuanceBatch.STATUS_CONFIRMATION_CLOSED,
             actor=actor,
             note=f'{flagged} record(s) auto-flagged for non-response.',
         )
         from registry.services import notifier
-        notifier.confirmation_closed(session, flagged=flagged)
+        notifier.confirmation_closed(batch, flagged=flagged)
         return {'flagged': flagged}
 
     # ── Stage 2: start issuance ──────────────────────────────────────────
 
-    def start_issuance(self, session, *, actor):
-        """Backwards-compatible: issue everything confirmed in one unfiltered batch.
+    def start_issuance(self, batch, *, actor):
+        """Backwards-compatible: issue everything confirmed in one unfiltered run.
 
-        Since Slice 3 this delegates to ``IssuanceBatchService``. The legacy
+        Delegates to ``IssuanceRunService``. The legacy
         return shape (``queued``/``issued``/``failed``) is preserved so the
         old REST endpoint and tests keep working unchanged.
         """
-        # Imported lazily to avoid a circular import — batch service imports us.
-        from registry.services.issuance_batch_service import IssuanceBatchService
+        # Imported lazily to avoid a circular import — run service imports us.
+        from registry.services.issuance_run_service import IssuanceRunService
 
-        batch, result = IssuanceBatchService(lifecycle=self.lifecycle, issuance=self).create_and_run(
-            session=session,
+        run, result = IssuanceRunService(lifecycle=self.lifecycle, issuance=self).create_and_run(
+            batch=batch,
             requested_by=actor,
             filter_criteria={},
             notes='Legacy start_issuance call (unfiltered).',
         )
         return {
-            'queued': batch.total_targeted,
+            'queued': run.total_targeted,
             'issued': result['succeeded'],
             'failed': result['failed'],
-            'batch_id': str(batch.id),
+            'run_id': str(run.id),
         }
 
     # ── Stage 3: complete ────────────────────────────────────────────────
 
     @transaction.atomic
-    def complete(self, session, *, actor):
-        if session.status != CongregationSession.STATUS_ISSUANCE_IN_PROGRESS:
+    def complete(self, batch, *, actor):
+        if batch.status != IssuanceBatch.STATUS_ISSUANCE_IN_PROGRESS:
             raise IssuanceError(
-                'A session can only be completed from ISSUANCE_IN_PROGRESS.'
+                'A batch can only be completed from ISSUANCE_IN_PROGRESS.'
             )
         outstanding = StudentRecord.objects.filter(
-            session=session,
+            batch=batch,
             confirmation_status=StudentRecord.CONF_CONFIRMED,
             issuance_status__in=[
                 StudentRecord.ISSUE_NOT_ISSUED, StudentRecord.ISSUE_QUEUED,
@@ -149,9 +146,9 @@ class IssuanceService:
                 f'{outstanding} confirmed record(s) still pending issuance.'
             )
         self.lifecycle.transition(
-            session, CongregationSession.STATUS_COMPLETED, actor=actor,
+            batch, IssuanceBatch.STATUS_COMPLETED, actor=actor,
         )
-        return session
+        return batch
 
     # ── Per-record issuance ──────────────────────────────────────────────
 
@@ -160,7 +157,7 @@ class IssuanceService:
         try:
             cert = Certificate.objects.create(
                 student_record=record,
-                template=record.session.certificate_template,
+                template=record.batch.certificate_template,
                 student_name=record.full_name,
                 degree_type=_map_degree_type(record.programme),
                 honors=_map_honors(record.class_of_degree),
@@ -184,25 +181,31 @@ class IssuanceService:
             return False
 
     def _email_issuance(self, record, cert):
-        body = (
-            f"Dear {record.full_name},\n\n"
-            f"Your certificate from {record.session.name} has been issued. "
-            f"Certificate number: {cert.certificate_number}.\n\n"
-            f"You will be able to download it from your account or via the "
-            f"verification portal.\n\n— UEW CerTiFyHub"
+        from registry.services.email_renderer import render_email
+
+        subject = f"Your certificate has been issued — {record.batch.name}"
+        subject, html_body, plain_body = render_email(
+            'emails/certificate_issued.html',
+            {
+                'subject': subject,
+                'student_name': record.full_name,
+                'batch_name': record.batch.name,
+                'certificate_number': cert.certificate_number,
+            },
         )
         log = EmailDeliveryLog.objects.create(
-            student_record=record, session=record.session,
+            student_record=record, batch=record.batch,
             email_type=EmailDeliveryLog.TYPE_ISSUANCE,
             recipient=record.institutional_email,
             status=EmailDeliveryLog.STATUS_QUEUED,
         )
         try:
             send_mail(
-                subject=f"Your certificate has been issued — {record.session.name}",
-                message=body,
+                subject=subject,
+                message=plain_body,
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[record.institutional_email],
+                html_message=html_body,
                 fail_silently=False,
             )
             log.status = EmailDeliveryLog.STATUS_SENT

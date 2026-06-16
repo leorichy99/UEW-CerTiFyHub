@@ -16,6 +16,7 @@ import {
   XCircle,
   ChevronDown,
 } from "lucide-react";
+import PageTitle from "../components/PageTitle";
 import Pagination from "../components/Pagination";
 import RefreshButton from "../components/ui/RefreshButton";
 import Table from "../components/ui/Table";
@@ -170,6 +171,7 @@ export default React.memo(function AuditLogs() {
 
   return (
     <div className="">
+      <PageTitle>Audit Logs</PageTitle>
       {/* Tab Navigation */}
       <div className="border-b border-slate-200 mb-6">
         <nav className="flex space-x-8">

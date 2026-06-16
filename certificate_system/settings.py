@@ -10,6 +10,10 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = ['*']
 
+# Admin bulk ops (delete-selected) send one POST field per row.
+# Raise default cap (1000) for large student-record batches.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000
+
 # Application definition
 INSTALLED_APPS = [
     'daphne',  # Must be before django.contrib.staticfiles for ASGI
@@ -53,7 +57,7 @@ ROOT_URLCONF = 'certificate_system.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'dist'],  # Built React app (index.html)
+        'DIRS': [BASE_DIR / 'templates', BASE_DIR / 'dist'],  # Django templates + built React app
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -113,13 +117,6 @@ USE_SSE_NOTIFICATIONS = config('USE_SSE_NOTIFICATIONS', default=True, cast=bool)
 USE_SSE_AUDIT_LOGS = config('USE_SSE_AUDIT_LOGS', default=True, cast=bool)
 SSE_AUDIT_LOG_LIMIT = config('SSE_AUDIT_LOG_LIMIT', default=50, cast=int)
 
-# Registry feature flags
-# Max number of sessions allowed per Congregation. UEW's standard pattern is 2;
-# override via env if a Super Admin needs to run an exceptional 3-session event.
-REGISTRY_MAX_SESSIONS_PER_CONGREGATION = config(
-    'REGISTRY_MAX_SESSIONS_PER_CONGREGATION', default=2, cast=int,
-)
-
 # Celery Configuration
 CELERY_BROKER_URL = _redis_url if _redis_url else 'memory://'
 CELERY_RESULT_BACKEND = _redis_url if _redis_url else None
@@ -157,6 +154,10 @@ CELERY_BEAT_SCHEDULE = {
     'auto-close-expired-confirmation-windows': {
         'task': 'registry.auto_close_expired_confirmation_windows',
         'schedule': crontab(minute=15, hour=0),  # daily at 00:15 UTC
+    },
+    'cleanup-temp-imports': {
+        'task': 'registry.cleanup_temp_imports',
+        'schedule': crontab(minute=0),  # hourly
     },
 }
 

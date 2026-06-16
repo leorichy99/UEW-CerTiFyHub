@@ -58,12 +58,9 @@ export default function SummaryStatCard({
 
   return (
     <div
-      className={`group relative overflow-hidden rounded-xl px-4 py-3 transition-all duration-300 ${palette.card} ${palette.borderTop} shadow-lg hover:shadow-xl border border-slate-200`}
+      className={`group relative overflow-hidden rounded-xl px-4 py-3 transition-all duration-300 ${palette.card} ${palette.borderTop} shadow-md hover:shadow-lg border border-slate-200`}
     >
       <div className="flex flex-col justify-between">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${palette.iconWrap} transition-transform duration-300 group-hover:scale-105 mb-3`}>
-            <Icon size={20} strokeWidth={1.5} />
-          </div>
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1">
             <p className={`text-sm font-medium uppercase tracking-wide ${palette.textMuted}`}>
@@ -74,11 +71,18 @@ export default function SummaryStatCard({
               {valueSuffix}
             </p>
           </div>
+
+{/* stat icon */}
+          <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${palette.iconWrap} transition-transform duration-300 group-hover:scale-105 mb-3`}>
+            <Icon size={18} strokeWidth={1} />
+          </div>
         </div>
+
+        {/* trend */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {trend ? (
-            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${palette.trendWrap}`}>
-              <ArrowUpRight size={12} className={!trendPositive ? "rotate-90" : ""} />
+            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${palette.trendWrap}`}>
+              <ArrowUpRight size={10} className={!trendPositive ? "rotate-90" : ""} />
               {trend}
             </span>
           ) : null}

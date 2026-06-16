@@ -1,16 +1,12 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useMemo } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
-import {
-  FileText, Activity, TrendingUp, Calendar, RefreshCw, Loader2,
-} from "lucide-react";
-import { superAdminAPI } from "../services/api";
+import { FileText } from "lucide-react";
 
 export default function CertificateIssuanceTimeline({ overview, analytics, timeRange, onRefresh }) {
   const shouldReduceMotion = useReducedMotion();
-  const [loading, setLoading] = useState(false);
 
   const chartData = useMemo(() => {
     const issuance = analytics.issuanceTrends || [];
@@ -22,33 +18,6 @@ export default function CertificateIssuanceTimeline({ overview, analytics, timeR
     }));
   }, [analytics.issuanceTrends]);
 
-  // Calculate real-time summary stats
-  const summaryStats = useMemo(() => {
-    const totalIssued = analytics.summary?.totalIssued || 0;
-    const totalVerified = analytics.summary?.totalVerified || 0;
-    const verificationRate = totalIssued > 0 
-      ? ((totalVerified / totalIssued) * 100).toFixed(1) 
-      : "0";
-    
-    // Calculate issuance velocity (issued per day based on time range)
-    const daysMap = { "24h": 1, "7d": 7, "30d": 30, "90d": 90, "1y": 365 };
-    const days = daysMap[timeRange] || 30;
-    const velocity = totalIssued > 0 ? (totalIssued / days).toFixed(1) : "0";
-
-    return {
-      totalIssued,
-      totalVerified,
-      verificationRate,
-      velocity,
-    };
-  }, [analytics.summary, timeRange]);
-
-  const handleRefresh = useCallback(async () => {
-    setLoading(true);
-    await onRefresh();
-    setLoading(false);
-  }, [onRefresh]);
-
   return (
     <motion.div
       initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
@@ -59,13 +28,7 @@ export default function CertificateIssuanceTimeline({ overview, analytics, timeR
       {/* Header */}
       <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
         <div>
-          <div className="flex items-center gap-2.5">
-            {/* <FileText size={18} className="text-slate-700" /> */}
-            <h2 className="text-lg font-semibold text-slate-900">Certificate Issuance Timeline</h2>
-          </div>
-          <p className="mt-0.5 text-sm text-slate-500">
-            Track issuance and verification activity over time
-          </p>
+          <h2 className="text-lg font-semibold text-slate-900">Certificate Issuance Timeline</h2>
         </div>
         <div className="flex items-center gap-3">
           {/* Time Range Selector */}
@@ -80,52 +43,6 @@ export default function CertificateIssuanceTimeline({ overview, analytics, timeR
             <option value="90d">Last 90 days</option>
             <option value="1y">Last year</option>
           </select>
-          
-          {/* Live Indicator */}
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-700">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            </span>
-            Live
-          </span>
-
-          <button
-            onClick={handleRefresh}
-            disabled={loading}
-            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-50 hover:text-slate-600 disabled:opacity-50"
-            title="Refresh"
-          >
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-          </button>
-        </div>
-      </div>
-
-      {/* Metrics Row */}
-      <div className="grid grid-cols-2 gap-3 px-6 pt-5 sm:grid-cols-4">
-        <div className="rounded-lg bg-slate-50 px-4 py-3">
-          <p className="text-xs font-medium text-slate-500">Total Issued</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
-            {summaryStats.totalIssued.toLocaleString()}
-          </p>
-        </div>
-        <div className="rounded-lg bg-slate-50 px-4 py-3">
-          <p className="text-xs font-medium text-slate-500">Total Verified</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
-            {summaryStats.totalVerified.toLocaleString()}
-          </p>
-        </div>
-        <div className="rounded-lg bg-slate-50 px-4 py-3">
-          <p className="text-xs font-medium text-slate-500">Verification Rate</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
-            {summaryStats.verificationRate}%
-          </p>
-        </div>
-        <div className="rounded-lg bg-slate-50 px-4 py-3">
-          <p className="text-xs font-medium text-slate-500">Issuance Rate</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
-            {summaryStats.velocity} / day
-          </p>
         </div>
       </div>
 

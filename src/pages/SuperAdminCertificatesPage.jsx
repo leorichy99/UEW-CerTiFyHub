@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useConfirmDialog } from '../context/ConfirmDialogContext';
 import CertificatePreview from '../components/CertificatePreview';
+import PageTitle from "../components/PageTitle";
 import RefreshButton from '../components/ui/RefreshButton';
 import Breadcrumb from '../components/ui/Breadcrumb';
 
@@ -278,6 +279,7 @@ export default function SuperAdminCertificatesPage() {
 
   return (
     <div className="min-h-screen">
+      <PageTitle>All Certificates</PageTitle>
       <Breadcrumb items={[{ label: "Home", to: "/" }, { label: "Certificates" }]} />
       <div className="">
         {/* Overview Metric Cards */}

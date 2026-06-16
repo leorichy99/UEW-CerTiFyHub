@@ -6,30 +6,57 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useDropzone } from "react-dropzone";
 import { useParams, Link } from "react-router-dom";
 import {
-  ArrowLeft, GraduationCap, Upload, Loader2, FileSpreadsheet,
+  ArrowLeft, Upload, Loader2, FileSpreadsheet,
   Pencil, Trash2, AlertTriangle, CheckCircle2, Clock, Hourglass,
-  CalendarPlus, History, ChevronRight, Search,
+  CalendarPlus, History, ChevronRight, Search, Mail, X, RefreshCw,
 } from "lucide-react";
 
+import ImportWizard from "../components/ImportWizard.jsx";
 import {
-  useSession, useSessionRecords, useSessionImports,
-  useUpdateRecord, useDeleteRecord, uploadImportFile,
-  usePublishSession, useSessionDisputes, useResolveDispute,
-  useCloseConfirmation, useStartIssuance, useCompleteSession,
+  useBatch, useBatchRecords, useBatchImports,
+  useUpdateRecord, useDeleteRecord,
+  usePublishBatch, useBatchDisputes, useResolveDispute,
+  useCloseConfirmation, useStartIssuance, useCompleteBatch,
   useExtendDeadline, useDeadlineExtensions,
-  useIssuanceBatches, useCreateIssuanceBatch,
-} from "../hooks/registry/useSessions.js";
+  useIssuanceRuns, useCreateIssuanceRun,
+} from "../hooks/registry/useBatches.js";
 import { useFaculties, useDepartments } from "../hooks/registry/useFaculties.js";
 import { useSessionProgress } from "../hooks/registry/useSessionProgress.js";
+import {
+  useEmailDeliveryStream,
+  useEmailDeliveryFailures,
+  useResendConfirmation,
+  useResendFailedConfirmations,
+} from "../hooks/registry/useEmailDelivery.js";
 import { useToast } from "../components/ToastContainer";
 import { useConfirmDialog } from "../context/ConfirmDialogContext";
+import PageTitle from "../components/PageTitle";
 import Table from "../components/ui/Table";
 
 const inputClass =
   "w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400";
+
+const STATUS_STYLES = {
+  DRAFT: "bg-slate-100 text-slate-700",
+  PUBLISHED: "bg-blue-100 text-blue-700",
+  CONFIRMATION_OPEN: "bg-amber-100 text-amber-900",
+  CONFIRMATION_CLOSED: "bg-violet-100 text-violet-700",
+  ISSUANCE_IN_PROGRESS: "bg-indigo-100 text-indigo-700",
+  COMPLETED: "bg-emerald-100 text-emerald-700",
+  ARCHIVED: "bg-slate-200 text-slate-500",
+};
+
+const STATUS_LABELS = {
+  DRAFT: "Draft",
+  PUBLISHED: "Published",
+  CONFIRMATION_OPEN: "Confirmation Open",
+  CONFIRMATION_CLOSED: "Confirmation Closed",
+  ISSUANCE_IN_PROGRESS: "Issuance In Progress",
+  COMPLETED: "Completed",
+  ARCHIVED: "Archived",
+};
 
 function readArray(data) {
   if (!data) return [];
@@ -43,7 +70,8 @@ export default function RegistrySessionDetailPage() {
   const batchId = params.id || params.session_id;
   const congregation_id = params.congregation_id;
   const [tab, setTab] = useState("overview");
-  const sessionQuery = useSession(batchId);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const sessionQuery = useBatch(batchId);
   const baseSession = sessionQuery.data;
   // Subscribe to live progress while the session is in any in-flight state.
   const streamEnabled = !!baseSession && [
@@ -65,10 +93,10 @@ export default function RegistrySessionDetailPage() {
     }
   }, [liveSnapshot?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const publish = usePublishSession(batchId);
+  const publish = usePublishBatch(batchId);
   const closeConfirmation = useCloseConfirmation(batchId);
   const startIssuance = useStartIssuance(batchId);
-  const completeSession = useCompleteSession(batchId);
+  const completeSession = useCompleteBatch(batchId);
   const toast = useToast();
   const confirm = useConfirmDialog();
 
@@ -89,6 +117,7 @@ export default function RegistrySessionDetailPage() {
         s ? `Published: ${s.sent}/${s.total} emails sent` : "Session published",
       );
       sessionQuery.invalidate();
+      setTab("overview");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Failed to publish");
     }
@@ -151,30 +180,27 @@ export default function RegistrySessionDetailPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm">
-        <Link to="/admin/batches" className="text-slate-500 hover:text-slate-700">
-          Batches
-        </Link>
-        <ChevronRight size={14} className="text-slate-300" />
-        <span className="text-slate-800 font-medium">
-          {session?.name || "Batch"}
-        </span>
-      </div>
+    <>
+      {wizardOpen && (
+        <div className="fixed inset-0 z-50">
+          <ImportWizard
+            batchId={batchId}
+            onBack={() => setWizardOpen(false)}
+            onComplete={() => {
+              sessionQuery.invalidate();
+              setWizardOpen(false);
+            }}
+          />
+        </div>
+      )}
 
-      <div className="flex items-center gap-3">
-        <GraduationCap className="text-blue-600" size={22} />
-        <div className="flex-1">
-          <h1 className="text-xl font-semibold text-slate-800">{session?.name || "Batch"}</h1>
-          <p className="text-xs text-slate-500 flex items-center gap-2">
-            <span>{session?.academic_year} · {session?.scope_type} · {session?.status}</span>
-            {streamEnabled && liveSnapshot && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> LIVE
-              </span>
-            )}
-          </p>
+      <div className="space-y-6">
+<div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <PageTitle>{session?.name || "Batch"}</PageTitle>
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[session?.status] || "bg-slate-100 text-slate-700"}`}>
+            {STATUS_LABELS[session?.status] || session?.status || "Unknown"}
+          </span>
         </div>
         <PipelineActions
           session={session}
@@ -192,8 +218,8 @@ export default function RegistrySessionDetailPage() {
       <div className="flex gap-2 border-b border-slate-200">
         {[
           ["overview", "Overview"],
-          ["records", "Records"],
           ["imports", "Imports"],
+          ["records", "Records"],
           ["disputes", `Disputes${session?.counts?.disputed ? ` (${session.counts.disputed})` : ""}`],
           ["batches", "Issuance"],
         ].map(([k, label]) => (
@@ -212,11 +238,12 @@ export default function RegistrySessionDetailPage() {
       </div>
 
       {tab === "overview" && <OverviewTab session={session} loading={sessionQuery.isLoading} />}
-      {tab === "records" && <RecordsTab sessionId={batchId} isDraft={isDraft} />}
       {tab === "imports" && (
         <ImportsTab sessionId={batchId} isDraft={isDraft}
-          onUploaded={() => sessionQuery.invalidate()} />
+          onUploaded={() => sessionQuery.invalidate()}
+          onStartImportWizard={() => setWizardOpen(true)} />
       )}
+      {tab === "records" && <RecordsTab sessionId={batchId} isDraft={isDraft} />}
       {tab === "disputes" && (
         <DisputesTab sessionId={batchId} onResolved={() => sessionQuery.invalidate()} />
       )}
@@ -224,6 +251,7 @@ export default function RegistrySessionDetailPage() {
         <IssuanceBatchesTab session={session} onChanged={() => sessionQuery.invalidate()} />
       )}
     </div>
+    </>
   );
 }
 
@@ -296,27 +324,35 @@ function OverviewTab({ session, loading }) {
   if (loading) return <div className="text-center py-10"><Loader2 className="animate-spin inline" /></div>;
   if (!session) return <div className="text-slate-500">Session not found.</div>;
   const c = session.counts || {};
+  const showDeliveryPanel = [
+    "PUBLISHED", "CONFIRMATION_OPEN", "CONFIRMATION_CLOSED",
+  ].includes(session.status);
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-      <Stat label="Total records" value={c.total ?? 0} />
-      <Stat label="Confirmed" value={c.confirmed ?? 0} />
-      <Stat label="Pending" value={c.pending ?? 0} />
-      <Stat label="Issued" value={c.issued ?? 0} />
-      <Stat label="Disputed" value={c.disputed ?? 0} />
-      <Stat label="Flagged" value={c.flagged ?? 0} />
-      <Stat label="Issuance failed" value={c.issuance_failed ?? 0} />
-      <div className="col-span-full bg-white border border-slate-200 rounded-lg p-4 text-sm text-slate-600 space-y-2">
-        <div><strong>Slug:</strong> {session.slug}</div>
-        <div className="flex flex-wrap items-center gap-2">
-          <strong>Confirmation deadline:</strong>
-          <span>{session.confirmation_deadline}</span>
-          <DeadlineBadge session={session} />
-          <ExtendedBadge session={session} />
+    <div className="space-y-4">
+      {showDeliveryPanel && (
+        <EmailDeliveryPanel batchId={session.id} />
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <Stat label="Total records" value={c.total ?? 0} />
+        <Stat label="Confirmed" value={c.confirmed ?? 0} />
+        <Stat label="Pending" value={c.pending ?? 0} />
+        <Stat label="Issued" value={c.issued ?? 0} />
+        <Stat label="Disputed" value={c.disputed ?? 0} />
+        <Stat label="Flagged" value={c.flagged ?? 0} />
+        <Stat label="Issuance failed" value={c.issuance_failed ?? 0} />
+        <div className="col-span-full bg-white border border-slate-200 rounded-lg p-4 text-sm text-slate-600 space-y-2">
+          <div><strong>Slug:</strong> {session.slug}</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <strong>Confirmation deadline:</strong>
+            <span>{session.confirmation_deadline}</span>
+            <DeadlineBadge session={session} />
+            <ExtendedBadge session={session} />
+          </div>
+          <div><strong>Template:</strong> {session.template_name}</div>
+          <MultiUploadIndicator session={session} />
         </div>
-        <div><strong>Template:</strong> {session.template_name}</div>
-        <MultiUploadIndicator session={session} />
+        <DeadlineExtensionSection session={session} />
       </div>
-      <DeadlineExtensionSection session={session} />
     </div>
   );
 }
@@ -526,26 +562,73 @@ function Stat({ label, value }) {
   );
 }
 
+const RECORDS_PAGE_SIZE = 50;
+
 function RecordsTab({ sessionId, isDraft }) {
-  const recordsQuery = useSessionRecords(sessionId);
-  const records = readArray(recordsQuery.data);
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [emailStatusFilter, setEmailStatusFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [items, setItems] = useState([]);
+  const loadedRef = useRef(new Set());
+  const sentinelRef = useRef(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Reset the accumulated list whenever filters change.
+  useEffect(() => {
+    setItems([]);
+    setPage(1);
+    loadedRef.current = new Set();
+  }, [debouncedSearch, emailStatusFilter]);
+
+  const recordsQuery = useBatchRecords(sessionId, {
+    page,
+    page_size: RECORDS_PAGE_SIZE,
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    ...(emailStatusFilter ? { email_status: emailStatusFilter } : {}),
+  });
+  const data = recordsQuery.data;
+  const totalCount = data?.count ?? items.length;
+  const hasNext = !!data?.next;
+  const isFetching = recordsQuery._query.isFetching;
   const updateRecord = useUpdateRecord(sessionId, editing?.id);
   const deleteRecord = useDeleteRecord(sessionId, editing?.id);
   const toast = useToast();
   const confirm = useConfirmDialog();
 
-  const filteredRecords = search.trim()
-    ? records.filter((r) => {
-        const q = search.toLowerCase();
-        return (
-          (r.full_name || "").toLowerCase().includes(q) ||
-          (r.index_number || "").toLowerCase().includes(q) ||
-          (r.programme || "").toLowerCase().includes(q)
-        );
-      })
-    : records;
+  // Accumulate each page's results once, keyed by search + page.
+  useEffect(() => {
+    if (!data) return;
+    const key = `${debouncedSearch}|${page}`;
+    if (loadedRef.current.has(key)) return;
+    loadedRef.current.add(key);
+    const results = readArray(data);
+    setItems((prev) => (page === 1 ? results : [...prev, ...results]));
+  }, [data, page, debouncedSearch]);
+
+  // Load the next page when the sentinel scrolls into view.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return undefined;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNext && !isFetching) {
+          setPage((p) => p + 1);
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [hasNext, isFetching]);
+
+  const filteredRecords = items;
+  const initialLoading = isFetching && items.length === 0;
 
   const handleDelete = async (record) => {
     const ok = await confirm({
@@ -557,7 +640,7 @@ function RecordsTab({ sessionId, isDraft }) {
     try {
       // useDeleteRecord uses url at construction time; build ad-hoc via fetch:
       const res = await fetch(
-        `/api/registry/sessions/${sessionId}/records/${record.id}/`,
+        `/api/registry/batches/${sessionId}/records/${record.id}/`,
         {
           method: "DELETE",
           headers: { Authorization: `Bearer ${localStorage.getItem("accessToken") || ""}` },
@@ -565,7 +648,7 @@ function RecordsTab({ sessionId, isDraft }) {
       );
       if (!res.ok) throw new Error("Failed");
       toast.success("Record deleted");
-      recordsQuery.invalidate();
+      setItems((prev) => prev.filter((r) => r.id !== record.id));
     } catch {
       toast.error("Failed to delete record");
     }
@@ -584,11 +667,21 @@ function RecordsTab({ sessionId, isDraft }) {
             className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition"
           />
         </div>
-        {search && (
-          <span className="text-xs text-slate-500">
-            {filteredRecords.length} result{filteredRecords.length !== 1 ? "s" : ""}
-          </span>
-        )}
+        <select
+          value={emailStatusFilter}
+          onChange={(e) => setEmailStatusFilter(e.target.value)}
+          className="text-sm border border-slate-200 rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none bg-white"
+        >
+          <option value="">All email statuses</option>
+          <option value="QUEUED">Queued</option>
+          <option value="SENT">Sent</option>
+          <option value="DELIVERED">Delivered</option>
+          <option value="FAILED">Failed</option>
+          <option value="BOUNCED">Bounced</option>
+        </select>
+        <span className="text-xs text-slate-500">
+          {totalCount} record{totalCount !== 1 ? "s" : ""}
+        </span>
       </div>
 
       <Table>
@@ -599,15 +692,16 @@ function RecordsTab({ sessionId, isDraft }) {
             <Table.HeaderCell>Email</Table.HeaderCell>
             <Table.HeaderCell>Programme</Table.HeaderCell>
             <Table.HeaderCell>Class</Table.HeaderCell>
+            <Table.HeaderCell>Email Status</Table.HeaderCell>
             <Table.HeaderCell></Table.HeaderCell>
           </tr>
         </Table.Head>
         <Table.Body>
-          {recordsQuery.isLoading && (
-            <tr><td colSpan={6} className="text-center py-8"><Loader2 className="animate-spin inline" size={20} /></td></tr>
+          {initialLoading && (
+            <tr><td colSpan={7} className="text-center py-8"><Loader2 className="animate-spin inline" size={20} /></td></tr>
           )}
-          {!recordsQuery.isLoading && filteredRecords.length === 0 && (
-            <tr><td colSpan={6} className="text-center py-8 text-slate-500">
+          {!initialLoading && filteredRecords.length === 0 && (
+            <tr><td colSpan={7} className="text-center py-8 text-slate-500">
               {search ? "No records match your search." : "No records yet. Upload an import file or add records."}
             </td></tr>
           )}
@@ -618,6 +712,9 @@ function RecordsTab({ sessionId, isDraft }) {
               <Table.Cell className="text-sm text-slate-600">{r.institutional_email}</Table.Cell>
               <Table.Cell className="text-sm">{r.programme}</Table.Cell>
               <Table.Cell className="text-sm">{r.class_of_degree}</Table.Cell>
+              <Table.Cell>
+                <EmailStatusBadge status={r.confirmation_email_status} />
+              </Table.Cell>
               <Table.Cell className="text-right">
                 {isDraft && (
                   <>
@@ -635,11 +732,28 @@ function RecordsTab({ sessionId, isDraft }) {
         </Table.Body>
       </Table>
 
+      {/* Infinite-scroll sentinel: loads the next page when visible. */}
+      <div ref={sentinelRef} className="h-px" />
+      {hasNext && isFetching && items.length > 0 && (
+        <div className="text-center py-3">
+          <Loader2 className="animate-spin inline text-slate-400" size={18} />
+        </div>
+      )}
+      {!hasNext && items.length > 0 && (
+        <div className="text-center py-3 text-xs text-slate-400">
+          All {totalCount} record{totalCount !== 1 ? "s" : ""} loaded
+        </div>
+      )}
+
       {editing && (
         <EditRecordModal
           record={editing}
           onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); recordsQuery.invalidate(); }}
+          onSaved={(updated) => {
+            setItems((prev) => prev.map((r) =>
+              r.id === editing.id ? { ...r, ...updated } : r));
+            setEditing(null);
+          }}
           updateRecord={updateRecord}
         />
       )}
@@ -662,7 +776,7 @@ function EditRecordModal({ record, onClose, onSaved, updateRecord }) {
     try {
       await updateRecord.execute(form);
       toast.success("Record updated");
-      onSaved?.();
+      onSaved?.(form);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Failed to update");
     }
@@ -704,79 +818,21 @@ function EditRecordModal({ record, onClose, onSaved, updateRecord }) {
   );
 }
 
-function ImportsTab({ sessionId, isDraft, onUploaded }) {
-  const importsQuery = useSessionImports(sessionId);
+function ImportsTab({ sessionId, isDraft, onUploaded, onStartImportWizard }) {
+  const importsQuery = useBatchImports(sessionId);
   const imports = readArray(importsQuery.data);
-  const [uploading, setUploading] = useState(false);
-  const toast = useToast();
-
-  const handleUpload = useCallback(async (file) => {
-    if (!file) return;
-    setUploading(true);
-    try {
-      const batch = await uploadImportFile(sessionId, file);
-      toast.success(
-        `Imported ${batch.success_count} of ${batch.total_rows} rows` +
-        (batch.error_count ? ` (${batch.error_count} error(s))` : ''),
-      );
-      importsQuery.invalidate();
-      onUploaded?.();
-    } catch (e) {
-      const detail = e?.response?.data;
-      toast.error(typeof detail === "string" ? detail : (detail?.detail || "Upload failed"));
-    } finally {
-      setUploading(false);
-    }
-  }, [sessionId, importsQuery, onUploaded, toast]);
-
-  const onDrop = useCallback((acceptedFiles) => {
-    if (acceptedFiles?.[0]) handleUpload(acceptedFiles[0]);
-  }, [handleUpload]);
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      "text/csv": [".csv"],
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
-      "application/vnd.ms-excel": [".xls"],
-    },
-    multiple: false,
-    disabled: uploading,
-  });
 
   return (
     <div className="space-y-4">
       {isDraft && (
-        <div
-          {...getRootProps()}
-          className={`bg-white border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition ${
-            isDragActive
-              ? "border-blue-500 bg-blue-50/50"
-              : "border-slate-300 hover:border-slate-400"
-          } ${uploading ? "opacity-50 cursor-not-allowed" : ""}`}
-        >
-          <input {...getInputProps()} />
-          <FileSpreadsheet
-            className={`mx-auto mb-3 transition ${isDragActive ? "text-blue-500" : "text-slate-400"}`}
-            size={40}
-          />
-          <p className="text-sm text-slate-700 font-medium mb-1">
-            {isDragActive
-              ? "Drop the file here to upload"
-              : "Drag and drop a CSV or XLSX file, or click to browse"}
-          </p>
-          <p className="text-xs text-slate-500 mb-4">
-            Required columns: <code>index_number</code>, <code>full_name</code>,
-            <code> institutional_email</code>, <code>programme</code>, <code>class_of_degree</code>,
-            <code> date_of_completion</code>.
-          </p>
+        <div className="flex justify-end">
           <button
             type="button"
-            disabled={uploading}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 inline-flex items-center gap-2 text-sm disabled:opacity-50"
+            onClick={onStartImportWizard}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 inline-flex items-center gap-2 text-sm"
           >
-            {uploading ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
-            {uploading ? "Uploading…" : "Choose file"}
+            <Upload size={16} />
+            Import Student Records
           </button>
         </div>
       )}
@@ -838,7 +894,7 @@ function ImportsTab({ sessionId, isDraft, onUploaded }) {
 }
 
 function DisputesTab({ sessionId, onResolved }) {
-  const disputesQuery = useSessionDisputes(sessionId);
+  const disputesQuery = useBatchDisputes(sessionId);
   const disputes = readArray(disputesQuery.data);
   const [active, setActive] = useState(null);
 
@@ -1054,7 +1110,7 @@ const BATCH_STATUS_STYLES = {
 };
 
 function IssuanceBatchesTab({ session, onChanged }) {
-  const batchesQuery = useIssuanceBatches(session?.id);
+  const batchesQuery = useIssuanceRuns(session?.id);
   const batches = readArray(batchesQuery.data);
   // The composer is only meaningful when the session is in a state that
   // accepts new batches; the service rejects any other status anyway.
@@ -1084,7 +1140,7 @@ function IssuanceBatchesTab({ session, onChanged }) {
 }
 
 function IssuanceBatchComposer({ session, onSubmitted }) {
-  const create = useCreateIssuanceBatch(session.id);
+  const create = useCreateIssuanceRun(session.id);
   const toast = useToast();
   const facultiesQuery = useFaculties();
   const departmentsQuery = useDepartments();
@@ -1343,6 +1399,301 @@ function BatchHistory({ batches, loading }) {
     </div>
   );
 }
+
+// ── Email Delivery Panel ────────────────────────────────────────────────────
+
+function EmailDeliveryPanel({ batchId }) {
+  const { summary, complete, error } = useEmailDeliveryStream(batchId, {
+    enabled: !!batchId,
+  });
+  const [showFailures, setShowFailures] = useState(false);
+  const toast = useToast();
+
+  if (!summary) {
+    return (
+      <div className="bg-white border border-slate-200 rounded-lg p-4">
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <Loader2 className="animate-spin" size={16} />
+          Loading email delivery status…
+        </div>
+      </div>
+    );
+  }
+
+  const total = summary.total || 0;
+  const terminal = summary.terminal_count || 0;
+  const failed = (summary.failed || 0) + (summary.bounced || 0);
+  const pct = summary.completion_percentage || 0;
+  const inProgress = !complete && pct < 100;
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-slate-700 font-medium">
+          <Mail size={16} className="text-blue-600" />
+          Confirmation email delivery
+          {inProgress && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" /> Sending
+            </span>
+          )}
+          {complete && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-medium">
+              <CheckCircle2 size={10} /> Done
+            </span>
+          )}
+        </div>
+        {failed > 0 && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowFailures(true)}
+              className="text-xs text-blue-600 hover:text-blue-700 underline"
+            >
+              View failures ({failed})
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Progress bar */}
+      <div className="space-y-1">
+        <div className="flex justify-between text-xs text-slate-500">
+          <span>{terminal} of {total} processed</span>
+          <span>{pct}%</span>
+        </div>
+        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              complete ? "bg-emerald-500" : "bg-blue-500"
+            }`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Count pills */}
+      <div className="flex flex-wrap gap-2">
+        <CountPill label="Queued" value={summary.queued || 0} color="slate" />
+        <CountPill label="Sent" value={summary.sent || 0} color="emerald" />
+        <CountPill label="Delivered" value={summary.delivered || 0} color="blue" />
+        {summary.failed > 0 && (
+          <CountPill label="Failed" value={summary.failed} color="red" />
+        )}
+        {summary.bounced > 0 && (
+          <CountPill label="Bounced" value={summary.bounced} color="amber" />
+        )}
+      </div>
+
+      {complete && failed === 0 && total > 0 && (
+        <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">
+          <CheckCircle2 size={16} />
+          All {total} confirmation emails sent successfully.
+        </div>
+      )}
+
+      {error && (
+        <div className="text-xs text-amber-600 bg-amber-50 rounded px-2 py-1">
+          Live stream disconnected. Polling summary every 5s as fallback.
+        </div>
+      )}
+
+      {showFailures && (
+        <FailuresModal
+          batchId={batchId}
+          onClose={() => setShowFailures(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function CountPill({ label, value, color }) {
+  const colorMap = {
+    slate: "bg-slate-100 text-slate-700",
+    emerald: "bg-emerald-50 text-emerald-700",
+    blue: "bg-blue-50 text-blue-700",
+    red: "bg-red-50 text-red-700",
+    amber: "bg-amber-50 text-amber-800",
+  };
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs ${colorMap[color] || colorMap.slate}`}>
+      <span className="font-medium">{value}</span>
+      <span className="opacity-80">{label}</span>
+    </span>
+  );
+}
+
+// ── Failures Modal ─────────────────────────────────────────────────────────
+
+function FailuresModal({ batchId, onClose }) {
+  const [statusFilter, setStatusFilter] = useState("");
+  const failuresQuery = useEmailDeliveryFailures(batchId, {
+    status: statusFilter || null,
+  });
+  const failures = readArray(failuresQuery.data?.results);
+  const resendOne = useResendConfirmation(batchId);
+  const resendAll = useResendFailedConfirmations(batchId);
+  const toast = useToast();
+  const confirm = useConfirmDialog();
+
+  const handleResendOne = async (recordId) => {
+    try {
+      await resendOne.execute(recordId);
+      toast.success("Resent successfully");
+      failuresQuery.invalidate?.();
+    } catch (e) {
+      const status = e?.response?.status;
+      const msg = e?.response?.data?.detail || "Failed to resend";
+      if (status === 429) toast.error(msg);
+      else toast.error(msg);
+    }
+  };
+
+  const handleResendAll = async () => {
+    const eligible = failures.filter((f) => f.can_resend).length;
+    if (eligible === 0) {
+      toast.error("No eligible records to resend.");
+      return;
+    }
+    const ok = await confirm({
+      title: "Resend all failed confirmations?",
+      message: `This will resend confirmation emails to ${eligible} eligible failed record(s).`,
+      confirmText: "Resend all",
+    });
+    if (!ok) return;
+    try {
+      await resendAll.execute();
+      toast.success(`Resent to eligible records`);
+      failuresQuery.invalidate?.();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Bulk resend failed");
+    }
+  };
+
+  const humanReason = (reason) => {
+    const r = (reason || "").toLowerCase();
+    if (r.includes("invalid")) return "Invalid email address";
+    if (r.includes("dns")) return "DNS lookup failed";
+    if (r.includes("connection")) return "Server connection error";
+    if (r.includes("timeout")) return "Connection timeout";
+    if (r.includes("blocked")) return "Blocked by recipient server";
+    if (r.includes("quota")) return "Mailbox full / quota exceeded";
+    if (r.includes("bounced")) return "Message bounced";
+    return reason || "Unknown error";
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+          <div>
+            <h3 className="text-base font-semibold text-slate-800">Failed deliveries</h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Review failed confirmation emails and resend where appropriate.
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="px-5 py-3 border-b border-slate-200 flex items-center gap-3">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="text-sm border border-slate-200 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none"
+          >
+            <option value="">All failures</option>
+            <option value="FAILED">Failed</option>
+            <option value="BOUNCED">Bounced</option>
+          </select>
+          <button
+            onClick={handleResendAll}
+            disabled={resendAll.isExecuting || failures.filter((f) => f.can_resend).length === 0}
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {resendAll.isExecuting ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Resend all eligible ({failures.filter((f) => f.can_resend).length})
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-3">
+          {failuresQuery.isLoading && (
+            <div className="text-center py-10">
+              <Loader2 className="animate-spin inline text-slate-400" size={24} />
+            </div>
+          )}
+          {!failuresQuery.isLoading && failures.length === 0 && (
+            <div className="text-center py-10 text-sm text-slate-500">
+              No failed deliveries matching the selected filter.
+            </div>
+          )}
+          {failures.length > 0 && (
+            <Table>
+              <Table.Head>
+                <tr>
+                  <Table.HeaderCell>Student</Table.HeaderCell>
+                  <Table.HeaderCell>Index</Table.HeaderCell>
+                  <Table.HeaderCell>Email</Table.HeaderCell>
+                  <Table.HeaderCell>Status</Table.HeaderCell>
+                  <Table.HeaderCell>Reason</Table.HeaderCell>
+                  <Table.HeaderCell>Attempts</Table.HeaderCell>
+                  <Table.HeaderCell></Table.HeaderCell>
+                </tr>
+              </Table.Head>
+              <Table.Body>
+                {failures.map((f) => (
+                  <Table.Row key={f.record_id}>
+                    <Table.Cell className="text-sm font-medium text-slate-800">{f.student_name}</Table.Cell>
+                    <Table.Cell className="text-sm font-mono">{f.index_number}</Table.Cell>
+                    <Table.Cell className="text-sm text-slate-600">{f.institutional_email}</Table.Cell>
+                    <Table.Cell>
+                      <EmailStatusBadge status={f.status} />
+                    </Table.Cell>
+                    <Table.Cell className="text-sm text-slate-600 max-w-[200px] truncate" title={f.failure_reason}>
+                      {humanReason(f.failure_reason)}
+                    </Table.Cell>
+                    <Table.Cell className="text-sm text-slate-500">{f.resend_attempts}/3</Table.Cell>
+                    <Table.Cell className="text-right">
+                      {f.can_resend ? (
+                        <button
+                          onClick={() => handleResendOne(f.record_id)}
+                          disabled={resendOne.isExecuting}
+                          className="text-xs text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
+                        >
+                          Resend
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-400">Max attempts</span>
+                      )}
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmailStatusBadge({ status }) {
+  const styles = {
+    QUEUED: "bg-slate-100 text-slate-700",
+    SENT: "bg-emerald-50 text-emerald-700",
+    DELIVERED: "bg-blue-50 text-blue-700",
+    FAILED: "bg-red-50 text-red-700",
+    BOUNCED: "bg-amber-50 text-amber-800",
+  };
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${styles[status] || "bg-slate-100"}`}>
+      {status || "—"}
+    </span>
+  );
+}
+
+// ── Existing components ───────────────────────────────────────────────────
 
 function MultiUploadIndicator({ session }) {
   const imports = session?.import_batches || [];

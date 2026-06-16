@@ -10,29 +10,29 @@ from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from registry.models import (
-    CongregationSession, StudentRecord, EmailDeliveryLog, ConfirmationAuditLog,
+    IssuanceBatch, StudentRecord, EmailDeliveryLog, ConfirmationAuditLog,
 )
 from registry.services import (
     DisputeService, DisputeResolutionError, ConfirmationService,
 )
 from registry.services.token_service import generate_token, hash_token
 from tests.factories import (
-    UserFactory, CongregationSessionFactory, StudentRecordFactory,
+    UserFactory, IssuanceBatchFactory, StudentRecordFactory,
 )
 
 
-def _publish_with_dispute(session, actor, *, note='Name is misspelled.'):
-    """Move the session to PUBLISHED and put one record in DISPUTED."""
-    record = StudentRecordFactory(session=session, index_number='UEW001')
+def _publish_with_dispute(batch, actor, *, note='Name is misspelled.'):
+    """Move the batch to PUBLISHED and put one record in DISPUTED."""
+    record = StudentRecordFactory(batch=batch, index_number='UEW001')
     raw = generate_token()
     record.confirmation_token_hash = hash_token(raw)
     record.confirmation_token_expires_at = timezone.now() + timedelta(days=7)
     record.save(update_fields=[
         'confirmation_token_hash', 'confirmation_token_expires_at',
     ])
-    session.status = CongregationSession.STATUS_PUBLISHED
-    session.published_at = timezone.now()
-    session.save(update_fields=['status', 'published_at'])
+    batch.status = IssuanceBatch.STATUS_PUBLISHED
+    batch.published_at = timezone.now()
+    batch.save(update_fields=['status', 'published_at'])
     ConfirmationService().dispute(record, note=note)
     record.refresh_from_db()
     return record, raw
@@ -42,8 +42,8 @@ def _publish_with_dispute(session, actor, *, note='Name is misspelled.'):
 class DisputeServiceTests(APITestCase):
     def setUp(self):
         self.actor = UserFactory()
-        self.session = CongregationSessionFactory()
-        self.record, _ = _publish_with_dispute(self.session, self.actor)
+        self.batch = IssuanceBatchFactory()
+        self.record, _ = _publish_with_dispute(self.batch, self.actor)
         self.service = DisputeService()
 
     def test_correct_changes_record_and_reissues_token(self):
@@ -101,7 +101,7 @@ class DisputeServiceTests(APITestCase):
         with self.assertRaises(DisputeResolutionError):
             self.service.correct(
                 self.record, actor=self.actor,
-                corrections={'session_id': 'whatever'},
+                corrections={'batch_id': 'whatever'},
             )
 
 
@@ -114,18 +114,18 @@ class DisputeEndpointTests(APITestCase):
         token = RefreshToken.for_user(self.actor).access_token
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
 
-        self.session = CongregationSessionFactory(created_by=self.actor)
-        self.record, _ = _publish_with_dispute(self.session, self.actor)
+        self.batch = IssuanceBatchFactory(created_by=self.actor)
+        self.record, _ = _publish_with_dispute(self.batch, self.actor)
 
     def test_list_disputes(self):
-        resp = self.client.get(f'/api/registry/sessions/{self.session.id}/disputes/')
+        resp = self.client.get(f'/api/registry/batches/{self.batch.id}/disputes/')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(len(resp.data), 1)
         self.assertEqual(resp.data[0]['index_number'], 'UEW001')
 
     def test_resolve_correct_endpoint(self):
         resp = self.client.post(
-            f'/api/registry/sessions/{self.session.id}/records/{self.record.id}/resolve-dispute/',
+            f'/api/registry/batches/{self.batch.id}/records/{self.record.id}/resolve-dispute/',
             {
                 'mode': 'correct',
                 'corrections': {'full_name': 'Jane Adwoa Doe'},
@@ -139,7 +139,7 @@ class DisputeEndpointTests(APITestCase):
 
     def test_resolve_reject_endpoint(self):
         resp = self.client.post(
-            f'/api/registry/sessions/{self.session.id}/records/{self.record.id}/resolve-dispute/',
+            f'/api/registry/batches/{self.batch.id}/records/{self.record.id}/resolve-dispute/',
             {'mode': 'reject', 'resolution_note': 'Original is correct.'},
             format='json',
         )
@@ -148,7 +148,7 @@ class DisputeEndpointTests(APITestCase):
 
     def test_resolve_requires_valid_mode(self):
         resp = self.client.post(
-            f'/api/registry/sessions/{self.session.id}/records/{self.record.id}/resolve-dispute/',
+            f'/api/registry/batches/{self.batch.id}/records/{self.record.id}/resolve-dispute/',
             {'mode': 'shrug'},
             format='json',
         )

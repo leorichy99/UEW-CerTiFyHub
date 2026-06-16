@@ -65,6 +65,9 @@ class SuperAdminStatsView(APIView):
             is_active=True,
             profile__role__in=['ADMIN', 'SUPER_ADMIN']
         ).count()
+        pending_disputes = StudentRecord.objects.filter(
+            confirmation_status=StudentRecord.CONF_DISPUTED
+        ).count()
 
         # Blockchain-derived stats (certificates as proxy)
         # "Blocks mined" = total certificates
@@ -118,6 +121,7 @@ class SuperAdminStatsView(APIView):
             'totalCertificates': total_certificates,
             'totalVerifications': total_verifications,
             'activeAdmins': active_admins,
+            'pendingDisputes': pending_disputes,
             'blockchainStatus': blockchain_status,
             'blocksMined': blocks_mined,
             'networkHashrate': hashrate,

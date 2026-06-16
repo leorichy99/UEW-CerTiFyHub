@@ -11,8 +11,7 @@ from tests.factories.templates import CertificateTemplateFactory
 from tests.factories.registry import (
     FacultyFactory,
     DepartmentFactory,
-    CongregationFactory,
-    CongregationSessionFactory,
+    IssuanceBatchFactory,
     StudentRecordFactory,
 )
 from tests.factories.builders import (
@@ -30,8 +29,7 @@ __all__ = [
     'CertificateTemplateFactory',
     'FacultyFactory',
     'DepartmentFactory',
-    'CongregationFactory',
-    'CongregationSessionFactory',
+    'IssuanceBatchFactory',
     'StudentRecordFactory',
     'TestCertificateBuilder',
     'TestUserBuilder',

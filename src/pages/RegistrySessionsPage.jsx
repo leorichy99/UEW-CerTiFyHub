@@ -9,11 +9,12 @@ import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { GraduationCap, Plus, Loader2, X } from "lucide-react";
 
-import { useSessions, useCreateSession } from "../hooks/registry/useSessions.js";
+import { useBatches, useCreateBatch } from "../hooks/registry/useBatches.js";
 import { useFaculties, useDepartments } from "../hooks/registry/useFaculties.js";
 import { useCongregations } from "../hooks/registry/useCongregations.js";
 import { templateAPI } from "../services/api";
 import { useToast } from "../components/ToastContainer";
+import PageTitle from "../components/PageTitle";
 import Table from "../components/ui/Table";
 
 const inputClass =
@@ -48,11 +49,12 @@ function readArray(data) {
 
 export default function RegistrySessionsPage() {
   const [showCreate, setShowCreate] = useState(false);
-  const sessionsQuery = useSessions();
+  const sessionsQuery = useBatches();
   const sessions = useMemo(() => readArray(sessionsQuery.data), [sessionsQuery.data]);
 
   return (
     <div className="space-y-6">
+      <PageTitle>Certificate Batches</PageTitle>
       <div className="flex justify-between items-center">
         <div className="text-sm text-slate-500">{sessions.length} session(s)</div>
         <button
@@ -119,7 +121,7 @@ export default function RegistrySessionsPage() {
 
 function CreateSessionModal({ onClose, onCreated }) {
   const toast = useToast();
-  const create = useCreateSession();
+  const create = useCreateBatch();
   const congregationsQuery = useCongregations({ status: "DRAFT,IN_PROGRESS" });
   const congregations = readArray(congregationsQuery.data);
   const facultiesQuery = useFaculties({ active_only: 1 });

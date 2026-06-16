@@ -11,6 +11,7 @@ import {
   Loader2, Shield, ShieldOff, Unlock, UserCheck, AlertTriangle,
   Mail, CheckCircle,
 } from "lucide-react";
+import PageTitle from "../components/PageTitle";
 
 const STATUS_BADGE = {
   active: "bg-green-100 text-green-700",
@@ -108,6 +109,7 @@ export default function AccountManagementPage() {
 
   return (
     <div className="space-y-6">
+      <PageTitle>Account Management</PageTitle>
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 flex items-center gap-2">
           <AlertTriangle size={16} /> {error}

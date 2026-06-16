@@ -12,11 +12,15 @@ import {
   FileCheck,
   Settings,
   Plus,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import QuickActionCard from "../components/QuickActionCard";
 import CertificateIssuanceTimeline from "../components/CertificateIssuanceTimeline";
 import AdminActivityTimeline from "../components/AdminActivityTimeline";
+import PageTitle from "../components/PageTitle";
 import DashboardFirstRun from "../components/DashboardFirstRun";
+import SummaryStatCard from "../components/SummaryStatCard";
 
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
@@ -36,6 +40,7 @@ export default function SuperAdminDashboard() {
     totalCertificates: 0,
     totalVerifications: 0,
     activeAdmins: 0,
+    pendingDisputes: 0,
     blockchainStatus: "inactive",
     blocksMined: 0,
     networkHashrate: 0,
@@ -66,6 +71,7 @@ export default function SuperAdminDashboard() {
         totalCertificates: statsData.totalCertificates ?? 0,
         totalVerifications: statsData.totalVerifications ?? 0,
         activeAdmins: statsData.activeAdmins ?? 0,
+        pendingDisputes: statsData.pendingDisputes ?? 0,
         blockchainStatus: statsData.blockchainStatus ?? "inactive",
         blocksMined: statsData.blocksMined ?? 0,
         networkHashrate: statsData.networkHashrate ?? 0,
@@ -115,29 +121,34 @@ export default function SuperAdminDashboard() {
     };
   };
 
-  const topCards = useMemo(
-    () => [
+  const topCards = useMemo(() => {
+    const certTrend = deltaTrend(analytics.summary.growthRate, overview.totalCertificates);
+    const verifTrend = deltaTrend(analytics.summary.verificationGrowth, overview.totalVerifications);
+
+    return [
       {
-        label: "Total Certificates",
-        value: overview.totalCertificates,
-        icon: FileText,
-        ...deltaTrend(analytics.summary.growthRate, overview.totalCertificates),
+        title: "Total Certificates",
+        value: fmt(overview.totalCertificates),
+        Icon: FileText,
+        tone: "neutral",
+        ...certTrend,
       },
       {
-        label: "Total Verifications",
-        value: overview.totalVerifications,
-        icon: Eye,
-        ...deltaTrend(analytics.summary.verificationGrowth, overview.totalVerifications),
+        title: "Total Verifications",
+        value: fmt(overview.totalVerifications),
+        Icon: Eye,
+        tone: verifTrend.trend ? (verifTrend.trendPositive ? "positive" : "negative") : "neutral",
+        ...verifTrend,
       },
       {
-        label: "Active Admins",
-        value: overview.activeAdmins,
-        icon: Shield,
-        subtitle: overview.activeAdmins > 0 ? "Active now" : "None active",
+        title: "Pending Disputes",
+        value: fmt(overview.pendingDisputes),
+        Icon: AlertTriangle,
+        tone: overview.pendingDisputes > 0 ? "warning" : "neutral",
+        subtitle: overview.pendingDisputes > 0 ? "Needs attention" : "All clear",
       },
-    ],
-    [analytics.summary, overview],
-  );
+    ];
+  }, [analytics.summary, overview]);
 
   if (loading) {
     return (
@@ -171,52 +182,36 @@ export default function SuperAdminDashboard() {
       {/* Header */}
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Dashboard</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Issuance, verification, and admin activity at a glance.
-          </p>
+          <PageTitle>Dashboard</PageTitle>
         </div>
-        <button
-          type="button"
-          onClick={() => navigate("/admin/certificates")}
-          className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2"
-          style={{ backgroundColor: "#242576" }}
-        >
-          <Plus size={16} />
-          Issue certificate
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 border border-slate-200 bg-white shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+          >
+            <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+            Refresh
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/admin/certificates")}
+            className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2"
+            style={{ backgroundColor: "#242576" }}
+          >
+            <Plus size={16} />
+            Issue Certificate
+          </button>
+        </div>
       </header>
 
-      {/* Top-level figures — quiet inline strip, not floating cards */}
-      <dl className="grid grid-cols-1 divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-        {topCards.map((card) => {
-          const Icon = card.icon;
-          return (
-            <div key={card.label} className="px-5 py-4">
-              <div className="flex items-center gap-2 text-slate-500">
-                <Icon size={15} strokeWidth={1.75} />
-                <dt className="text-xs font-medium uppercase tracking-wide">{card.label}</dt>
-              </div>
-              <dd className="mt-1.5 flex items-baseline gap-2">
-                <span className="text-2xl font-bold tracking-tight text-slate-900">
-                  {fmt(card.value)}
-                </span>
-                {card.trend ? (
-                  <span
-                    className={`text-xs font-semibold ${
-                      card.trendPositive ? "text-emerald-600" : "text-red-600"
-                    }`}
-                  >
-                    {card.trend}
-                  </span>
-                ) : card.subtitle ? (
-                  <span className="text-xs font-medium text-slate-400">{card.subtitle}</span>
-                ) : null}
-              </dd>
-            </div>
-          );
-        })}
-      </dl>
+      {/* Top-level stats */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {topCards.map((card) => (
+          <SummaryStatCard key={card.title} {...card} />
+        ))}
+      </div>
 
       {/* Main grid: chart leads, activity in the rail (1.6fr / 0.9fr on xl) */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.6fr_0.9fr]">

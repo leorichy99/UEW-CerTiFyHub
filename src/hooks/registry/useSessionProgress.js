@@ -16,7 +16,7 @@ export function useSessionProgress(sessionId, { enabled = true } = {}) {
     if (!sessionId || !enabled) return undefined;
 
     const token = localStorage.getItem("accessToken") || "";
-    const url = `/api/registry/sessions/${sessionId}/progress/stream/?token=${encodeURIComponent(token)}`;
+    const url = `/api/registry/batches/${sessionId}/progress/stream/?token=${encodeURIComponent(token)}`;
     const source = new EventSource(url);
 
     source.addEventListener("progress", (e) => {

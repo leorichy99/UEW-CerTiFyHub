@@ -4,10 +4,10 @@ from registry.models import ConfirmationAuditLog, EmailDeliveryLog
 
 
 class ConfirmationAuditLogRepository:
-    def log(self, *, session, event_type, student_record=None,
+    def log(self, *, batch, event_type, student_record=None,
             ip_address=None, user_agent='', metadata=None):
         return ConfirmationAuditLog.objects.create(
-            session=session,
+            batch=batch,
             event_type=event_type,
             student_record=student_record,
             ip_address=ip_address,
@@ -15,17 +15,17 @@ class ConfirmationAuditLogRepository:
             metadata=metadata or {},
         )
 
-    def for_session(self, session_id):
-        return ConfirmationAuditLog.objects.filter(session_id=session_id)
+    def for_batch(self, batch_id):
+        return ConfirmationAuditLog.objects.filter(batch_id=batch_id)
 
     def for_record(self, record_id):
         return ConfirmationAuditLog.objects.filter(student_record_id=record_id)
 
 
 class EmailDeliveryLogRepository:
-    def log_queued(self, *, student_record, session, email_type, recipient):
+    def log_queued(self, *, student_record, batch, email_type, recipient):
         return EmailDeliveryLog.objects.create(
-            student_record=student_record, session=session,
+            student_record=student_record, batch=batch,
             email_type=email_type, recipient=recipient,
             status=EmailDeliveryLog.STATUS_QUEUED,
         )
@@ -44,5 +44,5 @@ class EmailDeliveryLogRepository:
             error_message=error_message or '',
         )
 
-    def for_session(self, session_id):
-        return EmailDeliveryLog.objects.filter(session_id=session_id)
+    def for_batch(self, batch_id):
+        return EmailDeliveryLog.objects.filter(batch_id=batch_id)

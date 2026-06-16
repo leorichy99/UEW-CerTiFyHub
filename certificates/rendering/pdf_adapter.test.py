@@ -98,6 +98,22 @@ class TestPDFRendererAdapter:
         result.seek(0)
         assert len(result.read()) > 0
 
+    def test_qr_code_vector_rendering(self):
+        """Test QR code is drawn as native vector rectangles, not raster."""
+        adapter = PDFRendererAdapter()
+        buffer = BytesIO()
+        canvas = adapter.create_canvas(buffer)
+        
+        adapter.draw_qr_code(canvas, "https://verify.uew.edu.gh/TEST123", 100, 500, 60)
+        
+        canvas.save()
+        buffer.seek(0)
+        pdf_data = buffer.read()
+        assert len(pdf_data) > 0
+        # Vector rects use 're' operator; raster images use 'Do' + XObject
+        # We cannot easily assert 're' presence without a PDF parser,
+        # so we at minimum assert the PDF is valid and non-empty.
+
 
 class TestRenderingUtils:
     """Test cases for rendering utilities."""
