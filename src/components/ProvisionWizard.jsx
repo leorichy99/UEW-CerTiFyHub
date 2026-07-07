@@ -5,9 +5,8 @@ import { useAuth } from "../context/AuthContext";
 import { useConfirmDialog } from "../context/ConfirmDialogContext";
 import StepIndicator from "./provision-steps/StepIndicator";
 import Step1Identity from "./provision-steps/Step1Identity";
-import Step2Authorisation from "./provision-steps/Step2Authorisation";
-import Step3Permissions from "./provision-steps/Step3Permissions";
-import Step4Review from "./provision-steps/Step4Review";
+import Step2Permissions from "./provision-steps/Step3Permissions";
+import Step3Review from "./provision-steps/Step4Review";
 
 const INITIAL_IDENTITY = {
   email: "",
@@ -18,16 +17,10 @@ const INITIAL_IDENTITY = {
   access_duration: "permanent",
   access_end_date: "",
 };
-const INITIAL_AUTH = { reference_number: "", _selectedRef: null, _mismatchAck: false, _mismatchAckTimestamp: null };
 const INITIAL_PERMS = { permissions: {} };
 
-export default function ProvisionWizard({
-  open,
-  onClose,
-  onSuccess,
-  permConstants,
-  authorisations,
-}) {
+export default function ProvisionWizard(props) {
+  const { open, onClose, onSuccess, permConstants } = props;
   const confirm = useConfirmDialog();
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
@@ -35,12 +28,11 @@ export default function ProvisionWizard({
 
   // Step data
   const [identity, setIdentity] = useState(INITIAL_IDENTITY);
-  const [authorisation, setAuthorisation] = useState(INITIAL_AUTH);
   const [permissions, setPermissions] = useState(INITIAL_PERMS);
   const [notes, setNotes] = useState("");
 
   // Validity per step
-  const [stepValid, setStepValid] = useState({ 1: false, 2: false, 3: false });
+  const [stepValid, setStepValid] = useState({ 1: false, 2: false });
 
   // UI states
   const [submitting, setSubmitting] = useState(false);
@@ -57,10 +49,9 @@ export default function ProvisionWizard({
       setCurrentStep(1);
       setCompletedSteps(new Set());
       setIdentity(INITIAL_IDENTITY);
-      setAuthorisation(INITIAL_AUTH);
       setPermissions(INITIAL_PERMS);
       setNotes("");
-      setStepValid({ 1: false, 2: false, 3: false });
+      setStepValid({ 1: false, 2: false });
       setSubmitting(false);
       setSubmitError("");
       setEditMode(false);
@@ -105,24 +96,22 @@ export default function ProvisionWizard({
   // Validity callbacks (stable via useCallback)
   const onStep1Valid = useCallback((v) => setStepValid((s) => ({ ...s, 1: v })), []);
   const onStep2Valid = useCallback((v) => setStepValid((s) => ({ ...s, 2: v })), []);
-  const onStep3Valid = useCallback((v) => setStepValid((s) => ({ ...s, 3: v })), []);
 
   // --- Navigation ---
 
   const clearStepsAfter = (step) => {
     setCompletedSteps((prev) => {
       const next = new Set(prev);
-      for (let s = step + 1; s <= 4; s++) next.delete(s);
+      for (let s = step + 1; s <= 3; s++) next.delete(s);
       return next;
     });
     // Reset data for cleared steps
-    if (step < 2) { setAuthorisation(INITIAL_AUTH); setStepValid((s) => ({ ...s, 2: false })); }
-    if (step < 3) { setPermissions(INITIAL_PERMS); setStepValid((s) => ({ ...s, 3: false })); }
-    if (step < 4) { setNotes(""); }
+    if (step < 2) { setPermissions(INITIAL_PERMS); setStepValid((s) => ({ ...s, 2: false })); }
+    if (step < 3) { setNotes(""); }
   };
 
   const goForward = () => {
-    if (currentStep >= 4) return;
+    if (currentStep >= 3) return;
     setCompletedSteps((prev) => new Set([...prev, currentStep]));
     setEditMode(false);
     setCurrentStep((s) => s + 1);
@@ -141,7 +130,7 @@ export default function ProvisionWizard({
   };
 
   const goBackAndEdit = () => {
-    // From Step 4 — preserve all data
+    // From Step 3 — preserve all data
     setEditMode(true);
     setCurrentStep(1);
   };
@@ -163,14 +152,6 @@ export default function ProvisionWizard({
     }
   };
 
-  const handleAuthorisationChange = (newData) => {
-    const changed = newData.reference_number !== authorisation.reference_number;
-    setAuthorisation(newData);
-    if (changed && editMode) {
-      clearStepsAfter(2);
-      setEditMode(false);
-    }
-  };
 
   const handlePermissionsChange = (newData) => {
     setPermissions(newData);
@@ -202,7 +183,6 @@ export default function ProvisionWizard({
         department: identity.department,
         account_type: identity.account_type,
         access_duration: identity.access_duration,
-        letter_reference_number: authorisation.reference_number,
         permissions: permissions.permissions,
       };
       if (identity.access_duration === "time_limited" && identity.access_end_date) {
@@ -216,7 +196,6 @@ export default function ProvisionWizard({
       onSuccess({
         fullName: identity.full_name,
         email: identity.email,
-        referenceNumber: authorisation.reference_number,
         credentialEmailSent: data.credential_email_sent !== false,
         warning: data.warning || null,
       });
@@ -225,7 +204,7 @@ export default function ProvisionWizard({
       const msg =
         typeof d === "string"
           ? d
-          : d?.detail || d?.email?.[0] || d?.letter_reference_number?.[0] || JSON.stringify(d) || "Provisioning failed.";
+          : d?.detail || d?.email?.[0] || JSON.stringify(d) || "Provisioning failed.";
       setSubmitError(msg);
     } finally {
       setSubmitting(false);
@@ -305,29 +284,17 @@ export default function ProvisionWizard({
           )}
 
           {currentStep === 2 && (
-            <Step2Authorisation
-              data={authorisation}
-              onChange={handleAuthorisationChange}
+            <Step2Permissions
+              data={permissions}
+              onChange={handlePermissionsChange}
               onValidityChange={onStep2Valid}
-              authorisations={authorisations}
-              identityName={identity.full_name}
+              permConstants={permConstants}
             />
           )}
 
           {currentStep === 3 && (
-            <Step3Permissions
-              data={permissions}
-              onChange={handlePermissionsChange}
-              onValidityChange={onStep3Valid}
-              permConstants={permConstants}
-              scopeText={authorisation._selectedRef?.notes || ""}
-            />
-          )}
-
-          {currentStep === 4 && (
-            <Step4Review
+            <Step3Review
               identity={identity}
-              authorisation={authorisation}
               permissions={permissions}
               permConstants={permConstants}
               notes={notes}
@@ -342,7 +309,7 @@ export default function ProvisionWizard({
           {/* Navigation buttons */}
           <div className="flex items-center justify-between">
             <div>
-              {currentStep > 1 && currentStep < 4 && (
+              {currentStep > 1 && currentStep < 3 && (
                 <button
                   type="button"
                   onClick={goBack}
@@ -351,7 +318,7 @@ export default function ProvisionWizard({
                   <ArrowLeft size={14} /> Back
                 </button>
               )}
-              {currentStep === 4 && (
+              {currentStep === 3 && (
                 <button
                   type="button"
                   onClick={goBackAndEdit}
@@ -371,7 +338,7 @@ export default function ProvisionWizard({
                 Cancel
               </button>
 
-              {currentStep < 4 && (
+              {currentStep < 3 && (
                 <button
                   type="button"
                   onClick={goForward}
@@ -383,7 +350,7 @@ export default function ProvisionWizard({
                 </button>
               )}
 
-              {currentStep === 4 && (
+              {currentStep === 3 && (
                 <button
                   type="button"
                   onClick={handleProvisionClick}

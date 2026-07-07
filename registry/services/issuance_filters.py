@@ -16,6 +16,13 @@ Supported keys (all optional; an empty dict targets every confirmed record):
                                             then match.
     index_number_prefix:  str               StudentRecord.index_number
                                             STARTSWITH ...
+    faculty_name:         str               StudentRecord.faculty_name
+                                            ICONTAINS ... (free text).
+    department_name:      str               StudentRecord.department_name
+                                            ICONTAINS ... (free text).
+    programme:            str               StudentRecord.programme ICONTAINS
+    class_of_degree:      str               StudentRecord.class_of_degree
+                                            ICONTAINS ...
     record_ids:           list[UUID-str]    Explicit record selection.
     retry_failed:         bool              Include ISSUE_FAILED records.
                                             Default: False (only NOT_ISSUED).
@@ -43,6 +50,7 @@ def validate_filter_criteria(criteria):
     allowed = {
         'faculty_ids', 'department_ids', 'honors',
         'index_number_prefix', 'record_ids', 'retry_failed',
+        'faculty_name', 'department_name', 'programme', 'class_of_degree',
     }
     unknown = set(criteria) - allowed
     if unknown:
@@ -64,13 +72,18 @@ def validate_filter_criteria(criteria):
             )
         out[key] = [v.strip() for v in value]
 
-    prefix = criteria.get('index_number_prefix')
-    if prefix is not None:
-        if not isinstance(prefix, str):
-            raise FilterValidationError('index_number_prefix must be a string.')
-        prefix = prefix.strip()
-        if prefix:
-            out['index_number_prefix'] = prefix
+    for text_key in (
+        'index_number_prefix', 'faculty_name',
+        'department_name', 'programme', 'class_of_degree',
+    ):
+        value = criteria.get(text_key)
+        if value is None:
+            continue
+        if not isinstance(value, str):
+            raise FilterValidationError(f'{text_key} must be a string.')
+        value = value.strip()
+        if value:
+            out[text_key] = value
 
     retry = criteria.get('retry_failed')
     if retry is not None:
@@ -97,6 +110,9 @@ def apply_batch_filters(queryset, criteria):
         queryset = queryset.filter(
             index_number__istartswith=criteria['index_number_prefix']
         )
+    for text_key in ('faculty_name', 'department_name', 'programme', 'class_of_degree'):
+        if criteria.get(text_key):
+            queryset = queryset.filter(**{f'{text_key}__icontains': criteria[text_key]})
     if criteria.get('honors'):
         # The dataset stores free-text class_of_degree; we materialise the
         # mapping here. For datasets larger than a few thousand records this
@@ -121,7 +137,9 @@ def issuable_records_for_batch(batch, criteria):
         batch=batch,
         confirmation_status=StudentRecord.CONF_CONFIRMED,
     )
-    if criteria.get('retry_failed'):
+    # Explicit record selection (e.g. a per-row retry) targets exactly those
+    # records regardless of their current issuance status, except already-issued.
+    if criteria.get('record_ids') or criteria.get('retry_failed'):
         base = base.filter(
             issuance_status__in=[
                 StudentRecord.ISSUE_NOT_ISSUED,

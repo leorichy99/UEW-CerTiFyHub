@@ -139,6 +139,8 @@ export default function useNotificationSSE({ onMessage, enabled = true }) {
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
+
     if (enabled) {
       connect();
     } else {

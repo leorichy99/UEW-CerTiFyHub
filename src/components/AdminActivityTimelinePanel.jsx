@@ -8,14 +8,6 @@ import {
 import { superAdminAPI } from "../services/api";
 import ExpandableTimelineRow from "./ExpandableTimelineRow";
 
-const FILTERS = [
-  { id: "all", label: "All Actions" },
-  { id: "issued", label: "Issued" },
-  { id: "revoked", label: "Revoked" },
-  { id: "imports", label: "Imports" },
-  { id: "admin_changes", label: "Admin Changes" },
-];
-
 function formatTimeAgo(ts) {
   const t = typeof ts === "string" ? new Date(ts).getTime() : ts;
   if (!Number.isFinite(t)) return "Recently";
@@ -107,7 +99,6 @@ export default function AdminActivityTimelinePanel({ onViewAll }) {
   const shouldReduceMotion = useReducedMotion();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState("all");
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
@@ -128,10 +119,7 @@ export default function AdminActivityTimelinePanel({ onViewAll }) {
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
-  const filtered = useMemo(() => {
-    if (activeFilter === "all") return logs;
-    return logs.filter((l) => l.actionType === activeFilter);
-  }, [logs, activeFilter]);
+  const filtered = useMemo(() => logs.slice(0, 5), [logs]);
 
   const grouped = useMemo(() => {
     const map = {};
@@ -170,25 +158,6 @@ export default function AdminActivityTimelinePanel({ onViewAll }) {
           >
             View All
           </button>
-        </div>
-      </div>
-
-      {/* Filter Bar - Segmented Control */}
-      <div className="border-b border-slate-100 px-6 py-3">
-        <div className="inline-flex rounded-lg bg-slate-100 p-1">
-          {FILTERS.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setActiveFilter(f.id)}
-              className={`relative rounded-md px-4 py-1.5 text-xs font-medium transition-all duration-200 ${
-                activeFilter === f.id
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
         </div>
       </div>
 

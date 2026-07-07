@@ -163,7 +163,8 @@ class PDFRendererAdapter:
     def draw_qr_code(self, canvas, data, x, y, size=100):
         """
         Draw a QR code on the canvas using native vector rectangles.
-        Completely resolution-independent — no raster embedding.
+        Rounds module size to whole points and centers the QR within
+        the requested area for sharp rendering at all zoom levels.
         
         Args:
             canvas: ReportLab canvas
@@ -183,7 +184,11 @@ class PDFRendererAdapter:
         
         modules_count = qr.modules_count
         modules_with_border = modules_count + 8  # 4-module quiet zone each side
-        module_size = size / modules_with_border
+        module_size = round(size / modules_with_border)
+        actual_size = module_size * modules_with_border
+        # Center the QR within the requested size
+        offset_x = (size - actual_size) / 2
+        offset_y = (size - actual_size) / 2
         
         for row in range(modules_with_border):
             for col in range(modules_with_border):
@@ -196,8 +201,8 @@ class PDFRendererAdapter:
                 )
                 if is_dark:
                     canvas.rect(
-                        x + col * module_size,
-                        y + (modules_with_border - 1 - row) * module_size,
+                        x + offset_x + col * module_size,
+                        y + offset_y + (modules_with_border - 1 - row) * module_size,
                         module_size, module_size,
                         fill=1, stroke=0
                     )

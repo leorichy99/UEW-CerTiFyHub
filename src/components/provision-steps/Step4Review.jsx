@@ -12,7 +12,6 @@ const DURATION_MAP = { permanent: "Permanent", time_limited: "Time-limited" };
 
 export default function Step4Review({
   identity,
-  authorisation,
   permissions,
   permConstants,
   notes,
@@ -25,8 +24,6 @@ export default function Step4Review({
   useEffect(() => {
     requestAnimationFrame(() => notesRef.current?.focus());
   }, []);
-
-  const selectedRef = authorisation._selectedRef;
 
   // Group enabled permissions by category
   const groupedPerms = useMemo(() => {
@@ -44,14 +41,6 @@ export default function Step4Review({
   }, [permissions, permConstants]);
 
   const totalPerms = groupedPerms.reduce((s, g) => s + g.items.length, 0);
-
-  // Name match info
-  const nameMatch = useMemo(() => {
-    if (!selectedRef || !identity.full_name) return null;
-    const refName = selectedRef.requester_name.trim().toLowerCase();
-    const idName = identity.full_name.trim().toLowerCase();
-    return refName === idName ? "match" : "mismatch";
-  }, [selectedRef, identity.full_name]);
 
   return (
     <div className="space-y-6">
@@ -79,46 +68,7 @@ export default function Step4Review({
         </div>
       </div>
 
-      {/* Section 2 — Authorisation */}
-      {selectedRef && (
-        <div className={SECTION_CLS}>
-          <div className={HEADING_CLS}>Authorisation</div>
-          <div className="px-5 py-3 space-y-0">
-            <ReviewRow label="Reference number" value={selectedRef.reference_number} mono />
-            <ReviewRow label="Authorised for" value={selectedRef.requester_name} />
-            <ReviewRow
-              label="Approved by"
-              value={`${selectedRef.authorising_head_name}, ${selectedRef.authorising_head_title}`}
-            />
-            <ReviewRow label="Date approved" value={selectedRef.approval_date} />
-            {selectedRef.notes && (
-              <div className="py-2">
-                <span className={LABEL_CLS}>Scope noted</span>
-                <p className="text-sm text-slate-700 mt-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 whitespace-pre-wrap">
-                  {selectedRef.notes}
-                </p>
-              </div>
-            )}
-            <div className="py-2 flex items-center gap-2">
-              <span className={LABEL_CLS}>Name match</span>
-              {nameMatch === "match" ? (
-                <span className="text-xs text-green-600 flex items-center gap-1 ml-auto">
-                  <CheckCircle size={12} /> Names matched
-                </span>
-              ) : (
-                <span className="text-xs text-amber-600 flex items-center gap-1 ml-auto">
-                  <AlertTriangle size={12} />
-                  Mismatch acknowledged by {superAdminName}{" "}
-                  {authorisation._mismatchAckTimestamp &&
-                    `at ${new Date(authorisation._mismatchAckTimestamp).toLocaleString()}`}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Section 3 — Permissions */}
+      {/* Section 2 — Permissions */}
       <div className={SECTION_CLS}>
         <div className={HEADING_CLS}>
           <div className="flex items-center gap-2">

@@ -58,15 +58,24 @@ class CertificateViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
     def get_queryset(self):
-        qs = Certificate.objects.all().order_by('-generated_date')
+        qs = (
+            Certificate.objects
+            .select_related('issuance_batch', 'issuance_run', 'student_record')
+            .order_by('-generated_date')
+        )
         params = self.request.query_params
 
         search = params.get('search', '').strip()
         if search:
             qs = qs.filter(
                 Q(student_name__icontains=search) |
-                Q(certificate_number__icontains=search)
+                Q(certificate_number__icontains=search) |
+                Q(student_record__index_number__icontains=search)
             )
+
+        batch_id = params.get('batch_id', '').strip()
+        if batch_id:
+            qs = qs.filter(issuance_batch_id=batch_id)
 
         program = params.get('program', '').strip()
         if program:
@@ -226,7 +235,10 @@ class CertificateViewSet(viewsets.ModelViewSet):
         if certificate.status == 'REVOKED':
             return Response({'error': 'Certificate is already revoked.'}, status=status.HTTP_400_BAD_REQUEST)
         certificate.status = 'REVOKED'
-        certificate.save(update_fields=['status'])
+        certificate.revoked_at = timezone.now()
+        certificate.revoked_by = request.user
+        certificate.revocation_reason = request.data.get('reason', '')
+        certificate.save(update_fields=['status', 'revoked_at', 'revoked_by', 'revocation_reason'])
         log_audit(request=request, action='Revoked certificate',
                   target=f'{certificate.student_name} - {certificate.certificate_number}',
                   details=f'Certificate {certificate.certificate_number} revoked',
@@ -263,7 +275,10 @@ class CertificateViewSet(viewsets.ModelViewSet):
         if certificate.status != 'REVOKED':
             return Response({'error': 'Certificate is not revoked.'}, status=status.HTTP_400_BAD_REQUEST)
         certificate.status = 'ISSUED'
-        certificate.save(update_fields=['status'])
+        certificate.revoked_at = None
+        certificate.revoked_by = None
+        certificate.revocation_reason = None
+        certificate.save(update_fields=['status', 'revoked_at', 'revoked_by', 'revocation_reason'])
         log_audit(request=request, action='Reactivated certificate',
                   target=f'{certificate.student_name} - {certificate.certificate_number}',
                   details=f'Certificate {certificate.certificate_number} reactivated',
@@ -775,7 +790,9 @@ class CertificateViewSet(viewsets.ModelViewSet):
         modules_count = probe.modules_count
         modules_with_border = modules_count + 8
 
-        box_size = max(1, target // modules_with_border)
+        # Generate at 4x oversampled resolution then downscale with NEAREST
+        oversample = 4
+        box_size = max(1, (target * oversample) // modules_with_border)
 
         qr = _qrcode.QRCode(
             version=1, error_correction=_qrcode.constants.ERROR_CORRECT_L, box_size=box_size, border=4
@@ -788,13 +805,17 @@ class CertificateViewSet(viewsets.ModelViewSet):
             img = img.get_image()
         img = img.convert('RGBA')
 
-        # Pad to exact target if needed (no resize / no anti-aliasing blur)
+        # Pad to exact oversampled target, then resize down with NEAREST
         actual_size = modules_with_border * box_size
-        if actual_size != target:
-            padded = Image.new('RGBA', (target, target), (255, 255, 255, 255))
-            offset = (target - actual_size) // 2
+        oversampled_target = target * oversample
+        if actual_size != oversampled_target:
+            padded = Image.new('RGBA', (oversampled_target, oversampled_target), (255, 255, 255, 255))
+            offset = (oversampled_target - actual_size) // 2
             padded.paste(img, (offset, offset))
             img = padded
+
+        if img.size != (target, target):
+            img = img.resize((target, target), Image.Resampling.NEAREST)
 
         return img
 

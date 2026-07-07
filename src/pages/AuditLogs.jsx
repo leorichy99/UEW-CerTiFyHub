@@ -86,6 +86,14 @@ export default React.memo(function AuditLogs() {
     fetchAuditLogs({ silent: initialLoadDoneRef.current });
   }, [fetchAuditLogs]);
 
+  // Auto-refresh every 30s so new logs appear without manual refresh
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchAuditLogs({ silent: true });
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [fetchAuditLogs]);
+
   const handleRefresh = useCallback(async () => {
     await fetchAuditLogs({ silent: true });
     toastRef.current.success("Audit logs refreshed");
@@ -171,7 +179,7 @@ export default React.memo(function AuditLogs() {
 
   return (
     <div className="">
-      <PageTitle>Audit Logs</PageTitle>
+      <PageTitle className="mb-8">Audit Logs</PageTitle>
       {/* Tab Navigation */}
       <div className="border-b border-slate-200 mb-6">
         <nav className="flex space-x-8">

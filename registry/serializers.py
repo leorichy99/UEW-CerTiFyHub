@@ -82,7 +82,7 @@ class IssuanceBatchSerializer(serializers.ModelSerializer):
         model = IssuanceBatch
         fields = (
             'id',
-            'name', 'year',
+            'name', 'reference_name', 'year',
             'status', 'confirmation_deadline', 'confirmation_opens_at',
             'confirmation_deadline_original',
             'confirmation_deadline_extended_at',
@@ -96,7 +96,7 @@ class IssuanceBatchSerializer(serializers.ModelSerializer):
             'counts',
         )
         read_only_fields = (
-            'id', 'year', 'status', 'created_by', 'created_at',
+            'id', 'year', 'reference_name', 'status', 'created_by', 'created_at',
             'confirmation_deadline_original',
             'confirmation_deadline_extended_at',
             'confirmation_deadline_extended_by',
@@ -111,8 +111,8 @@ class IssuanceBatchSerializer(serializers.ModelSerializer):
 
 
 class StudentRecordSerializer(serializers.ModelSerializer):
-    faculty_name = serializers.CharField(source='faculty.name', read_only=True, default=None)
-    department_name = serializers.CharField(source='department.name', read_only=True, default=None)
+    certificate_id = serializers.SerializerMethodField()
+    certificate_number = serializers.SerializerMethodField()
 
     class Meta:
         model = StudentRecord
@@ -127,7 +127,8 @@ class StudentRecordSerializer(serializers.ModelSerializer):
             'confirmation_email_sent_at', 'confirmed_at',
             'dispute_note', 'dispute_submitted_at',
             'dispute_resolved_at', 'dispute_resolution_note',
-            'issuance_status', 'issued_at', 'issuance_error',
+            'issuance_status', 'issued_at', 'issuance_error', 'last_issuance_run',
+            'certificate_id', 'certificate_number',
             'created_at', 'updated_at',
         )
         read_only_fields = (
@@ -136,16 +137,34 @@ class StudentRecordSerializer(serializers.ModelSerializer):
             'confirmation_email_sent_at', 'confirmed_at',
             'dispute_note', 'dispute_submitted_at',
             'dispute_resolved_at', 'dispute_resolution_note',
-            'issuance_status', 'issued_at', 'issuance_error',
+            'issuance_status', 'issued_at', 'issuance_error', 'last_issuance_run',
+            'certificate_id', 'certificate_number',
             'created_at', 'updated_at',
         )
+
+    def _latest_cert(self, obj):
+        # Most recent non-revoked certificate for this record, if any.
+        return (
+            obj.certificates
+            .filter(status='ISSUED')
+            .order_by('-generated_date')
+            .first()
+        )
+
+    def get_certificate_id(self, obj):
+        cert = self._latest_cert(obj)
+        return str(cert.id) if cert else None
+
+    def get_certificate_number(self, obj):
+        cert = self._latest_cert(obj)
+        return cert.certificate_number if cert else None
 
 
 class ImportBatchSerializer(serializers.ModelSerializer):
     class Meta:
         model = ImportBatch
         fields = (
-            'id', 'batch', 'uploaded_by', 'uploaded_at', 'file_name',
+            'id', 'batch', 'uploaded_by', 'uploaded_at', 'file_name', 'original_file_name',
             'total_rows', 'success_count', 'skipped_count', 'error_count',
             'status', 'error_log', 'email_summary', 'completed_at',
             'mapping_configuration',

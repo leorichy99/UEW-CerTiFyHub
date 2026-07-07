@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Link } from "react-router-dom";
 import { useToast } from "./ToastContainer";
 import {
   Download, X, Printer, ZoomIn, ZoomOut, Maximize2, Minimize2,
@@ -193,7 +194,16 @@ export default function CertificatePreview({ certificate, onClose }) {
     if (!dateString) return "—";
     const date = new Date(dateString);
     if (Number.isNaN(date.getTime())) return "—";
-    return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    return date.toLocaleDateString("en-GB", { month: "long", day: "numeric", year: "numeric" });
+  };
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return "—";
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return "—";
+    const d = date.toLocaleDateString("en-GB", { month: "long", day: "numeric", year: "numeric" });
+    const t = date.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit", hour12: true });
+    return `${d} at ${t}`;
   };
 
   const status = (certificate?.status || 'active').toLowerCase();
@@ -281,7 +291,7 @@ export default function CertificatePreview({ certificate, onClose }) {
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="flex flex-col items-center gap-3">
                     <div className="relative h-44 w-64 sm:h-56 sm:w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                      <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-transparent via-slate-100 to-transparent" />
+                      <div className="absolute inset-0 animate-pulse bg-linear-to-r from-transparent via-slate-100 to-transparent" />
                     </div>
                     <div className="flex items-center gap-2 text-xs text-slate-500">
                       <Loader2 size={13} className="animate-spin" />
@@ -298,10 +308,10 @@ export default function CertificatePreview({ certificate, onClose }) {
                     className="relative"
                     style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', transition: 'transform 180ms ease' }}
                   >
-                    {/* Verification ribbon */}
-                    <div className="absolute -top-2.5 left-3 z-10 inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white shadow-md ring-2 ring-white">
+                    {/* Issued / Revoked ribbon */}
+                    <div className={`absolute -top-2.5 left-3 z-10 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white shadow-md ring-2 ring-white ${isRevoked ? 'bg-rose-600' : 'bg-emerald-600'}`}>
                       <ShieldCheck size={11} strokeWidth={2.5} />
-                      Verified
+                      {isRevoked ? 'Revoked' : 'Issued'}
                     </div>
                     {/* Paper */}
                     <div className="overflow-hidden rounded-lg border border-slate-200/80 bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,0.25),0_2px_6px_rgba(15,23,42,0.05)]">
@@ -394,9 +404,9 @@ export default function CertificatePreview({ certificate, onClose }) {
             <div className="flex items-center gap-2 overflow-x-auto border-t border-slate-200 bg-white px-4 py-2.5 text-[11px] md:hidden">
               <span className="font-mono text-slate-700">{certificate?.certificate_number || '—'}</span>
               <span className="text-slate-300">·</span>
-              <span className="truncate text-slate-600">{certificate?.recipient_name || certificate?.full_name || '—'}</span>
+              <span className="truncate text-slate-600">{certificate?.student_name || '—'}</span>
               <span className="text-slate-300">·</span>
-              <span className="text-slate-500">{formatDate(certificate?.issued_date || certificate?.created_at)}</span>
+              <span className="text-slate-500">{formatDateTime(certificate?.generated_date)}</span>
               <span
                 className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
                   isRevoked
@@ -411,16 +421,16 @@ export default function CertificatePreview({ certificate, onClose }) {
 
           {/* Right Metadata Sidebar (desktop) */}
           <aside className="hidden md:flex w-[280px] shrink-0 flex-col border-l border-slate-200 bg-slate-50/40">
-            {/* Verification badge card */}
-            <div className="m-4 rounded-lg border border-emerald-100 bg-emerald-50/70 p-4">
+            {/* Status badge card */}
+            <div className={`m-4 rounded-lg border p-4 ${isRevoked ? 'border-rose-100 bg-rose-50/70' : 'border-emerald-100 bg-emerald-50/70'}`}>
               <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm">
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white shadow-sm ${isRevoked ? 'bg-rose-600' : 'bg-emerald-600'}`}>
                   <ShieldCheck size={17} strokeWidth={2.25} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[13px] font-semibold text-emerald-900">Verified</p>
-                  <p className="mt-0.5 text-[11px] leading-snug text-emerald-700/80">
-                    This certificate is authentic and issued by the institution.
+                  <p className={`text-[13px] font-semibold ${isRevoked ? 'text-rose-900' : 'text-emerald-900'}`}>{isRevoked ? 'Revoked' : 'Issued'}</p>
+                  <p className={`mt-0.5 text-[11px] leading-snug ${isRevoked ? 'text-rose-700/80' : 'text-emerald-700/80'}`}>
+                    {isRevoked ? 'This certificate has been revoked and is no longer valid.' : 'This certificate is authentic and issued by the institution.'}
                   </p>
                 </div>
               </div>
@@ -433,9 +443,12 @@ export default function CertificatePreview({ certificate, onClose }) {
               </h3>
               <dl className="mt-3 space-y-3">
                 <MetaRow label="Certificate ID" value={certificate?.certificate_number || '—'} mono />
-                <MetaRow label="Recipient" value={certificate?.recipient_name || certificate?.full_name || '—'} />
-                <MetaRow label="Program" value={certificate?.program || certificate?.program_name || '—'} />
-                <MetaRow label="Issued" value={formatDate(certificate?.issued_date || certificate?.created_at)} />
+                <MetaRow label="Index Number" value={certificate?.index_number || '—'} />
+                <MetaRow label="Recipient" value={certificate?.student_name || '—'} />
+                <MetaRow label="Program" value={certificate?.program || '—'} />
+                <MetaRow label="Class of Degree" value={certificate?.honors_display || '—'} />
+                <MetaRow label="Date of Completion" value={formatDate(certificate?.date_awarded)} />
+                <MetaRow label="Issued" value={formatDateTime(certificate?.generated_date)} />
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-[11px] font-medium text-slate-500">Status</dt>
                   <dd>
@@ -455,16 +468,46 @@ export default function CertificatePreview({ certificate, onClose }) {
 
             <div className="mx-5 my-4 h-px bg-slate-200" />
 
-            {/* Verification meta */}
+            {/* Issuance Record */}
             <div className="px-5 pb-5">
               <h3 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
-                Verification
+                Issuance Record
               </h3>
               <dl className="mt-3 space-y-3">
-                <MetaRow label="Verified at" value={new Date().toLocaleString("en-US")} />
-                <MetaRow label="Issuer" value={certificate?.issuer || certificate?.issued_by || 'University Registrar'} />
+                <MetaRow label="Issued At" value={formatDateTime(certificate?.generated_date)} />
+                <MetaRow label="Issued By" value={certificate?.created_by_name || '—'} />
+                {certificate?.batch_reference_name ? (
+                  <div className="flex items-start justify-between gap-3">
+                    <dt className="shrink-0 text-[11px] font-medium text-slate-500">Batch</dt>
+                    <dd className="min-w-0 text-right text-[12px] font-medium truncate">
+                      <Link to={`/admin/batches/${certificate.batch_id}`} className="text-blue-600 hover:text-blue-800 hover:underline">
+                        {certificate.batch_reference_name}
+                      </Link>
+                    </dd>
+                  </div>
+                ) : (
+                  <MetaRow label="Batch" value="—" />
+                )}
+                <MetaRow label="Issuance Run" value={certificate?.issuance_run_display || '—'} />
               </dl>
             </div>
+
+            {/* Revocation (conditional) */}
+            {isRevoked && (
+              <>
+                <div className="mx-5 my-4 h-px bg-slate-200" />
+                <div className="px-5 pb-5">
+                  <h3 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                    Revocation
+                  </h3>
+                  <dl className="mt-3 space-y-3">
+                    <MetaRow label="Revoked At" value={formatDateTime(certificate?.revoked_at)} />
+                    <MetaRow label="Revoked By" value={certificate?.revoked_by_name || '—'} />
+                    <MetaRow label="Reason" value={certificate?.revocation_reason || '—'} />
+                  </dl>
+                </div>
+              </>
+            )}
 
             <div className="mt-auto border-t border-slate-200 px-5 py-3 text-[10px] text-slate-400">
               Press <kbd className="rounded border border-slate-200 bg-white px-1 font-mono">Esc</kbd> to close

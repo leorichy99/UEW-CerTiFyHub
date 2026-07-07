@@ -264,18 +264,6 @@ body {
   }
 }
 
-/* Global focus-visible rings for keyboard accessibility */
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-[tabindex]:not([tabindex="-1"]):focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--color-brand);
-  border-radius: 0.25rem;
-}
-
 /* Mobile drawer slide-in */
 @keyframes slide-in-left {
   from { transform: translateX(-100%); opacity: 0; }

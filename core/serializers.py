@@ -151,7 +151,6 @@ class AccountProvisionSerializer(serializers.Serializer):
     account_type = serializers.ChoiceField(choices=UserProfile.ACCOUNT_TYPE_CHOICES)
     access_duration = serializers.ChoiceField(choices=UserProfile.ACCESS_DURATION_CHOICES)
     access_end_date = serializers.DateField(required=False, allow_null=True)
-    letter_reference_number = serializers.CharField(max_length=50)
     permissions = serializers.DictField(child=serializers.BooleanField(), required=True)
 
     def validate_email(self, value):
@@ -170,24 +169,6 @@ class AccountProvisionSerializer(serializers.Serializer):
         if UserProfile.objects.filter(staff_id=value).exclude(staff_id='').exists():
             raise serializers.ValidationError(
                 "An active account with this staff ID already exists."
-            )
-        return value
-
-    def validate_letter_reference_number(self, value):
-        try:
-            ref = AuthorisationReference.objects.get(reference_number=value)
-            if ref.status != 'pending':
-                raise serializers.ValidationError(
-                    f"This reference has already been used (status: {ref.status})."
-                )
-            if ref.purpose != 'provision':
-                raise serializers.ValidationError(
-                    f"This reference is for '{ref.get_purpose_display()}', not account provisioning."
-                )
-        except AuthorisationReference.DoesNotExist:
-            raise serializers.ValidationError(
-                "No authorisation reference found with this number. "
-                "Log the authorisation reference before provisioning."
             )
         return value
 
@@ -322,7 +303,6 @@ class AccountDetailSerializer(serializers.ModelSerializer):
 class PermissionUpdateSerializer(serializers.Serializer):
     """Validates permission changes (add/remove)."""
     permissions = serializers.DictField(child=serializers.BooleanField())
-    letter_reference_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
     reason = serializers.CharField(required=False, allow_blank=True)
 
     def validate_permissions(self, value):
@@ -332,16 +312,6 @@ class PermissionUpdateSerializer(serializers.Serializer):
                 f"Invalid permission keys: {', '.join(invalid_keys)}"
             )
         return value
-
-    def validate(self, data):
-        perms = data.get('permissions', {})
-        # If any permissions are being ADDED (set to True), require a letter reference
-        adding = any(v for v in perms.values())
-        if adding and not data.get('letter_reference_number'):
-            raise serializers.ValidationError({
-                'letter_reference_number': 'A letter reference is required when adding permissions.'
-            })
-        return data
 
 
 # ── Setup Account (First Login) Serializer ───────────────────────────────

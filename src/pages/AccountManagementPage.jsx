@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { accountAPI, authorisationAPI } from "../services/api";
+import { accountAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import ProvisionWizard from "../components/ProvisionWizard";
 import PermissionEditorDrawer from "../components/PermissionEditorDrawer";
@@ -36,7 +36,6 @@ export default function AccountManagementPage() {
 
   // Provision wizard
   const [showProvision, setShowProvision] = useState(false);
-  const [authorisations, setAuthorisations] = useState([]);
   const [successBanner, setSuccessBanner] = useState(null);
 
   // Permission editor drawer
@@ -59,11 +58,8 @@ export default function AccountManagementPage() {
   useEffect(() => { fetchAccounts(); }, [fetchAccounts]);
 
   useEffect(() => {
-    // Load permission constants + available authorisations for provision form
+    // Load permission constants for provision form
     accountAPI.getPermissionConstants().then(({ data }) => setPermConstants(data)).catch(() => {});
-    authorisationAPI.getAll({ status: "pending", purpose: "provision" }).then(({ data }) => {
-      setAuthorisations(Array.isArray(data) ? data : data.results || []);
-    }).catch(() => {});
   }, []);
 
   const handleAction = async (actionFn, accountId, payload = {}) => {
@@ -84,13 +80,10 @@ export default function AccountManagementPage() {
   const handleProvisionSuccess = async (result) => {
     setShowProvision(false);
     const banner = result.credentialEmailSent
-      ? `Account provisioned for ${result.fullName}. Credentials sent to ${result.email}. Reference: ${result.referenceNumber}.`
+      ? `Account provisioned for ${result.fullName}. Credentials sent to ${result.email}.`
       : `Account provisioned for ${result.fullName} but credential email failed to deliver. Go to the account record and select Resend Credentials.`;
     setSuccessBanner(banner);
     await fetchAccounts();
-    authorisationAPI.getAll({ status: "pending", purpose: "provision" }).then(({ data }) => {
-      setAuthorisations(Array.isArray(data) ? data : data.results || []);
-    }).catch(() => {});
     setTimeout(() => setSuccessBanner(null), 15000);
   };
 
@@ -98,7 +91,7 @@ export default function AccountManagementPage() {
     setEditingAccount(null);
     await fetchAccounts();
     setSuccessBanner(
-      `Permissions updated for ${result.fullName}. ${result.added} permission(s) added, ${result.removed} permission(s) removed. Reference: ${result.reference}.`
+      `Permissions updated for ${result.fullName}. ${result.added} permission(s) added, ${result.removed} permission(s) removed.`
     );
     setTimeout(() => setSuccessBanner(null), 15000);
   };
@@ -109,7 +102,7 @@ export default function AccountManagementPage() {
 
   return (
     <div className="space-y-6">
-      <PageTitle>Account Management</PageTitle>
+      <PageTitle>User Management</PageTitle>
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 flex items-center gap-2">
           <AlertTriangle size={16} /> {error}
@@ -123,7 +116,6 @@ export default function AccountManagementPage() {
         onClose={() => setShowProvision(false)}
         onSuccess={handleProvisionSuccess}
         permConstants={permConstants}
-        authorisations={authorisations}
       />
 
       {/* Success Banner */}
@@ -207,7 +199,7 @@ export default function AccountManagementPage() {
                         </button>
                       ) : (
                         <button aria-label="Reactivate account" title="Reactivate" disabled={isActionLoading}
-                          onClick={() => handleAction(accountAPI.reactivate, acc.id, { authorisation_reference: "" })}
+                          onClick={() => handleAction(accountAPI.reactivate, acc.id)}
                           className="inline-flex items-center justify-center min-w-[36px] min-h-[36px] rounded-lg text-green-600 hover:bg-green-50 transition-colors disabled:opacity-30">
                           <UserCheck size={16} />
                         </button>

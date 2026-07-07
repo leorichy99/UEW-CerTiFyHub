@@ -84,7 +84,7 @@ def audit_log_created(sender, instance, created, **kwargs):
         
         # Prepare audit log data
         audit_data = {
-            'id': instance.id,
+            'id': str(instance.id),
             'user': instance.username,
             'action': instance.action,
             'target': instance.target,

@@ -51,7 +51,7 @@ export default function DashboardFirstRun({ totalStudents = 0, onNavigate, onDis
         description: "Generate a real certificate and watch it verify. You go live.",
         cta: "Issue certificate",
         Icon: Award,
-        route: "/admin/certificates",
+        route: "/admin/batches",
         done: false,
       },
     ],

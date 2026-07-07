@@ -4,6 +4,7 @@ from .batch_views import (
 )
 from .confirmation_views import (
     PublicConfirmationLookupView, PublicConfirmView, PublicDisputeView,
+    PublicDisputeUploadView,
 )
 from .dispute_views import BatchDisputesView, ResolveDisputeView
 from .issuance_run_views import IssuanceRunViewSet
@@ -13,5 +14,6 @@ __all__ = [
     'IssuanceBatchViewSet', 'StudentRecordViewSet', 'ImportBatchViewSet',
     'IssuanceRunViewSet',
     'PublicConfirmationLookupView', 'PublicConfirmView', 'PublicDisputeView',
+    'PublicDisputeUploadView',
     'BatchDisputesView', 'ResolveDisputeView',
 ]

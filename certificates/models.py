@@ -30,6 +30,14 @@ class Certificate(models.Model):
         'registry.StudentRecord', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='certificates',
     )
+    issuance_batch = models.ForeignKey(
+        'registry.IssuanceBatch', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='certificates',
+    )
+    issuance_run = models.ForeignKey(
+        'registry.IssuanceRun', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='certificates',
+    )
     template = models.ForeignKey('templates.CertificateTemplate', on_delete=models.SET_NULL, null=True, blank=True)
     status = models.CharField(max_length=20, default='ISSUED', choices=[('ISSUED', 'Issued'), ('REVOKED', 'Revoked')])
     
@@ -55,7 +63,10 @@ class Certificate(models.Model):
     pdf_file = models.FileField(upload_to='certificates/', null=True, blank=True)
     
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='revoked_certificates')
+    revocation_reason = models.TextField(null=True, blank=True)
+
     class Meta:
         ordering = ['-generated_date']
         verbose_name = 'Certificate'

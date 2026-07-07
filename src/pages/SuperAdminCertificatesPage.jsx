@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useToast } from "../components/ToastContainer";
-import { certificateAPI } from "../services/api";
+import api, { certificateAPI } from "../services/api";
 import Pagination from "../components/Pagination";
 import SummaryStatCard from "../components/SummaryStatCard";
 import PageSkeleton from "../components/ui/PageSkeleton";
@@ -15,8 +15,6 @@ import {
   Ban,
   Power,
   ChevronDown,
-  Activity,
-  ShieldCheck,
   CheckCircle,
   XCircle,
   Clipboard,
@@ -25,7 +23,6 @@ import { useConfirmDialog } from '../context/ConfirmDialogContext';
 import CertificatePreview from '../components/CertificatePreview';
 import PageTitle from "../components/PageTitle";
 import RefreshButton from '../components/ui/RefreshButton';
-import Breadcrumb from '../components/ui/Breadcrumb';
 
 export default function SuperAdminCertificatesPage() {
   const confirm = useConfirmDialog();
@@ -42,7 +39,6 @@ export default function SuperAdminCertificatesPage() {
     totalIssued: 0,
     active: 0,
     revoked: 0,
-    verifiedNodes: 0,
     growthThisMonth: 0,
   });
 
@@ -51,7 +47,9 @@ export default function SuperAdminCertificatesPage() {
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("30d");
+  const [batchFilter, setBatchFilter] = useState("all");
   const [departments, setDepartments] = useState([]);
+  const [batches, setBatches] = useState([]);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -77,13 +75,14 @@ export default function SuperAdminCertificatesPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [departmentFilter, statusFilter, dateFilter]);
+  }, [departmentFilter, batchFilter, statusFilter, dateFilter]);
 
   // Build query params for backend
   const buildParams = useCallback(() => {
     const params = { page: currentPage, page_size: itemsPerPage };
     if (debouncedSearch) params.search = debouncedSearch;
     if (departmentFilter !== "all") params.program = departmentFilter;
+    if (batchFilter !== "all") params.batch_id = batchFilter;
     if (statusFilter !== "all") params.status = statusFilter;
     if (dateFilter !== "all") {
       const now = new Date();
@@ -95,7 +94,7 @@ export default function SuperAdminCertificatesPage() {
       if (cutoff) params.date_from = cutoff.toISOString().slice(0, 10);
     }
     return params;
-  }, [currentPage, itemsPerPage, debouncedSearch, departmentFilter, statusFilter, dateFilter]);
+  }, [currentPage, itemsPerPage, debouncedSearch, departmentFilter, batchFilter, statusFilter, dateFilter]);
 
   // Fetch certificates page (silent flag avoids the full-page skeleton)
   const initialLoadDoneRef = useRef(false);
@@ -135,7 +134,6 @@ export default function SuperAdminCertificatesPage() {
         totalIssued: total,
         active,
         revoked,
-        verifiedNodes: 0,
         growthThisMonth: 0,
       });
     } catch {
@@ -148,14 +146,19 @@ export default function SuperAdminCertificatesPage() {
     toastRef.current.success("Data refreshed");
   }, [fetchCertificates, fetchStats]);
 
-  // Fetch departments once
+  // Fetch departments and batches once
   useEffect(() => {
     (async () => {
       try {
-        const res = await certificateAPI.getAll({ page: 1, page_size: 200 });
-        const results = res.data.results || (Array.isArray(res.data) ? res.data : []);
-        const uniqueDepts = [...new Set(results.map((c) => c.program).filter(Boolean))];
+        const [certRes, batchRes] = await Promise.all([
+          certificateAPI.getAll({ page: 1, page_size: 200 }),
+          api.get("/registry/batches/", { params: { page_size: 200 } }),
+        ]);
+        const certResults = certRes.data.results || (Array.isArray(certRes.data) ? certRes.data : []);
+        const uniqueDepts = [...new Set(certResults.map((c) => c.program).filter(Boolean))];
         setDepartments(uniqueDepts);
+        const batchResults = batchRes.data?.results || batchRes.data || [];
+        setBatches(batchResults);
       } catch { /* ignore */ }
     })();
     fetchStats();
@@ -279,11 +282,11 @@ export default function SuperAdminCertificatesPage() {
 
   return (
     <div className="min-h-screen">
-      <PageTitle>All Certificates</PageTitle>
-      <Breadcrumb items={[{ label: "Home", to: "/" }, { label: "Certificates" }]} />
+      <PageTitle className="mb-5">All Certificates</PageTitle>
+      
       <div className="">
         {/* Overview Metric Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <SummaryStatCard
             title="Total Issued"
             value={stats.totalIssued.toLocaleString()}
@@ -307,14 +310,6 @@ export default function SuperAdminCertificatesPage() {
             tone="negative"
             trend={stats.revoked > 0 ? "High priority alerts" : "No revocations"}
             trendPositive={stats.revoked === 0}
-          />
-          <SummaryStatCard
-            title="Verified Nodes"
-            value={stats.verifiedNodes}
-            Icon={Activity}
-            tone="info"
-            trend={stats.verifiedNodes > 0 ? "Network healthy" : "No data yet"}
-            trendPositive={stats.verifiedNodes > 0}
           />
         </div>
 
@@ -349,6 +344,27 @@ export default function SuperAdminCertificatesPage() {
                 {departments.map((d) => (
                   <option key={d} value={d}>
                     {d}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={16}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+              />
+            </div>
+
+            {/* Batch Filter */}
+            <div className="relative">
+              <select
+                value={batchFilter}
+                onChange={(e) => setBatchFilter(e.target.value)}
+                aria-label="Filter by batch"
+                className="appearance-none pl-4 pr-10 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white min-w-48"
+              >
+                <option value="all">All Batches</option>
+                {batches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.reference_name || b.name}
                   </option>
                 ))}
               </select>
@@ -415,10 +431,10 @@ export default function SuperAdminCertificatesPage() {
               <tr>
                 <Table.HeaderCell>Certificate ID</Table.HeaderCell>
                 <Table.HeaderCell>Recipient</Table.HeaderCell>
+                <Table.HeaderCell>Batch</Table.HeaderCell>
                 <Table.HeaderCell>Department</Table.HeaderCell>
                 <Table.HeaderCell>Date Issued</Table.HeaderCell>
                 <Table.HeaderCell>Status</Table.HeaderCell>
-                <Table.HeaderCell>Blockchain</Table.HeaderCell>
                 <Table.HeaderCell className="text-right">Actions</Table.HeaderCell>
               </tr>
             </Table.Head>
@@ -453,6 +469,20 @@ export default function SuperAdminCertificatesPage() {
                     </div>
                   </Table.Cell>
 
+                  {/* Batch */}
+                  <Table.Cell>
+                    {cert.batch_id ? (
+                      <Link
+                        to={`/admin/batches/${cert.batch_id}?tab=issuance&highlight_cert=${cert.id}`}
+                        className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                      >
+                        {cert.batch_reference_name || "—"}
+                      </Link>
+                    ) : (
+                      <span className="text-sm text-slate-500">—</span>
+                    )}
+                  </Table.Cell>
+
                   {/* Department */}
                   <Table.Cell>
                     <span className="text-sm text-slate-700">
@@ -476,29 +506,6 @@ export default function SuperAdminCertificatesPage() {
                     ) : (
                       <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-extrabold bg-red-100 text-red-700 uppercase tracking-wide">
                         Revoked
-                      </span>
-                    )}
-                  </Table.Cell>
-
-                  {/* Blockchain */}
-                  <Table.Cell>
-                    {cert.status === "REVOKED" ? (
-                      <span className="text-sm text-slate-400 italic flex items-center gap-1.5">
-                        <ShieldCheck size={14} className="text-slate-400" />
-                        Voided
-                      </span>
-                    ) : (
-                      <span className="text-sm text-emerald-600 font-medium flex items-center gap-1.5">
-                        <ShieldCheck size={14} className="text-emerald-500" />
-                        {truncateHash(cert.id)}
-                        <button
-                          type="button"
-                          onClick={() => { navigator.clipboard.writeText(String(cert.id)); toast.success('Blockchain hash copied'); }}
-                          className="p-0.5 rounded hover:bg-emerald-100 text-emerald-400 hover:text-emerald-600 transition"
-                          title="Copy blockchain hash"
-                        >
-                          <Clipboard size={12} />
-                        </button>
                       </span>
                     )}
                   </Table.Cell>

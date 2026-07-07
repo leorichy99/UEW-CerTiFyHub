@@ -2,13 +2,17 @@ import { useEffect, useMemo } from "react";
 import { AlertTriangle } from "lucide-react";
 
 const SYSTEM_FIELDS = [
+  // Required fields
   { key: "index_number", label: "Index Number", required: true, desc: "Student's institutional ID" },
-  { key: "full_name", label: "Full Name", required: true, desc: "Name on the certificate" },
-  { key: "gender", label: "Gender", required: false, desc: "Male / Female / Other" },
+  { key: "first_name", label: "First Name", required: true, desc: "Student's first name" },
+  { key: "last_name", label: "Last Name", required: true, desc: "Student's last name / surname" },
   { key: "institutional_email", label: "Institutional Email", required: true, desc: "@uew.edu.gh address" },
   { key: "programme", label: "Programme", required: true, desc: "Programme as on certificate" },
   { key: "class_of_degree", label: "Class of Degree", required: true, desc: "Degree classification" },
   { key: "date_of_completion", label: "Date of Completion", required: true, desc: "Programme end date" },
+  // Optional fields
+  { key: "other_names", label: "Other Names", required: false, desc: "Middle names or additional names" },
+  { key: "gender", label: "Gender", required: false, desc: "Male / Female / Other" },
   { key: "date_of_admission", label: "Date of Admission", required: false, desc: "" },
   { key: "faculty", label: "Faculty", required: false, desc: "" },
   { key: "department", label: "Department", required: false, desc: "" },
@@ -16,7 +20,9 @@ const SYSTEM_FIELDS = [
 
 const KNOWN_ALIASES = {
   index_number: ["index number", "index no", "index no.", "reg. no.", "reg no", "registration number", "student id", "student number", "id number"],
-  full_name: ["full name", "student name", "name", "student full name", "legal name", "student's name"],
+  first_name: ["first name", "firstname", "first", "given name", "student first name"],
+  other_names: ["other names", "othername", "other name", "other", "middle name", "middle names", "student other names"],
+  last_name: ["last name", "lastname", "last", "surname", "family name", "student last name"],
   gender: ["gender", "sex", "student gender"],
   institutional_email: ["institutional email", "email", "student email", "e-mail", "uew email", "institutional e-mail"],
   programme: ["programme", "program", "programme of study", "course", "degree programme", "program of study"],

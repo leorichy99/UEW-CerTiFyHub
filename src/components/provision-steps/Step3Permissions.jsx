@@ -26,7 +26,6 @@ export default function Step3Permissions({
   onChange,
   onValidityChange,
   permConstants,
-  scopeText,
 }) {
   const firstCheckboxRef = useRef(null);
 
@@ -69,36 +68,12 @@ export default function Step3Permissions({
   let isFirstCheckbox = true;
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 min-h-0">
-      {/* Left panel — scope reference */}
-      <div className="lg:w-70 shrink-0">
-        <div className="border border-slate-200 rounded-xl bg-slate-50/50 sticky top-0">
-          <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
-            <FileText size={14} className="text-slate-400" />
-            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-              What the letter authorises
-            </h4>
-          </div>
-          <div className="px-4 py-3">
-            {scopeText ? (
-              <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
-                {scopeText}
-              </p>
-            ) : (
-              <p className="text-sm text-slate-400 italic">
-                No scope notes recorded on this authorisation reference.
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Right panel — permissions */}
+    <div className="flex flex-col gap-6 min-h-0">
       <div className="flex-1 min-w-0 space-y-5">
         <div className="flex items-center gap-2">
           <Shield size={15} className="text-slate-400" />
           <p className="text-sm text-slate-500">
-            Enable only the permissions explicitly authorised in the letter.
+            Select the permissions this account should have.
           </p>
         </div>
 

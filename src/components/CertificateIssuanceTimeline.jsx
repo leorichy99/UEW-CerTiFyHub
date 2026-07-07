@@ -26,7 +26,7 @@ export default function CertificateIssuanceTimeline({ overview, analytics, timeR
       className="rounded-xl border border-slate-200 bg-white shadow-sm"
     >
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
+      <div className="flex items-start justify-between gap-4 **:px-3 py-3">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Certificate Issuance Timeline</h2>
         </div>
@@ -47,7 +47,7 @@ export default function CertificateIssuanceTimeline({ overview, analytics, timeR
       </div>
 
       {/* Chart */}
-      <div className="px-6 pt-6 pb-2">
+      <div className="px-6 pt-6">
         {chartData.length > 0 ? (
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -105,10 +105,9 @@ export default function CertificateIssuanceTimeline({ overview, analytics, timeR
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="flex h-48 flex-col items-center justify-center gap-2 rounded-xl bg-slate-50">
+          <div className="flex h-full flex-col items-center justify-center gap-2">
             <FileText size={24} className="text-slate-300" />
             <p className="text-sm font-medium text-slate-400">No certificate activity yet</p>
-            <p className="text-xs text-slate-300">Trends will appear once issuance begins.</p>
           </div>
         )}
       </div>

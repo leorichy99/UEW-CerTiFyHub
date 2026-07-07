@@ -31,7 +31,7 @@ export default function ExpandableTimelineRow({
       <div className="flex flex-col items-center pt-2">
         <div className="relative">
           <div
-            className={`h-3 w-3 rounded-full ${colors.dot} ring-[4px] ${colors.ring} ring-offset-2 transition-transform group-hover:scale-110`}
+            className={`h-3 w-3 rounded-full ${colors.dot} ring-4 ${colors.ring} ring-offset-2 transition-transform group-hover:scale-110`}
           />
           <div className="absolute inset-0 flex items-center justify-center">
             <ActionIcon size={10} className={colors.iconColor} />

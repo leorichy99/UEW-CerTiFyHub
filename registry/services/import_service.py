@@ -26,7 +26,9 @@ from registry.services.batch_lifecycle_service import BatchLifecycleService
 
 SYSTEM_FIELDS = {
     'index_number': {'label': 'Index Number', 'required': True},
-    'full_name': {'label': 'Full Name', 'required': True},
+    'first_name': {'label': 'First Name', 'required': True},
+    'other_names': {'label': 'Other Names', 'required': False},
+    'last_name': {'label': 'Last Name', 'required': True},
     'gender': {'label': 'Gender', 'required': False},
     'institutional_email': {'label': 'Institutional Email', 'required': True},
     'programme': {'label': 'Programme', 'required': True},
@@ -43,9 +45,16 @@ KNOWN_ALIASES = {
         'index number', 'index no', 'index no.', 'reg. no.', 'reg no',
         'registration number', 'student id', 'student number', 'id number',
     ],
-    'full_name': [
-        'full name', 'student name', 'name', 'student full name',
-        'legal name', 'student\'s name',
+    'first_name': [
+        'first name', 'firstname', 'first', 'given name', 'student first name',
+    ],
+    'other_names': [
+        'other names', 'othername', 'other name', 'other', 'middle name',
+        'middle names', 'student other names',
+    ],
+    'last_name': [
+        'last name', 'lastname', 'last', 'surname', 'family name',
+        'student last name',
     ],
     'gender': ['gender', 'sex', 'student gender'],
     'institutional_email': [
@@ -315,7 +324,7 @@ class ImportService:
     # ── Legacy synchronous API (kept for backward compat) ─────────────────
 
     @transaction.atomic
-    def process_upload(self, *, batch, uploaded_by, file_name, raw_bytes):
+    def process_upload(self, *, batch, uploaded_by, file_name, raw_bytes, original_file_name=None):
         """DEPRECATED: Use the 4-step wizard with process_async instead."""
         if not self.lifecycle.can_edit_records(batch):
             raise ImportRejected(
@@ -329,6 +338,7 @@ class ImportService:
         import_batch = self.batch_repo.create(
             batch=batch, uploaded_by=uploaded_by,
             file_name=file_name or 'upload',
+            original_file_name=original_file_name or file_name or 'upload',
             total_rows=len(rows),
             status=ImportBatch.STATUS_PROCESSING,
         )
@@ -470,9 +480,16 @@ class ImportService:
 
         admission = self._parse_date(mapped.get('date_of_admission')) if mapped.get('date_of_admission') else None
 
+        first_name = mapped.get('first_name', '').strip()
+        other_names = mapped.get('other_names', '').strip()
+        last_name = mapped.get('last_name', '').strip()
+
         cleaned = {
             'index_number': mapped['index_number'],
-            'full_name': mapped['full_name'],
+            'first_name': first_name,
+            'other_names': other_names,
+            'last_name': last_name,
+            'full_name': ' '.join(filter(None, [first_name, other_names, last_name])),
             'gender': (mapped.get('gender') or '').upper(),
             'institutional_email': email,
             'programme': mapped['programme'],
@@ -481,6 +498,8 @@ class ImportService:
             'date_of_admission': admission,
             'faculty': None,
             'department': None,
+            'faculty_name': (mapped.get('faculty') or '').strip(),
+            'department_name': (mapped.get('department') or '').strip(),
             'extra_fields': {},
         }
 
@@ -493,39 +512,31 @@ class ImportService:
             err.field = 'class_of_degree'
             raise err
 
-        fac_code = mapped.get('faculty')
-        if fac_code:
-            faculty = faculty_by_code.get(fac_code)
-            if not faculty:
-                # Try by name if not a code
-                faculty = Faculty.objects.filter(name__iexact=fac_code).first()
+        # Faculty / department are free text. We best-effort link to an existing
+        # reference entity for reporting, but never reject an unknown value.
+        fac_text = cleaned['faculty_name']
+        if fac_text:
+            faculty = faculty_by_code.get(fac_text) or \
+                Faculty.objects.filter(name__iexact=fac_text).first()
             if faculty:
                 cleaned['faculty'] = faculty
-            else:
-                err = ValidationError(f"Unknown faculty: {fac_code}")
-                err.field = 'faculty'
-                raise err
 
-        dept_code = mapped.get('department')
-        if dept_code:
-            department = department_by_code.get(dept_code)
-            if not department:
-                department = Department.objects.filter(name__iexact=dept_code).first()
+        dept_text = cleaned['department_name']
+        if dept_text:
+            department = department_by_code.get(dept_text) or \
+                Department.objects.filter(name__iexact=dept_text).first()
             if department:
                 cleaned['department'] = department
                 if cleaned['faculty'] is None:
                     cleaned['faculty'] = department.faculty
-            else:
-                err = ValidationError(f"Unknown department: {dept_code}")
-                err.field = 'department'
-                raise err
+                    cleaned['faculty_name'] = cleaned['faculty_name'] or department.faculty.name
 
         return cleaned
 
     # ── Legacy row cleaning (normalised keys) ────────────────────────────
 
     def _clean_row_legacy(self, raw, faculty_by_code, department_by_code):
-        for col in ['index_number', 'full_name', 'institutional_email',
+        for col in ['index_number', 'first_name', 'last_name', 'institutional_email',
                     'programme', 'class_of_degree', 'date_of_completion']:
             if not raw.get(col):
                 err = ValidationError(f"Missing required value: {col}")
@@ -548,9 +559,16 @@ class ImportService:
 
         admission = self._parse_date(raw.get('date_of_admission')) if raw.get('date_of_admission') else None
 
+        first_name = raw.get('first_name', '').strip()
+        other_names = raw.get('other_names', '').strip()
+        last_name = raw.get('last_name', '').strip()
+
         cleaned = {
             'index_number': raw['index_number'],
-            'full_name': raw['full_name'],
+            'first_name': first_name,
+            'other_names': other_names,
+            'last_name': last_name,
+            'full_name': ' '.join(filter(None, [first_name, other_names, last_name])),
             'gender': (raw.get('gender') or '').upper(),
             'institutional_email': email,
             'programme': raw['programme'],
@@ -559,35 +577,36 @@ class ImportService:
             'date_of_admission': admission,
             'faculty': None,
             'department': None,
+            'faculty_name': (raw.get('faculty_code') or raw.get('faculty') or '').strip(),
+            'department_name': (raw.get('department_code') or raw.get('department') or '').strip(),
             'extra_fields': {},
         }
 
         if cleaned['gender'] and cleaned['gender'] not in {'MALE', 'FEMALE', 'OTHER'}:
             cleaned['gender'] = ''
 
-        fac_code = raw.get('faculty_code')
-        if fac_code:
-            faculty = faculty_by_code.get(fac_code)
-            if not faculty:
-                err = ValidationError(f"Unknown faculty code: {fac_code}")
-                err.field = 'faculty_code'
-                raise err
-            cleaned['faculty'] = faculty
+        # Free-text faculty / department: best-effort FK link, never reject.
+        fac_text = cleaned['faculty_name']
+        if fac_text:
+            faculty = faculty_by_code.get(fac_text) or \
+                Faculty.objects.filter(name__iexact=fac_text).first()
+            if faculty:
+                cleaned['faculty'] = faculty
 
-        dept_code = raw.get('department_code')
-        if dept_code:
-            department = department_by_code.get(dept_code)
-            if not department:
-                err = ValidationError(f"Unknown department code: {dept_code}")
-                err.field = 'department_code'
-                raise err
-            cleaned['department'] = department
-            if cleaned['faculty'] is None:
-                cleaned['faculty'] = department.faculty
+        dept_text = cleaned['department_name']
+        if dept_text:
+            department = department_by_code.get(dept_text) or \
+                Department.objects.filter(name__iexact=dept_text).first()
+            if department:
+                cleaned['department'] = department
+                if cleaned['faculty'] is None:
+                    cleaned['faculty'] = department.faculty
+                    cleaned['faculty_name'] = cleaned['faculty_name'] or department.faculty.name
 
-        known = {'index_number', 'full_name', 'institutional_email',
-                 'programme', 'class_of_degree', 'date_of_completion',
-                 'gender', 'date_of_admission', 'faculty_code', 'department_code'}
+        known = {'index_number', 'first_name', 'other_names', 'last_name',
+                 'institutional_email', 'programme', 'class_of_degree',
+                 'date_of_completion', 'gender', 'date_of_admission',
+                 'faculty_code', 'department_code'}
         extra = {k: v for k, v in raw.items() if k not in known and k}
         if extra:
             cleaned['extra_fields'] = extra

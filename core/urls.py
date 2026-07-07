@@ -3,11 +3,11 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     AuditTokenObtainPairView, CurrentUserView, PasswordChangeView,
     PasswordResetRequestView, VerifyResetTokenView, PasswordResetConfirmView,
-    AuthorisationReferenceListCreateView, AuthorisationReferenceDetailView,
     AccountListCreateView, AccountDetailView,
     AccountPermissionUpdateView, AccountDeactivateView, AccountReactivateView,
     AccountUnlockView, AccountRegenerateCredentialView,
     SADeactivationConfirmView, SetupAccountView, PermissionConstantsView,
+    ReAuthenticateView,
 )
 
 urlpatterns = [
@@ -19,11 +19,10 @@ urlpatterns = [
     path('password-reset/verify/', VerifyResetTokenView.as_view(), name='password_reset_verify'),
     path('password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('setup-account/', SetupAccountView.as_view(), name='setup_account'),
+    path('re-authenticate/', ReAuthenticateView.as_view(), name='re_authenticate'),
 ]
 
 admin_urlpatterns = [
-    path('authorisations/', AuthorisationReferenceListCreateView.as_view(), name='authorisation_list_create'),
-    path('authorisations/<int:pk>/', AuthorisationReferenceDetailView.as_view(), name='authorisation_detail'),
     path('accounts/', AccountListCreateView.as_view(), name='account_list_create'),
     path('accounts/<int:pk>/', AccountDetailView.as_view(), name='account_detail'),
     path('accounts/<int:pk>/permissions/', AccountPermissionUpdateView.as_view(), name='account_permissions'),

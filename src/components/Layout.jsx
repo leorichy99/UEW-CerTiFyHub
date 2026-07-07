@@ -19,7 +19,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   User,
-  Building2,
+  Folder,
   GraduationCap,
   ChevronDown,
   ChevronRight,
@@ -79,9 +79,8 @@ export default React.memo(function Layout({ children, showSearch = true }) {
     const path = window.location.pathname;
     const sections = {};
     if (path.startsWith('/admin/certificates') || path.startsWith('/admin/templates')) sections.certificates = true;
-    if (path.startsWith('/admin/accounts') || path.startsWith('/admin/authorisations')) sections.users = true;
+    if (path.startsWith('/admin/users')) sections.users = true;
     if (path.startsWith('/admin/analytics') || path.startsWith('/admin/audit')) sections.insights = true;
-    if (path.startsWith('/registry') || path.startsWith('/admin/batches') || path.startsWith('/settings/faculties')) sections.registry = true;
     if (path.startsWith('/admin/settings')) sections.settings = true;
     return sections;
   });
@@ -163,9 +162,8 @@ export default React.memo(function Layout({ children, showSearch = true }) {
     const path = location.pathname;
     const updates = {};
     if (path.startsWith('/admin/certificates') || path.startsWith('/admin/templates')) updates.certificates = true;
-    if (path.startsWith('/admin/accounts') || path.startsWith('/admin/authorisations')) updates.users = true;
+    if (path.startsWith('/admin/users')) updates.users = true;
     if (path.startsWith('/admin/analytics') || path.startsWith('/admin/audit')) updates.insights = true;
-    if (path.startsWith('/registry')) updates.registry = true;
     if (path.startsWith('/admin/settings')) updates.settings = true;
     if (Object.keys(updates).length > 0) {
       setExpandedSections(prev => ({ ...prev, ...updates }));
@@ -251,7 +249,7 @@ export default React.memo(function Layout({ children, showSearch = true }) {
               type: 'Account',
               label: account.first_name && account.last_name ? `${account.first_name} ${account.last_name}` : account.username,
               sublabel: account.email,
-              path: `/admin/accounts?search=${query}`,
+              path: `/admin/users?search=${query}`,
               id: account.id
             });
           });
@@ -259,21 +257,6 @@ export default React.memo(function Layout({ children, showSearch = true }) {
           // Ignore search errors
         }
 
-        // Search authorisations
-        try {
-          const authResponse = await api.get('/users/authorisations/', { params: { search: query, limit: 3 } });
-          authResponse.data.results?.forEach(auth => {
-            results.push({
-              type: 'Authorisation',
-              label: auth.title || auth.reference_number || 'Authorisation',
-              sublabel: auth.department_name,
-              path: `/admin/authorisations?search=${query}`,
-              id: auth.id
-            });
-          });
-        } catch (e) {
-          // Ignore search errors
-        }
 
         // Search faculties
         try {
@@ -349,8 +332,6 @@ export default React.memo(function Layout({ children, showSearch = true }) {
     "/admin/audit": "AUDIT LOGS",
     "/admin/settings": "SETTINGS",
     "/admin/invitations": "ADMIN INVITATIONS",
-    "/admin/accounts": "ACCOUNT MANAGEMENT",
-    "/admin/authorisations": "AUTHORISATION LETTERS",
     "/settings/faculties-departments": "FACULTIES & DEPARTMENTS",
   }), []);
 
@@ -533,10 +514,10 @@ export default React.memo(function Layout({ children, showSearch = true }) {
         {/* Desktop sidebar */}
         <aside className={`${sidebarWidth} hidden md:flex flex-col bg-(--color-bg-card) border-r border-(--color-border) transition-all duration-300 ease-in-out shrink-0`}>
           {/* Logo + Name + Collapse */}
-          <div className={`flex items-center border-b border-(--color-border) ${collapsed ? 'flex-col gap-2 py-3 px-2' : 'flex-row justify-between px-4 py-3'}`}>
+          <div className={`flex items-center border-b border-(--color-border) ${collapsed ? 'flex-col gap-2 py-3 px-2' : 'flex-row justify-between px-2 py-3'}`}>
             <div className={`flex items-center gap-2 ${collapsed ? 'justify-center' : ''}`}>
               <img src={uewLogo} alt="UEW" className="h-8 w-8" loading="lazy" decoding="async" />
-              {!collapsed && <span className="font-extrabold text-base lg:text-lg xl:text-xl text-(--color-text-primary)">CertifyHub</span>}
+              {!collapsed && <span className="font-extrabold text-base lg:text-md xl:text-md text-(--color-text-primary)">CertifyHub</span>}
             </div>
             <button
               onClick={() => setCollapsed((p) => !p)}
@@ -622,13 +603,7 @@ export default React.memo(function Layout({ children, showSearch = true }) {
                       {renderSubNavItem("/admin/templates", "Templates")}
                     </ul>
                   </AnimatedCollapse>
-                  {renderSectionHeader("Users", "users", Users)}
-                  <AnimatedCollapse expanded={!!expandedSections.users}>
-                    <ul className="pl-2 space-y-0.5">
-                      {renderSubNavItem("/admin/accounts", "Accounts")}
-                      {renderSubNavItem("/admin/authorisations", "Authorisations")}
-                    </ul>
-                  </AnimatedCollapse>
+                  {renderNavItem("/admin/users", Users, "User Management")}
                   {renderSectionHeader("Insights", "insights", BarChart3)}
                   <AnimatedCollapse expanded={!!expandedSections.insights}>
                     <ul className="pl-2 space-y-0.5">
@@ -636,12 +611,7 @@ export default React.memo(function Layout({ children, showSearch = true }) {
                       {renderSubNavItem("/admin/audit", "Audit Logs")}
                     </ul>
                   </AnimatedCollapse>
-                  {renderSectionHeader("Registry", "registry", Building2)}
-                  <AnimatedCollapse expanded={!!expandedSections.registry}>
-                    <ul className="pl-2 space-y-0.5">
-                      {renderSubNavItem("/admin/batches", "Certificate Batches")}
-                    </ul>
-                  </AnimatedCollapse>
+                  {renderNavItem("/admin/batches", Folder, "Certificate Batches")}
                   {renderSectionHeader("Settings", "settings", Settings)}
                   <AnimatedCollapse expanded={!!expandedSections.settings}>
                     <ul className="pl-2 space-y-0.5">
@@ -663,7 +633,7 @@ export default React.memo(function Layout({ children, showSearch = true }) {
                       </span>
                     )}
                     {collapsed && unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-0.5 text-[9px] font-extrabold text-white leading-none" />
+                      <span className="absolute top-1 right-3 flex h-3 min-w-3 items-center justify-center rounded-full bg-red-500 px-0.5 text-[9px] font-extrabold text-white leading-none" />
                     )}
                   </NavLink>
                 </SidebarTooltip>
@@ -788,13 +758,7 @@ export default React.memo(function Layout({ children, showSearch = true }) {
                   </ul>
                 </AnimatedCollapse>
 
-                <li><button onClick={() => toggleSection('users')} className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-(--color-text-primary) hover:bg-(--color-nav-hover-bg) transition-colors rounded-lg"><div className="flex items-center gap-3"><Users size={18} /> Users</div>{expandedSections.users ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></li>
-                <AnimatedCollapse expanded={!!expandedSections.users}>
-                  <ul className="pl-2 space-y-0.5">
-                    <li><NavLink to="/admin/accounts" onClick={() => setMobileOpen(false)} className={({isActive}) => `w-full flex items-center px-3 py-2 pl-6 text-sm font-medium rounded-lg transition-colors ${isActive ? "bg-(--color-nav-active-bg) text-(--color-nav-active-text)" : "text-(--color-text-secondary) hover:bg-(--color-nav-hover-bg) hover:text-(--color-nav-hover-text)"}`}>Accounts</NavLink></li>
-                    <li><NavLink to="/admin/authorisations" onClick={() => setMobileOpen(false)} className={({isActive}) => `w-full flex items-center px-3 py-2 pl-6 text-sm font-medium rounded-lg transition-colors ${isActive ? "bg-(--color-nav-active-bg) text-(--color-nav-active-text)" : "text-(--color-text-secondary) hover:bg-(--color-nav-hover-bg) hover:text-(--color-nav-hover-text)"}`}>Authorisations</NavLink></li>
-                  </ul>
-                </AnimatedCollapse>
+                <li><NavLink to="/admin/users" onClick={() => setMobileOpen(false)} className={({isActive}) => `w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors ${isActive ? "bg-(--color-nav-active-bg) text-(--color-nav-active-text)" : "text-(--color-text-primary) hover:bg-(--color-nav-hover-bg)"}`}><Users size={20} />User Management</NavLink></li>
 
                 <li><button onClick={() => toggleSection('insights')} className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-(--color-text-primary) hover:bg-(--color-nav-hover-bg) transition-colors rounded-lg"><div className="flex items-center gap-3"><BarChart3 size={18} /> Insights</div>{expandedSections.insights ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></li>
                 <AnimatedCollapse expanded={!!expandedSections.insights}>
@@ -804,12 +768,7 @@ export default React.memo(function Layout({ children, showSearch = true }) {
                   </ul>
                 </AnimatedCollapse>
 
-                <li><button onClick={() => toggleSection('registry')} className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-(--color-text-primary) hover:bg-(--color-nav-hover-bg) transition-colors rounded-lg"><div className="flex items-center gap-3"><Building2 size={18} /> Registry</div>{expandedSections.registry ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></li>
-                <AnimatedCollapse expanded={!!expandedSections.registry}>
-                  <ul className="pl-2 space-y-0.5">
-                    <li><NavLink to="/admin/batches" onClick={() => setMobileOpen(false)} className={({isActive}) => `w-full flex items-center px-3 py-2 pl-6 text-sm font-medium rounded-lg transition-colors ${isActive ? "bg-(--color-nav-active-bg) text-(--color-nav-active-text)" : "text-(--color-text-secondary) hover:bg-(--color-nav-hover-bg) hover:text-(--color-nav-hover-text)"}`}>Certificate Batches</NavLink></li>
-                  </ul>
-                </AnimatedCollapse>
+                <li><NavLink to="/admin/batches" onClick={() => setMobileOpen(false)} className={({isActive}) => `w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors ${isActive ? "bg-(--color-nav-active-bg) text-(--color-nav-active-text)" : "text-(--color-text-primary) hover:bg-(--color-nav-hover-bg)"}`}><Folder size={20} />Batches</NavLink></li>
 
                 <li><button onClick={() => toggleSection('settings')} className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-(--color-text-primary) hover:bg-(--color-nav-hover-bg) transition-colors rounded-lg"><div className="flex items-center gap-3"><Settings size={18} /> Settings</div>{expandedSections.settings ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></li>
                 <AnimatedCollapse expanded={!!expandedSections.settings}>

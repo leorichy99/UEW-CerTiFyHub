@@ -6,14 +6,6 @@ import {
 import { superAdminAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 
-const FILTERS = [
-  { id: "all", label: "All" },
-  { id: "issued", label: "Issued" },
-  { id: "revoked", label: "Revoked" },
-  { id: "imports", label: "Imports" },
-  { id: "admin_changes", label: "Admin Changes" },
-];
-
 function formatTimeAgo(ts) {
   const t = typeof ts === "string" ? new Date(ts).getTime() : ts;
   if (!Number.isFinite(t)) return "Recently";
@@ -134,7 +126,6 @@ export default function AdminActivityTimeline({ onViewAll }) {
   const shouldReduceMotion = useReducedMotion();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState("all");
   const [isLive, setIsLive] = useState(false);
   const eventSourceRef = useRef(null);
 
@@ -161,7 +152,6 @@ export default function AdminActivityTimeline({ onViewAll }) {
   // SSE connection for real-time audit log updates
   useEffect(() => {
     if (!useSSE || !isAuthenticated) {
-      // Close existing connection if SSE is disabled
       if (eventSourceRef.current) {
         eventSourceRef.current.abort();
         eventSourceRef.current = null;
@@ -169,22 +159,21 @@ export default function AdminActivityTimeline({ onViewAll }) {
       return;
     }
 
-    // Get token from localStorage
     const token = localStorage.getItem('accessToken');
     if (!token) return;
 
-    // Close existing connection
     if (eventSourceRef.current) {
       eventSourceRef.current.abort();
     }
 
-    // Create new AbortController for this connection
     const abortController = new AbortController();
     eventSourceRef.current = abortController;
 
     const url = `${import.meta.env.VITE_API_URL || ''}/api/notifications/sse/audit-logs/`;
-    
-    const processStream = async () => {
+    let reconnectTimer = null;
+    let reconnectDelay = 2000; // ms
+
+    const connect = async () => {
       try {
         const response = await fetch(url, {
           method: 'GET',
@@ -201,21 +190,19 @@ export default function AdminActivityTimeline({ onViewAll }) {
         }
 
         setIsLive(true);
+        reconnectDelay = 2000; // Reset on successful connection
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
 
         while (true) {
           const { done, value } = await reader.read();
-          
           if (done) break;
-          
+
           buffer += decoder.decode(value, { stream: true });
-          
-          // Process SSE messages
           const lines = buffer.split('\n');
-          buffer = lines.pop() || ''; // Keep incomplete line in buffer
-          
+          buffer = lines.pop() || '';
+
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               const data = line.slice(6);
@@ -223,10 +210,7 @@ export default function AdminActivityTimeline({ onViewAll }) {
                 try {
                   const parsed = JSON.parse(data);
                   const newLog = interpretLog(parsed);
-                  
-                  // Add new log to the beginning of the list
                   setLogs((prev) => {
-                    // Avoid duplicates by checking if log already exists
                     const exists = prev.some(log => log.id === newLog.id);
                     if (exists) return prev;
                     return [newLog, ...prev];
@@ -239,21 +223,29 @@ export default function AdminActivityTimeline({ onViewAll }) {
           }
         }
 
+        // Stream ended gracefully — reconnect
+        if (!abortController.signal.aborted) {
+          setIsLive(false);
+          reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+          reconnectTimer = setTimeout(connect, reconnectDelay);
+        }
       } catch (error) {
         setIsLive(false);
-        if (error.name === 'AbortError') {
+        if (error.name === 'AbortError' || abortController.signal.aborted) {
           console.log('SSE audit log connection aborted');
           return;
         }
-        
         console.error('SSE audit log connection error:', error);
         eventSourceRef.current = null;
+        reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+        reconnectTimer = setTimeout(connect, reconnectDelay);
       }
     };
 
-    processStream();
+    connect();
 
     return () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       if (eventSourceRef.current) {
         eventSourceRef.current.abort();
         eventSourceRef.current = null;
@@ -264,10 +256,7 @@ export default function AdminActivityTimeline({ onViewAll }) {
   // Initial fetch
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
-  const filtered = useMemo(() => {
-    if (activeFilter === "all") return logs;
-    return logs.filter((l) => l.actionType === activeFilter);
-  }, [logs, activeFilter]);
+  const filtered = useMemo(() => logs.slice(0, 5), [logs]);
 
   const grouped = useMemo(() => {
     const map = {};
@@ -298,26 +287,6 @@ export default function AdminActivityTimeline({ onViewAll }) {
           >
             View all
           </button>
-        </div>
-      </div>
-
-      {/* Sticky Filter Bar - Segmented Control */}
-      <div className="sticky top-[61px] z-1 border-b border-slate-100 px-5 py-2.5 bg-white/95">
-        <div className="inline-flex rounded-lg bg-slate-100/70 p-0.5">
-          {FILTERS.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setActiveFilter(f.id)}
-              className={`relative rounded-md px-3 py-1 text-[11px] font-medium transition-all duration-150 ${
-                activeFilter === f.id
-                  ? "bg-white text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.06)]"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-              aria-label={`Filter by ${f.label}`}
-            >
-              {f.label}
-            </button>
-          ))}
         </div>
       </div>
 

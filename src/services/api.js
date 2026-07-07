@@ -58,6 +58,12 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     const method = response.config.method;
+    // Reset idle timer on any successful API call
+    if (typeof window !== 'undefined') {
+      try {
+        window.dispatchEvent(new CustomEvent('api:activity'));
+      } catch (_) { /* ignore */ }
+    }
     // Invalidate related cache entries after any mutation
     if (method && method !== 'get') {
       const url = response.config.url || '';
@@ -160,6 +166,7 @@ export const authAPI = {
   passwordResetConfirm: (token, email, new_password) => api.post("/auth/password-reset/confirm/", { token, email, new_password }),
   // First-login account setup (public)
   setupAccount: (data) => api.post("/auth/setup-account/", data),
+  reAuthenticate: (password) => api.post("/auth/re-authenticate/", { password }),
 };
 
 // Certificate API calls
@@ -247,22 +254,6 @@ export const templateAPI = {
   lock: (id) => api.post(`/templates/${id}/lock/`),
   unlock: (id) => api.post(`/templates/${id}/unlock/`),
   getSystemFonts: () => api.get("/templates/system-fonts/"),
-};
-
-// ── Authorisation References (Super Admin) ─────────────────────────────
-export const authorisationAPI = {
-  getAll: (params) => api.get("/users/authorisations/", { params }),
-  getOne: (id) => api.get(`/users/authorisations/${id}/`),
-  create: (data) => {
-    const formData = new FormData();
-    Object.entries(data).forEach(([key, value]) => {
-      if (value !== null && value !== undefined) formData.append(key, value);
-    });
-    return api.post("/users/authorisations/", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-  },
-  update: (id, data) => api.patch(`/users/authorisations/${id}/`, data),
 };
 
 // ── Account Provisioning (Super Admin) ──────────────────────────────────

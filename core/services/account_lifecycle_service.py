@@ -30,13 +30,13 @@ class AccountLifecycleService:
         self.user_profile_repo = UserProfileRepository()
         self.auth_ref_repo = AuthorisationReferenceRepository()
     
-    def provision_account(self, email, username, first_name, last_name, 
-                         role, staff_id, department, account_type, 
-                         access_duration, access_end_date, 
-                         reference_number, logged_by):
+    def provision_account(self, email, username, first_name, last_name,
+                         role, staff_id, department, account_type,
+                         access_duration, access_end_date,
+                         reference_number=None, logged_by=None):
         """
         Provision a new account with the given details.
-        
+
         Args:
             email: User email
             username: Username
@@ -48,17 +48,18 @@ class AccountLifecycleService:
             account_type: Account type (STAFF, EXTERNAL_COLLABORATOR)
             access_duration: Access duration (permanent, time_limited)
             access_end_date: End date for time-limited access
-            reference_number: Authorisation reference number
+            reference_number: Optional authorisation reference number
             logged_by: User who is logging the account creation
-        
+
         Returns:
             Created UserProfile instance
         """
-        # Validate authorisation reference
-        auth_ref = self.auth_ref_repo.get_by_reference_number(reference_number)
-        if not auth_ref or auth_ref.status != 'pending':
-            raise ValueError("Invalid or used authorisation reference")
-        
+        auth_ref = None
+        if reference_number:
+            auth_ref = self.auth_ref_repo.get_by_reference_number(reference_number)
+            if not auth_ref or auth_ref.status != 'pending':
+                raise ValueError("Invalid or used authorisation reference")
+
         # Create user account
         user = User.objects.create_user(
             username=username,
@@ -67,7 +68,7 @@ class AccountLifecycleService:
             last_name=last_name,
             is_active=False,  # Inactive until credential is set
         )
-        
+
         # Create user profile
         profile = self.user_profile_repo.create_profile(
             user=user,
@@ -80,16 +81,17 @@ class AccountLifecycleService:
             letter_reference=auth_ref,
             is_legacy=False,
         )
-        
-        # Mark reference as used
-        self.auth_ref_repo.mark_as_used(auth_ref, user)
-        
+
+        # Mark reference as used if provided
+        if auth_ref:
+            self.auth_ref_repo.mark_as_used(auth_ref, user)
+
         # Generate and set credential token
         credential_token = self._generate_credential_token()
         token_hash = self._hash_token(credential_token)
         expires_at = timezone.now() + timedelta(hours=24)
         self.user_profile_repo.set_credential_token(profile, token_hash, expires_at)
-        
+
         return profile, credential_token
     
     def generate_credential_for_existing_account(self, user_id):

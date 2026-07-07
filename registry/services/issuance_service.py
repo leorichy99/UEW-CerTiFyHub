@@ -23,6 +23,7 @@ from django.utils import timezone
 from registry.models import (
     IssuanceBatch, StudentRecord, EmailDeliveryLog,
 )
+from analytics.utils import log_audit
 from registry.services.batch_lifecycle_service import BatchLifecycleService
 from certificates.models import Certificate
 
@@ -157,6 +158,8 @@ class IssuanceService:
         try:
             cert = Certificate.objects.create(
                 student_record=record,
+                issuance_batch=record.batch,
+                issuance_run=record.last_issuance_run,
                 template=record.batch.certificate_template,
                 student_name=record.full_name,
                 degree_type=_map_degree_type(record.programme),
@@ -164,6 +167,13 @@ class IssuanceService:
                 program=record.programme,
                 date_awarded=timezone.now().date(),
                 created_by=actor,
+            )
+            log_audit(
+                request=None, user=actor,
+                action='Issued certificate',
+                target=f'{cert.student_name} - {cert.certificate_number}',
+                details=f'Certificate {cert.certificate_number} issued via batch {record.batch.name}',
+                category='admin',
             )
             record.issuance_status = StudentRecord.ISSUE_ISSUED
             record.issued_at = timezone.now()

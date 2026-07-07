@@ -41,9 +41,12 @@ export default function TemplateEditorPage() {
 
   const handleSave = async (templateData, opts = {}) => {
     const prevVersion = Number(template?.metadata?.version ?? 1);
-    const nextVersion = template?.id
+    // Only bump version on explicit (non-silent) user saves.
+    // Auto-save and font-normalization silent saves keep the current version.
+    const shouldBumpVersion = !opts.silent && template?.id;
+    const nextVersion = shouldBumpVersion
       ? Math.round((prevVersion + 0.1) * 10) / 10
-      : 1;
+      : prevVersion;
 
     const payload = {
       name:

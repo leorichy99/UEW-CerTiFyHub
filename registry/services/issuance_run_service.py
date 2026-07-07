@@ -131,6 +131,9 @@ class IssuanceRunService:
             issuance_status=StudentRecord.ISSUE_QUEUED,
             last_issuance_run=locked,
         )
+        # Refresh in-memory objects so _issue_one sees the updated FK.
+        for r in records:
+            r.refresh_from_db(fields=['issuance_status', 'last_issuance_run'])
 
         succeeded = 0
         failed = 0

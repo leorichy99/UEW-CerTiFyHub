@@ -102,6 +102,10 @@ class IssuanceBatch(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
+    reference_name = models.CharField(
+        max_length=32, unique=True, blank=True,
+        help_text='Human-friendly reference, auto-generated as BATCH-{year}-{NNNN}.',
+    )
     year = models.PositiveIntegerField(
         blank=True,
         help_text='Calendar year this batch belongs to, for archival/reporting grouping. Auto-populated from confirmation_deadline if omitted.',
@@ -168,7 +172,28 @@ class IssuanceBatch(models.Model):
     def save(self, *args, **kwargs):
         if not self.year and self.confirmation_deadline:
             self.year = self.confirmation_deadline.year
+        if not self.reference_name and self.year:
+            self.reference_name = self._generate_reference_name(self.year)
         super().save(*args, **kwargs)
+
+    @staticmethod
+    def _generate_reference_name(year):
+        """Return the next BATCH-{year}-{NNNN} reference for the given year."""
+        prefix = f'BATCH-{year}-'
+        last = (
+            IssuanceBatch.objects
+            .filter(reference_name__startswith=prefix)
+            .order_by('-reference_name')
+            .values_list('reference_name', flat=True)
+            .first()
+        )
+        next_seq = 1
+        if last:
+            try:
+                next_seq = int(last.rsplit('-', 1)[1]) + 1
+            except (ValueError, IndexError):
+                next_seq = 1
+        return f'{prefix}{next_seq:04d}'
 
     # ── Aggregated counts (computed via queries; cached here for hot reads) ──
     def counts(self):
@@ -211,6 +236,7 @@ class ImportBatch(models.Model):
     )
     uploaded_at = models.DateTimeField(auto_now_add=True)
     file_name = models.CharField(max_length=512)
+    original_file_name = models.CharField(max_length=512, blank=True, default="")
 
     total_rows = models.PositiveIntegerField(default=0)
     success_count = models.PositiveIntegerField(default=0)
@@ -305,7 +331,11 @@ class StudentRecord(models.Model):
     )
 
     index_number = models.CharField(max_length=50)
-    full_name = models.CharField(max_length=255)
+    full_name = models.CharField(max_length=255, blank=True)
+    first_name = models.CharField(max_length=100, blank=True)
+    other_names = models.CharField(max_length=100, blank=True)
+    last_name = models.CharField(max_length=100, blank=True)
+    name_order = models.JSONField(default=list, blank=True)
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True)
     institutional_email = models.EmailField()
     programme = models.CharField(max_length=255)
@@ -320,6 +350,11 @@ class StudentRecord(models.Model):
         Department, on_delete=models.PROTECT, null=True, blank=True,
         related_name='student_records',
     )
+    # Free-text faculty / department captured directly from the uploaded file.
+    # These do not require pre-created Faculty/Department reference entities and
+    # are what issuance-run filtering matches against.
+    faculty_name = models.CharField(max_length=200, blank=True, db_index=True)
+    department_name = models.CharField(max_length=200, blank=True, db_index=True)
     extra_fields = models.JSONField(
         default=dict, blank=True,
         help_text='Template-specific fields keyed by name.',
@@ -367,6 +402,24 @@ class StudentRecord(models.Model):
             models.Index(fields=['batch', 'confirmation_status']),
             models.Index(fields=['batch', 'issuance_status']),
         ]
+
+    def get_full_name(self):
+        """Assemble full_name from components in the stored order."""
+        components = {
+            'first_name': self.first_name or '',
+            'other_names': self.other_names or '',
+            'last_name': self.last_name or '',
+        }
+        if self.name_order:
+            parts = [components[k] for k in self.name_order if components.get(k)]
+        else:
+            parts = [components['first_name'], components['other_names'], components['last_name']]
+        return ' '.join(filter(None, parts))
+
+    def save(self, *args, **kwargs):
+        if self.first_name or self.last_name:
+            self.full_name = self.get_full_name()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.index_number} - {self.full_name}"
@@ -416,6 +469,26 @@ class ConfirmationAuditLog(models.Model):
             models.Index(fields=['batch', 'event_type']),
             models.Index(fields=['student_record', 'timestamp']),
         ]
+
+
+class DisputeAttachment(models.Model):
+    """
+    Stores uploaded files (ID proof, etc.) submitted with student disputes.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    record = models.ForeignKey(
+        StudentRecord, on_delete=models.CASCADE,
+        related_name='dispute_attachments',
+    )
+    file = models.FileField(upload_to='dispute_proofs/')
+    file_type = models.CharField(max_length=50)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f"{self.record.index_number} - {self.file.name}"
 
 
 class EmailDeliveryLog(models.Model):

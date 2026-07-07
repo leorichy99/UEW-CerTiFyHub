@@ -175,7 +175,7 @@ export default function SuperAdminTemplatesPage() {
 
   return (
     <div className="space-y-6">
-      <PageTitle>All Templates</PageTitle>
+      <PageTitle className="mb-5">All Templates</PageTitle>
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <SummaryStatCard title="Total Templates" value={stats.total} Icon={LayoutGrid} tone="info" />

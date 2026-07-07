@@ -1210,6 +1210,7 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
   // ─── Unsaved changes detection ───────────────────────────────────
   useEffect(() => {
     if (!savedSnapshotRef.current) return;
+    if (ignoreHistoryRef.current) return; // skip during font normalization / bulk ops
     const current = getCurrentSnapshot();
     const changed = current !== savedSnapshotRef.current;
     setHasUnsavedChanges(changed);
@@ -1231,8 +1232,9 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
   // ─── Normalize auto-sized text widths on load ────────────────────
   // Existing templates may carry stale/default `width` values that make the
   // center anchor (x + width/2) inaccurate. After fonts are ready, re-measure
-  // the natural width of non-resized text and persist it via a silent save so
-  // existing templates self-heal without a manual re-save.
+  // the natural width of non-resized text and update local state so the
+  // editor renders correctly. We do NOT silently persist here to avoid baking
+  // in wrong measurements when fonts haven't loaded yet on the first entry.
   const normalizedPresetsRef = useRef(new Set());
   useEffect(() => {
     if (!initialData) return;
@@ -1241,19 +1243,40 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
     let cancelled = false;
 
     const run = async () => {
+      const current = elementsByPresetRef.current[presetId] || [];
+      if (!current.length) return;
+
+      // Collect and explicitly load every font family used in this preset.
+      // Canvas text rendering (Konva / 2D context) may still use fallback
+      // metrics even after document.fonts.ready, so we force-load each one.
+      const fontFamilies = [...new Set(
+        current
+          .filter((el) => el.type === "text" && el.fontFamily)
+          .map((el) => `${el.fontSize || 16}px "${el.fontFamily}"`)
+      )];
+      if (document.fonts && fontFamilies.length) {
+        await Promise.all(
+          fontFamilies.map((spec) =>
+            document.fonts.load(spec).catch(() => {})
+          )
+        );
+      }
+
       try {
         if (document.fonts?.ready) await document.fonts.ready;
       } catch (_) {
         // fonts API unavailable — proceed with current metrics
       }
+
       // Wait two frames so Konva re-renders text with the loaded fonts.
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       if (cancelled) return;
+
+      // Force a stage draw so all text nodes have been laid out with the
+      // correct fonts before we measure their bounding boxes.
       const stage = stageRef.current;
       if (!stage) return;
-
-      const current = elementsByPresetRef.current[presetId] || [];
-      if (!current.length) return;
+      stage.draw();
 
       let changed = false;
       const next = current.map((el) => {
@@ -1276,32 +1299,13 @@ export function EditorProvider({ initialData, onSave, onClose, toast, children }
         ignoreHistoryRef.current = false;
       }, 0);
 
-      // Persist silently so the corrected widths reach the backend renderer.
-      if (onSave) {
-        const finalByPreset = { ...elementsByPresetRef.current, [presetId]: next };
-        const payload = {
-          title: templateTitle,
-          canvas: {
-            presetId,
-            width: canvasWidth,
-            height: canvasHeight,
-            background: canvasBackground,
-          },
-          elements: next,
-          elements_by_preset: finalByPreset,
-          background_by_preset: backgroundByPreset,
-          guides,
-        };
-        onSave(payload, { silent: true })
-          .then(() => {
-            savedSnapshotRef.current = getCurrentSnapshot({ elementsByPreset: finalByPreset });
-            setHasUnsavedChanges(false);
-            setLastAutoSavedAt(Date.now());
-          })
-          .catch(() => {
-            // Silent fail — unsaved indicator remains; user can save manually.
-          });
-      }
+      // Do NOT silently persist to the backend here — font metrics on the
+      // first entry after login may still be wrong.  However we MUST update
+      // the saved snapshot so the unsaved-changes detector treats the
+      // normalized widths as the new baseline, not as pending edits.
+      setTimeout(() => {
+        updateSavedSnapshot();
+      }, 0);
     };
 
     run();

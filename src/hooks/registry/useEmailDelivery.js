@@ -11,8 +11,9 @@ export function useEmailDeliverySummary(batchId) {
   });
 }
 
-export function useEmailDeliveryFailures(batchId, { status = null } = {}) {
-  const params = status ? { status } : undefined;
+export function useEmailDeliveryFailures(batchId, { status = null, page = 1, pageSize = 50 } = {}) {
+  const params = { page, page_size: pageSize };
+  if (status) params.status = status;
   return useApiQuery(`/registry/batches/${batchId}/email-delivery-failures/`, {
     enabled: !!batchId,
     params,
@@ -21,9 +22,9 @@ export function useEmailDeliveryFailures(batchId, { status = null } = {}) {
 
 // ── Mutations ────────────────────────────────────────────────────────────────
 
-export function useResendConfirmation(batchId, recordId) {
+export function useResendConfirmation(batchId) {
   return useApiMutation(
-    `/registry/batches/${batchId}/records/${recordId}/resend-confirmation/`,
+    (recordId) => `/registry/batches/${batchId}/records/${recordId}/resend-confirmation/`,
     { method: "POST" }
   );
 }

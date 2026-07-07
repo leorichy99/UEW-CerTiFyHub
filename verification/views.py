@@ -39,9 +39,14 @@ class VerifyCertificateView(generics.RetrieveAPIView):
                 related_object_id=str(instance.id),
                 related_object_type='certificate',
             )
+            # Return minimal data for privacy
             return Response({
                 'status': 'REVOKED',
-                'message': 'This certificate has been revoked.'
+                'message': 'This certificate has been revoked.',
+                'certificate': {
+                    'student_name': instance.student_name,
+                    'certificate_number': instance.certificate_number,
+                }
             }, status=status.HTTP_200_OK)
         
         log_audit(request=request, user=None, action='Verified certificate',

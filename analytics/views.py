@@ -10,6 +10,7 @@ from django.db.models import Count, Avg, F, Q
 from django.db.models.functions import TruncDate
 from datetime import timedelta
 from django.utils import timezone
+from collections import Counter
 
 from .models import AuditLog
 from core.permissions import IsSuperAdmin, IsActiveAccount, HasPermission, IsAdminOrSuperAdmin
@@ -101,7 +102,7 @@ class SuperAdminStatsView(APIView):
             AuditLog.objects.filter(category='admin')
             .exclude(action__icontains='notification')
             .exclude(action__icontains='login')
-            .order_by('-timestamp')[:10]
+            .order_by('-timestamp')[:5]
             .values('id', 'username', 'action', 'target', 'timestamp', 'category', 'status')
         )
 
@@ -210,12 +211,29 @@ class GlobalAnalyticsView(APIView):
             .values_list('program', 'issued')
         )
         # Verification counts per program
-        verif_by_program = dict(
-            AuditLog.objects.filter(category='verification', timestamp__gte=start_date)
-            .values('target')
-            .annotate(count=Count('id'))
-            .values_list('target', 'count')
+        # AuditLog.target stores "Student Name - CERT-123", so we extract the
+        # certificate number, join to Certificate, then aggregate by program.
+        verif_targets = AuditLog.objects.filter(
+            category='verification', timestamp__gte=start_date
+        ).values_list('target', flat=True)
+
+        cert_counts = Counter()
+        for target in verif_targets:
+            if ' - ' in target:
+                cert_num = target.rsplit(' - ', 1)[-1].strip()
+                cert_counts[cert_num] += 1
+
+        cert_programs = dict(
+            Certificate.objects.filter(
+                certificate_number__in=list(cert_counts.keys())
+            ).values_list('certificate_number', 'program')
         )
+
+        verif_by_program = Counter()
+        for cert_num, count in cert_counts.items():
+            prog = cert_programs.get(cert_num)
+            if prog:
+                verif_by_program[prog] += count
 
         department_breakdown = []
         for item in current_by_program:
@@ -285,9 +303,9 @@ class AuditLogsView(APIView):
 
         qs = AuditLog.objects.all()
 
-        # Exclude notification and login noise from audit logs
-        qs = qs.exclude(category='login')
-        qs = qs.exclude(action__icontains='notification')
+        # Exclude notification noise unless explicitly filtering for it
+        if category != 'all' or not search or 'notification' not in search.lower():
+            qs = qs.exclude(action__icontains='notification')
 
         if category and category != 'all':
             qs = qs.filter(category=category)

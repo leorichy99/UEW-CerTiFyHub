@@ -6,6 +6,7 @@ from .import_service import ImportService, ImportRejected
 from .publication_service import PublicationService, PublicationError
 from .confirmation_service import (
     ConfirmationService, TokenInvalid, TokenExpired, BatchNotAccepting,
+    AlreadyFinalised,
 )
 from .dispute_service import DisputeService, DisputeResolutionError
 from .issuance_service import IssuanceService, IssuanceError
@@ -18,6 +19,7 @@ __all__ = [
     'ImportService', 'ImportRejected',
     'PublicationService', 'PublicationError',
     'ConfirmationService', 'TokenInvalid', 'TokenExpired', 'BatchNotAccepting',
+    'AlreadyFinalised',
     'DisputeService', 'DisputeResolutionError',
     'IssuanceService', 'IssuanceError',
     'IssuanceRunService',

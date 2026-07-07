@@ -18,11 +18,10 @@ from django.utils import timezone
 
 from .models import (
     UserProfile, PasswordResetToken,
-    AuthorisationReference, LoginAttemptTracker, SuperAdminDeactivationRequest,
+    LoginAttemptTracker, SuperAdminDeactivationRequest,
 )
 from .serializers import (
     UserSerializer, AccountDetailSerializer,
-    AuthorisationReferenceSerializer, AuthorisationReferenceCreateSerializer,
     AccountProvisionSerializer, PermissionUpdateSerializer,
     SetupAccountSerializer, ProfileUpdateSerializer, PasswordChangeSerializer,
 )
@@ -213,93 +212,18 @@ class PasswordChangeView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  AUTHORISATION REFERENCE MANAGEMENT  (Super Admin only)
-# ═══════════════════════════════════════════════════════════════════════════
-
-class AuthorisationReferenceListCreateView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsSuperAdmin]
-    parser_classes = [MultiPartParser, FormParser, JSONParser]
-
-    def get(self, request):
-        qs = AuthorisationReference.objects.select_related('logged_by', 'linked_account').all()
-        status_filter = request.query_params.get('status')
-        if status_filter:
-            qs = qs.filter(status=status_filter)
-        purpose_filter = request.query_params.get('purpose')
-        if purpose_filter:
-            qs = qs.filter(purpose=purpose_filter)
-        search = request.query_params.get('search', '').strip()
-        if search:
-            qs = qs.filter(
-                Q(reference_number__icontains=search) |
-                Q(requester_name__icontains=search) |
-                Q(requester_staff_id__icontains=search)
-            )
-        serializer = AuthorisationReferenceSerializer(qs, many=True)
-        return Response(serializer.data)
+class ReAuthenticateView(APIView):
+    """Re-authenticate the current user with their password and issue a fresh access token."""
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        serializer = AuthorisationReferenceCreateSerializer(data=request.data)
-        if serializer.is_valid():
-            ref = serializer.save(logged_by=request.user)
-            log_audit(
-                request=request, user=request.user,
-                action='Authorisation reference logged',
-                target=ref.reference_number,
-                details=f'Requester: {ref.requester_name} (Staff ID: {ref.requester_staff_id})',
-                status='success', category='provisioning',
-                event_type='authorisation.logged',
-                letter_reference=ref.reference_number,
-            )
-            return Response(
-                AuthorisationReferenceSerializer(ref).data,
-                status=status.HTTP_201_CREATED,
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        password = request.data.get('password', '')
+        if not request.user.check_password(password):
+            return Response({'detail': 'Invalid password.'}, status=status.HTTP_401_UNAUTHORIZED)
 
-
-class AuthorisationReferenceDetailView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsSuperAdmin]
-
-    def get(self, request, pk):
-        try:
-            ref = AuthorisationReference.objects.select_related(
-                'logged_by', 'linked_account'
-            ).get(pk=pk)
-        except AuthorisationReference.DoesNotExist:
-            return Response({'error': 'Reference not found.'}, status=status.HTTP_404_NOT_FOUND)
-        return Response(AuthorisationReferenceSerializer(ref).data)
-
-    def patch(self, request, pk):
-        """Cancel a pending authorisation reference."""
-        try:
-            ref = AuthorisationReference.objects.get(pk=pk)
-        except AuthorisationReference.DoesNotExist:
-            return Response({'error': 'Reference not found.'}, status=status.HTTP_404_NOT_FOUND)
-
-        if ref.status != 'pending':
-            return Response(
-                {'error': f'Cannot modify reference with status "{ref.status}".'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        new_status = request.data.get('status', request.data.get('provisioning_status'))
-        if new_status == 'cancelled':
-            ref.status = 'cancelled'
-            ref.save(update_fields=['status'])
-            log_audit(
-                request=request, user=request.user,
-                action='Authorisation reference cancelled',
-                target=ref.reference_number,
-                details=f'Requester: {ref.requester_name}',
-                status='success', category='provisioning',
-                event_type='authorisation.cancelled',
-                letter_reference=ref.reference_number,
-            )
-            return Response(AuthorisationReferenceSerializer(ref).data)
-
-        return Response({'error': 'Only cancellation is allowed.'}, status=status.HTTP_400_BAD_REQUEST)
+        from rest_framework_simplejwt.tokens import RefreshToken
+        token = RefreshToken.for_user(request.user)
+        return Response({'access': str(token.access_token)})
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -368,7 +292,6 @@ class AccountListCreateView(APIView):
             account_type=data['account_type'],
             access_duration=data['access_duration'],
             access_end_date=data.get('access_end_date'),
-            reference_number=data['letter_reference_number'],
             logged_by=request.user
         )
 
@@ -378,7 +301,6 @@ class AccountListCreateView(APIView):
             'date': timezone.now().isoformat(),
             'action': 'initial_grant',
             'permissions_changed': {k: v for k, v in data['permissions'].items() if v},
-            'letter_ref': data['letter_reference_number'],
             'changed_by': request.user.username,
         }]
         profile.save()
@@ -395,7 +317,6 @@ class AccountListCreateView(APIView):
                     f"Permissions: {json.dumps({k: v for k, v in data['permissions'].items() if v})}",
             status='success', category='provisioning',
             event_type='account.created',
-            letter_reference=data['letter_reference_number'],
         )
 
         if email_sent:
@@ -406,14 +327,13 @@ class AccountListCreateView(APIView):
                 details=f'One-time setup link sent (expires in 24h)',
                 status='success', category='credentials',
                 event_type='credentials.delivered',
-                letter_reference=data['letter_reference_number'],
             )
 
         # Notify
         notify(
             role_target='SUPER_ADMIN',
             title='New Account Provisioned',
-            message=f"{data['full_name']} ({data['email']}) provisioned by {request.user.username}, ref: {data['letter_reference_number']}",
+            message=f"{data['full_name']} ({data['email']}) provisioned by {request.user.username}",
             notification_type='admin_created',
             priority='success',
             related_object_id=str(profile.user.id),
@@ -441,7 +361,7 @@ class AccountDetailView(APIView):
 
 
 class AccountPermissionUpdateView(APIView):
-    """Update permissions for an account (requires letter reference for additions)."""
+    """Update permissions for an account."""
     permission_classes = [permissions.IsAuthenticated, IsSuperAdmin]
 
     def patch(self, request, pk):
@@ -474,7 +394,6 @@ class AccountPermissionUpdateView(APIView):
             'date': timezone.now().isoformat(),
             'action': 'permission_update',
             'permissions_changed': changes,
-            'letter_ref': data.get('letter_reference_number', ''),
             'reason': data.get('reason', ''),
             'changed_by': request.user.username,
         }
@@ -483,18 +402,6 @@ class AccountPermissionUpdateView(APIView):
         profile.permission_history = history
         profile.save(update_fields=['permissions', 'permission_history'])
 
-        # Mark the authorisation reference as used and link it to this account
-        ref_number = data.get('letter_reference_number', '')
-        if ref_number:
-            try:
-                ref = AuthorisationReference.objects.get(reference_number=ref_number)
-                if ref.status == 'pending':
-                    ref.status = 'used'
-                    ref.linked_account = target_user
-                    ref.save(update_fields=['status', 'linked_account'])
-            except AuthorisationReference.DoesNotExist:
-                pass
-
         log_audit(
             request=request, user=request.user,
             action='Permissions updated',
@@ -502,7 +409,6 @@ class AccountPermissionUpdateView(APIView):
             details=f'Changes: {json.dumps(changes)}',
             status='success', category='permissions',
             event_type='permission.updated',
-            letter_reference=ref_number,
         )
 
         return Response(AccountDetailSerializer(target_user).data)

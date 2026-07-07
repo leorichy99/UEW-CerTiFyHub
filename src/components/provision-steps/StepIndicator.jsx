@@ -2,9 +2,8 @@ import { Check } from "lucide-react";
 
 const STEPS = [
   { num: 1, label: "Identity" },
-  { num: 2, label: "Authorisation" },
-  { num: 3, label: "Permissions" },
-  { num: 4, label: "Review" },
+  { num: 2, label: "Permissions" },
+  { num: 3, label: "Review" },
 ];
 
 export default function StepIndicator({ currentStep, completedSteps, onStepClick }) {
@@ -69,7 +68,7 @@ export default function StepIndicator({ currentStep, completedSteps, onStepClick
       {/* Mobile */}
       <div className="sm:hidden flex items-center justify-center gap-3">
         <span className="text-sm font-semibold text-blue-700">
-          Step {currentStep} of 4
+          Step {currentStep} of 3
         </span>
         <span className="text-sm text-slate-500">
           — {STEPS[currentStep - 1].label}

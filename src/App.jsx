@@ -20,6 +20,8 @@ import { ToastProvider, useToast } from "./components/ToastContainer";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
+import SessionLockModal from "./components/SessionLockModal";
+import { useSessionLockout } from "./hooks/useSessionLockout";
 
 const Login = lazy(() => import("./pages/Login"));
 const VerificationPage = lazy(() => import("./pages/VerificationPage"));
@@ -35,7 +37,6 @@ const BatchesListPage = lazy(() => import("./pages/BatchesListPage"));
 const TemplatesPage = lazy(() => import("./pages/TemplatesPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const AccountManagementPage = lazy(() => import("./pages/AccountManagementPage"));
-const AuthorisationLettersPage = lazy(() => import("./pages/AuthorisationLettersPage"));
 const SuperAdminCertificatesPage = lazy(() => import("./pages/SuperAdminCertificatesPage"));
 const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
 const SystemSettings = lazy(() => import("./pages/SystemSettings"));
@@ -93,7 +94,7 @@ const ROUTE_TITLES = [
   { path: "/admin/dashboard", title: "Admin Dashboard" },
   { path: "/admin/certificates", title: "All Certificates" },
   { path: "/admin/templates", title: "All Templates" },
-  { path: "/admin/users", title: "Account Management" },
+  { path: "/admin/users", title: "User Management" },
   { path: "/admin/settings", title: "System Settings" },
   { path: "/admin/audit", title: "Audit Logs" },
   { path: "/admin/analytics", title: "Analytics" },
@@ -102,7 +103,6 @@ const ROUTE_TITLES = [
   { path: "/admin/batches/:id", title: "Batch" },
   { path: "/registry/faculties-departments", title: "Faculties & Departments" },
   { path: "/settings/faculties-departments", title: "Faculties & Departments" },
-  { path: "/authorisation-letters", title: "Authorisation Letters" },
 ];
 
 function getTitleForPath(pathname) {
@@ -301,7 +301,10 @@ function AnimatedRoutes() {
       <Route path="/admin/congregations" element={<Navigate to="/admin/batches" replace />} />
       <Route path="/admin/congregations/:id" element={<Navigate to="/admin/batches" replace />} />
       <Route path="/admin/congregation-templates" element={<Navigate to="/admin/batches" replace />} />
-      <Route path="/registry/congregations/:congregation_id/sessions/:session_id" element={<Navigate to="/admin/batches/:session_id" replace />} />
+      <Route
+        path="/registry/congregations/:congregation_id/sessions/:session_id"
+        element={<Navigate to="/admin/batches" replace />}
+      />
 
       {/* Legacy route redirects */}
       <Route path="/students" element={<Navigate to="/" replace />} />
@@ -346,9 +349,9 @@ function AnimatedRoutes() {
         }
       />
 
-      {/* New provisioning pages */}
+      {/* User Management */}
       <Route
-        path="/admin/accounts"
+        path="/admin/users"
         element={
           <ProtectedRoute roles={["SUPER_ADMIN"]}>
             <DashboardLayout>
@@ -362,23 +365,8 @@ function AnimatedRoutes() {
         }
       />
 
-      <Route
-        path="/admin/authorisations"
-        element={
-          <ProtectedRoute roles={["SUPER_ADMIN"]}>
-            <DashboardLayout>
-              <RouteShell fallback={<div className="min-h-[60vh] flex items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-              </div>}>
-                <AuthorisationLettersPage />
-              </RouteShell>
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-
       {/* Legacy routes — redirect to new equivalents */}
-      <Route path="/admin/users" element={<Navigate to="/admin/accounts" replace />} />
+      <Route path="/admin/accounts" element={<Navigate to="/admin/users" replace />} />
 
       <Route
         path="/admin/certificates"
@@ -440,7 +428,7 @@ function AnimatedRoutes() {
         }
       />
 
-      <Route path="/admin/invitations" element={<Navigate to="/admin/accounts" replace />} />
+      <Route path="/admin/invitations" element={<Navigate to="/admin/users" replace />} />
 
       <Route
         path="/profile"
@@ -524,10 +512,33 @@ function ForbiddenListener() {
   return null;
 }
 
+function SessionLockoutGate() {
+  const { isLocked, unlock } = useSessionLockout();
+  const location = useLocation();
+
+  // Public routes that should not have session lockout
+  const publicRoutes = [
+    '/login',
+    '/setup-account',
+    '/verify',
+    '/forgot-password',
+    '/confirm',
+  ];
+
+  // Check if current route is a public route
+  const isPublicRoute = publicRoutes.some(route => location.pathname.startsWith(route));
+
+  // Only show lockout modal if not on a public route
+  if (isPublicRoute) return null;
+
+  return <SessionLockModal open={isLocked} onUnlock={unlock} />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <SessionLockoutGate />
         <ToastProvider>
           <ForbiddenListener />
           <NotificationProvider>

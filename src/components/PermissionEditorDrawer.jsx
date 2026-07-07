@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { accountAPI, authorisationAPI } from "../services/api";
+import { useState, useEffect, useRef } from "react";
+import { accountAPI } from "../services/api";
 import { useConfirmDialog } from "../context/ConfirmDialogContext";
 import {
   Loader2, ChevronDown, X, Award, BookOpen,
   ShieldCheck, BarChart3, Settings, Plus, Minus,
-  AlertTriangle, CheckCircle, Search, FileText, Info,
+  AlertTriangle, Info,
 } from "lucide-react";
 
 // ── Category metadata ────────────────────────────────────────────────────
@@ -18,7 +18,7 @@ const CATEGORY_META = {
 
 // ── Human-readable permission labels & descriptions ──────────────────────
 const PERMISSION_INFO = {
-  "certificates.revoke": { label: "Revoke Certificates", desc: "Mark issued certificates as revoked. Requires explicit justification in the authorisation letter." },
+  "certificates.revoke": { label: "Revoke Certificates", desc: "Mark issued certificates as revoked. Requires explicit justification." },
   "certificates.edit_drafts": { label: "Edit Certificate Drafts", desc: "Modify certificate records in draft state before issuance." },
   "certificates.view_all": { label: "View All Certificates", desc: "Read-only access to the full certificate registry." },
   "certificates.download": { label: "Download Certificates", desc: "Export certificate records or PDFs." },
@@ -154,18 +154,13 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
   // ── Accordion open state ───────────────────────────────────────────────
   const [openCategories, setOpenCategories] = useState(new Set());
 
-  // ── Authorisation reference ────────────────────────────────────────────
-  const [refSearch, setRefSearch] = useState("");
-  const [refResults, setRefResults] = useState([]);
-  const [refSearching, setRefSearching] = useState(false);
-  const [selectedRef, setSelectedRef] = useState(null);
-  const [refError, setRefError] = useState("");
-  const [nameMismatchAck, setNameMismatchAck] = useState(false);
   const [provisioningNotes, setProvisioningNotes] = useState("");
 
   // ── Refs ────────────────────────────────────────────────────────────────
   const drawerRef = useRef(null);
-  const refSearchTimeout = useRef(null);
+
+  // ── Derived values ───────────────────────────────────────────────────────
+  const accountName = account?.full_name || "";
 
   // ── Visible categories (exclude SA-only) ───────────────────────────────
   const visibleCategories = (permConstants?.categories || []).filter(
@@ -184,20 +179,11 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
   const hasChanges = added.length > 0 || removed.length > 0;
   const allOff = Object.values(currentPerms).every((v) => !v);
 
-  // ── Name match logic ───────────────────────────────────────────────────
-  const accountName = account?.full_name || "";
-  const refName = selectedRef?.requester_name || "";
-  const nameMatch = normaliseName(accountName) === normaliseName(refName);
-  const nameCheckNeeded = selectedRef && !nameMatch;
-
   // ── Save button state ──────────────────────────────────────────────────
-  const isRefValid = selectedRef && !refError;
-  const nameSatisfied = !nameCheckNeeded || nameMismatchAck;
-  const canSave = hasChanges && !allOff && isRefValid && nameSatisfied;
+  const canSave = hasChanges && !allOff;
 
   let saveTooltip = "";
   if (!hasChanges) saveTooltip = "No changes have been made to the permissions.";
-  else if (!isRefValid) saveTooltip = "A valid authorisation reference is required before saving.";
   else if (allOff) saveTooltip = "At least one permission must remain enabled.";
 
   // ── Load fresh data when drawer opens ──────────────────────────────────
@@ -205,11 +191,6 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
     if (!open || !account) return;
     setLoading(true);
     setError("");
-    setSelectedRef(null);
-    setRefSearch("");
-    setRefResults([]);
-    setRefError("");
-    setNameMismatchAck(false);
     setProvisioningNotes("");
     setOpenCategories(new Set());
 
@@ -254,43 +235,6 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open]);
 
-  // ── Reference search ───────────────────────────────────────────────────
-  const searchReferences = useCallback((query) => {
-    if (!query || query.length < 2) { setRefResults([]); return; }
-    setRefSearching(true);
-    authorisationAPI.getAll({ search: query, purpose: "permission_change" })
-      .then(({ data }) => {
-        const list = Array.isArray(data) ? data : data.results || [];
-        setRefResults(list);
-      })
-      .catch(() => setRefResults([]))
-      .finally(() => setRefSearching(false));
-  }, []);
-
-  const handleRefSearchChange = (value) => {
-    setRefSearch(value);
-    setSelectedRef(null);
-    setRefError("");
-    setNameMismatchAck(false);
-    clearTimeout(refSearchTimeout.current);
-    refSearchTimeout.current = setTimeout(() => searchReferences(value), 350);
-  };
-
-  const selectReference = (ref) => {
-    setRefResults([]);
-    setRefSearch(ref.reference_number);
-    // Validate status
-    const allowedStatuses = ["pending"];
-    if (!allowedStatuses.includes(ref.status)) {
-      setRefError(`This reference cannot be used (status: ${ref.status}). Select a different reference.`);
-      setSelectedRef(null);
-      return;
-    }
-    setRefError("");
-    setSelectedRef(ref);
-    setNameMismatchAck(false);
-  };
-
   // ── Permission toggle ──────────────────────────────────────────────────
   const togglePerm = (key, val) => {
     setCurrentPerms((prev) => ({ ...prev, [key]: val }));
@@ -330,14 +274,12 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
       }
       await accountAPI.updatePermissions(account.id, {
         permissions: changedPerms,
-        letter_reference_number: selectedRef.reference_number,
         reason: provisioningNotes,
       });
       onSaved({
         fullName: accountName,
         added: added.length,
         removed: removed.length,
-        reference: selectedRef.reference_number,
       });
       resetAndClose();
     } catch (err) {
@@ -397,12 +339,6 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
               </ul>
             </div>
           )}
-          <div className="text-xs text-slate-500 space-y-0.5 pt-1 border-t border-slate-200">
-            <p><span className="text-slate-400">Authorisation reference:</span> <strong className="text-slate-700">{selectedRef?.reference_number}</strong></p>
-            <p><span className="text-slate-400">Approved by:</span> <strong className="text-slate-700">{selectedRef?.authorising_head_name}</strong>
-              {selectedRef?.approval_date && <span className="text-slate-400 ml-1">· {selectedRef.approval_date}</span>}
-            </p>
-          </div>
           <p className="text-xs text-slate-500 italic">This action will be logged under your Super Admin account.</p>
         </div>
       ),
@@ -525,143 +461,19 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
                 </div>
               )}
 
-              {/* ─ Section 3: Authorisation Reference ──────────────────── */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Authorisation Reference</h4>
-
-                {/* Search field */}
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search size={15} className="text-slate-400" />
-                  </div>
-                  <input
-                    type="text"
-                    value={refSearch}
-                    onChange={(e) => handleRefSearchChange(e.target.value)}
-                    placeholder="Search by reference number, e.g. CERT-2025-AB1234"
-                    className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition"
-                  />
-                  {refSearching && (
-                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                      <Loader2 size={14} className="animate-spin text-slate-400" />
-                    </div>
-                  )}
-                  {/* Dropdown results */}
-                  {refResults.length > 0 && !selectedRef && (
-                    <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
-                      {refResults.map((r) => (
-                        <button
-                          key={r.id}
-                          type="button"
-                          onClick={() => selectReference(r)}
-                          className="w-full text-left px-4 py-2.5 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0"
-                        >
-                          <span className="text-sm font-medium text-slate-800">{r.reference_number}</span>
-                          <span className="ml-2 text-xs text-slate-400">{r.requester_name}</span>
-                          <span className={`ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${r.status === "pending" ? "bg-green-50 text-green-600" : "bg-slate-100 text-slate-500"}`}>
-                            {r.status}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Reference error */}
-                {refError && (
-                  <div className="flex items-start gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg p-3 text-sm" role="alert">
-                    <AlertTriangle size={15} className="shrink-0 mt-0.5" />
-                    <span>{refError}</span>
-                  </div>
-                )}
-
-                {/* Reference confirmation block */}
-                {selectedRef && !refError && (
-                  <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle size={15} className="text-green-500 shrink-0" />
-                      <span className="text-sm font-semibold text-slate-800">{selectedRef.reference_number}</span>
-                      <span className="text-[10px] font-medium bg-green-50 text-green-600 px-1.5 py-0.5 rounded-full">Confirmed</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px]">
-                      <div>
-                        <span className="text-slate-400">Authorised for</span>
-                        <p className="text-slate-700 font-medium">{selectedRef.requester_name}</p>
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Approved by</span>
-                        <p className="text-slate-700 font-medium">{selectedRef.authorising_head_name}{selectedRef.authorising_head_title ? `, ${selectedRef.authorising_head_title}` : ""}</p>
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Date approved</span>
-                        <p className="text-slate-700 font-medium">{selectedRef.approval_date}</p>
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Status</span>
-                        <p className="text-slate-700 font-medium capitalize">{selectedRef.status}</p>
-                      </div>
-                      {selectedRef.notes && (
-                        <div className="col-span-2">
-                          <span className="text-slate-400">Scope noted</span>
-                          <p className="text-slate-700">{selectedRef.notes}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Name match check */}
-                    {nameMatch && (
-                      <div className="flex items-center gap-2 text-green-600 text-xs bg-green-50 rounded-lg px-3 py-2">
-                        <CheckCircle size={13} className="shrink-0" />
-                        <span>Name match confirmed.</span>
-                      </div>
-                    )}
-                    {nameCheckNeeded && (
-                      <div className="space-y-2">
-                        <div className="flex items-start gap-2 text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs" role="alert">
-                          <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-                          <div>
-                            <p className="font-medium">Name mismatch detected.</p>
-                            <p className="mt-0.5">
-                              The reference is authorised for <strong>{refName}</strong> but this account belongs to <strong>{accountName}</strong>.
-                              If these refer to the same person, check the box below to acknowledge. This acknowledgement will be logged.
-                            </p>
-                          </div>
-                        </div>
-                        <label className="flex items-start gap-2.5 px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
-                          <input
-                            type="checkbox"
-                            checked={nameMismatchAck}
-                            onChange={(e) => setNameMismatchAck(e.target.checked)}
-                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 mt-0.5 shrink-0"
-                          />
-                          <span className="text-xs text-slate-700 leading-snug">
-                            I confirm that <strong>{accountName}</strong> and <strong>{refName}</strong> refer to the same person.
-                          </span>
-                        </label>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Provisioning notes — only visible after reference confirmed */}
-                {selectedRef && !refError && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-600">
-                      Provisioning Notes <span className="text-slate-400 font-normal">(optional, max 300 characters)</span>
-                    </label>
-                    <textarea
-                      value={provisioningNotes}
-                      onChange={(e) => setProvisioningNotes(e.target.value.slice(0, 300))}
-                      maxLength={300}
-                      rows={2}
-                      placeholder="e.g. Expanding access for Semester 2 certificate processing. Written letter to follow confirmation from Prof. Sarpong."
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none transition"
-                    />
-                    <p className="text-[11px] text-slate-400">
-                      Add any context about this permission change not captured in the letter scope. This note will be stored against the account record and included in the audit log.
-                    </p>
-                  </div>
-                )}
+              {/* ─ Section 3: Notes ───────────────────────────────────── */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-600">
+                  Notes <span className="text-slate-400 font-normal">(optional, max 300 characters)</span>
+                </label>
+                <textarea
+                  value={provisioningNotes}
+                  onChange={(e) => setProvisioningNotes(e.target.value.slice(0, 300))}
+                  maxLength={300}
+                  rows={2}
+                  placeholder="Add any context about this permission change. This note will be stored against the account record and included in the audit log."
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none transition"
+                />
               </div>
             </div>
           )}
@@ -685,22 +497,14 @@ export default function PermissionEditorDrawer({ open, account, permConstants, o
               </div>
             )}
 
-            <div className="flex gap-3">
-              <button
-                onClick={handleClose}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveClick}
-                disabled={!canSave}
-                title={saveTooltip}
-                className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
-              >
-                Save Permissions
-              </button>
-            </div>
+            <button
+              onClick={handleSaveClick}
+              disabled={!canSave}
+              title={saveTooltip}
+              className="w-full flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+            >
+              Save Permissions
+            </button>
           </div>
       </div>
     </div>

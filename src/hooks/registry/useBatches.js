@@ -136,6 +136,28 @@ export async function uploadImportFile(batchId, file) {
   return response.data;
 }
 
+// ── Certificates ───────────────────────────────────────────────────────────
+
+export function useBatchCertificates(batchId, params = {}) {
+  return useApiQuery(`/registry/batches/${batchId}/certificates/`, {
+    params, enabled: !!batchId,
+  });
+}
+
+export function useRecordFilterOptions(batchId) {
+  return useApiQuery(`/registry/batches/${batchId}/records/filter-options/`, {
+    enabled: !!batchId,
+  });
+}
+
+export async function downloadBatchCertificatesZip(batchId, params = {}) {
+  const response = await api.get(
+    `/registry/batches/${batchId}/certificates/download-zip/`,
+    { params, responseType: 'blob' },
+  );
+  return response.data;
+}
+
 // ── 4-step import wizard ───────────────────────────────────────────────────
 
 export async function uploadImportTempFile(batchId, file) {

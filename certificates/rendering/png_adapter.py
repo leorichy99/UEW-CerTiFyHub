@@ -226,7 +226,9 @@ class PNGRendererAdapter:
         modules_count = probe.modules_count
         modules_with_border = modules_count + 8
 
-        box_size = max(1, target // modules_with_border)
+        # Generate at 4x oversampled resolution then downscale with NEAREST
+        oversample = 4
+        box_size = max(1, (target * oversample) // modules_with_border)
 
         qr = qrcode.QRCode(
             version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=box_size, border=4
@@ -236,13 +238,17 @@ class PNGRendererAdapter:
 
         qr_img = qr.make_image(fill_color="black", back_color="white").convert('RGBA')
 
-        # Pad to exact target if needed (no resize / no anti-aliasing blur)
+        # Pad to exact oversampled target, then resize down with NEAREST
         actual_size = modules_with_border * box_size
-        if actual_size != target:
-            padded = Image.new('RGBA', (target, target), (255, 255, 255, 255))
-            offset = (target - actual_size) // 2
+        oversampled_target = target * oversample
+        if actual_size != oversampled_target:
+            padded = Image.new('RGBA', (oversampled_target, oversampled_target), (255, 255, 255, 255))
+            offset = (oversampled_target - actual_size) // 2
             padded.paste(qr_img, (offset, offset))
             qr_img = padded
+
+        if qr_img.size != (target, target):
+            qr_img = qr_img.resize((target, target), Image.Resampling.NEAREST)
 
         if img.mode != 'RGBA':
             img = img.convert('RGBA')

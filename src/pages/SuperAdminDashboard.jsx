@@ -182,7 +182,7 @@ export default function SuperAdminDashboard() {
       {/* Header */}
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <PageTitle>Dashboard</PageTitle>
+          <PageTitle className="mb-5">Dashboard</PageTitle>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -196,7 +196,7 @@ export default function SuperAdminDashboard() {
           </button>
           <button
             type="button"
-            onClick={() => navigate("/admin/certificates")}
+            onClick={() => navigate("/admin/batches")}
             className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2"
             style={{ backgroundColor: "#242576" }}
           >
@@ -253,7 +253,7 @@ export default function SuperAdminDashboard() {
             Icon={Shield}
             tone="info"
             variant="muted"
-            onClick={() => navigate("/admin/accounts")}
+            onClick={() => navigate("/admin/users")}
           />
           <QuickActionCard
             title="System settings"

@@ -6,6 +6,7 @@ from registry.views import (
     IssuanceBatchViewSet, StudentRecordViewSet, ImportBatchViewSet,
     IssuanceRunViewSet,
     PublicConfirmationLookupView, PublicConfirmView, PublicDisputeView,
+    PublicDisputeUploadView,
     BatchDisputesView, ResolveDisputeView,
 )
 from registry.sse_views import (
@@ -25,6 +26,7 @@ _record_detail = StudentRecordViewSet.as_view({
     'put': 'update', 'delete': 'destroy',
 })
 _record_resend = StudentRecordViewSet.as_view({'post': 'resend_confirmation'})
+_record_filter_options = StudentRecordViewSet.as_view({'get': 'filter_options'})
 _import_list = ImportBatchViewSet.as_view({'get': 'list'})
 _import_detail = ImportBatchViewSet.as_view({'get': 'retrieve'})
 _import_upload = ImportBatchViewSet.as_view({'post': 'upload'})
@@ -39,6 +41,8 @@ _issuance_run_detail = IssuanceRunViewSet.as_view({'get': 'retrieve'})
 urlpatterns = router.urls + [
     path('batches/<uuid:batch_pk>/records/', _record_list,
          name='batch-records-list'),
+    path('batches/<uuid:batch_pk>/records/filter-options/',
+         _record_filter_options, name='batch-records-filter-options'),
     path('batches/<uuid:batch_pk>/issuance-runs/', _issuance_run_list,
          name='batch-issuance-runs-list'),
     path('batches/<uuid:batch_pk>/issuance-runs/<uuid:pk>/',
@@ -87,4 +91,6 @@ urlpatterns = router.urls + [
          name='public-confirm-confirm'),
     path('public/confirm/dispute/', PublicDisputeView.as_view(),
          name='public-confirm-dispute'),
+    path('public/confirm/upload-proof/', PublicDisputeUploadView.as_view(),
+         name='public-confirm-upload-proof'),
 ]

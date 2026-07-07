@@ -115,7 +115,7 @@ def complete_batch_if_done(batch_id, actor_id):
 
 
 @shared_task(name='registry.on_batch_emails_complete')
-def on_batch_emails_complete(batch_id, actor_id):
+def on_batch_emails_complete(results, batch_id, actor_id):
     """Chord callback: fires once all confirmation emails for a batch finish.
 
     Reads actual delivery counts, publishes the completion event, and
@@ -174,7 +174,7 @@ def process_import_batch(import_batch_id, temp_file_id, mapping, skip_invalid=Fa
     temp_path = None
     try:
         for fname in default_storage.listdir('temp_imports')[1]:
-            if fname.startswith(temp_file_id):
+            if fname.startswith(temp_file_id) and not fname.endswith('.meta'):
                 temp_path = f"temp_imports/{fname}"
                 break
     except Exception:

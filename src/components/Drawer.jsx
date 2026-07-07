@@ -3,15 +3,15 @@ import { X } from "lucide-react";
 
 /**
  * Right-side slide-in drawer with backdrop.
- *
  * Props:
- *   open      – boolean controlling visibility
- *   onClose   – callback to close
- *   title     – drawer header text
- *   wide      – use wider width (default false → max-w-md, true → max-w-lg)
- *   children  – drawer body content
+ *   open       – boolean controlling visibility
+ *   onClose    – callback to close
+ *   title      – drawer header text
+ *   wide       – use wider width (default false → max-w-md, true → max-w-lg)
+ *   fullWidth  – occupy the full screen width (no max-width constraint)
+ *   children   – drawer body content
  */
-export default function Drawer({ open, onClose, title, wide = false, children }) {
+export default function Drawer({ open, onClose, title, wide = false, fullWidth = false, children }) {
   const [visible, setVisible] = useState(false);
   const [animate, setAnimate] = useState(false);
   const drawerRef = useRef(null);
@@ -53,7 +53,7 @@ export default function Drawer({ open, onClose, title, wide = false, children })
       <div
         ref={drawerRef}
         className={`absolute top-0 right-0 bottom-0 ${
-          wide ? "w-full max-w-lg" : "w-full max-w-md"
+          fullWidth ? "w-full" : wide ? "w-full max-w-lg" : "w-full max-w-md"
         } bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
           animate ? "translate-x-0" : "translate-x-full"
         }`}

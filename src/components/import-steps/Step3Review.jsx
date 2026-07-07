@@ -27,7 +27,9 @@ export default function Step3Review({
 
   const fieldLabels = {
     index_number: "Index Number",
-    full_name: "Full Name",
+    first_name: "First Name",
+    other_names: "Other Names",
+    last_name: "Last Name",
     gender: "Gender",
     institutional_email: "Email",
     programme: "Programme",

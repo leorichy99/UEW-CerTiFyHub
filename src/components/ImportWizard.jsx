@@ -111,7 +111,7 @@ export default function ImportWizard({ batchId, onBack, onComplete }) {
     }
     if (wizard.currentStep === 2) {
       const allRequiredMapped = [
-        "index_number", "full_name", "institutional_email",
+        "index_number", "first_name", "last_name", "institutional_email",
         "programme", "class_of_degree", "date_of_completion",
       ].every((f) => !!wizard.mapping[f]);
       const dupes = Object.values(wizard.mapping).filter(Boolean);
@@ -137,7 +137,7 @@ export default function ImportWizard({ batchId, onBack, onComplete }) {
   return (
     <div className="h-screen flex bg-white">
       {/* Left sidebar */}
-      <div className="w-[250px] flex flex-col border-r border-slate-200 bg-white shrink-0">
+      <div className="w-[200px] flex flex-col border-r border-slate-200 bg-white shrink-0">
         <div className="px-6 pt-6 pb-2">
           <h2 className="text-sm font-bold text-slate-800 tracking-tight">
             Import Student Records

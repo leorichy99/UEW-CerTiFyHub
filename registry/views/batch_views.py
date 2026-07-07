@@ -4,11 +4,14 @@ import io
 import json
 import os
 import uuid
+import zipfile
 from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.db.models import Q
+from django.http import FileResponse
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from rest_framework import viewsets, status, permissions
@@ -17,6 +20,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError, PermissionDenied
 
+from analytics.utils import log_audit
 from core.permissions import IsActiveAccount, IsSuperAdmin
 from registry.models import (
     IssuanceBatch, StudentRecord, ImportBatch, DeadlineExtensionLog,
@@ -35,6 +39,9 @@ from registry.services import (
 from registry.services.delivery_service import (
     EmailDeliveryService, DeliveryError, MaxResendError,
 )
+from certificates.models import Certificate
+from certificates.serializers import CertificateSerializer
+from certificate_system.pagination import FlexiblePageNumberPagination
 
 
 class IssuanceBatchViewSet(viewsets.ModelViewSet):
@@ -67,6 +74,13 @@ class IssuanceBatchViewSet(viewsets.ModelViewSet):
             )
         except BatchLifecycleError as e:
             raise ValidationError(str(e))
+        log_audit(
+            request=self.request, user=self.request.user,
+            action='Created issuance batch',
+            target=batch.name,
+            details=f'Batch {batch.name} created with template {batch.certificate_template.name if batch.certificate_template else "—"}.',
+            category='admin',
+        )
         serializer.instance = batch
 
     def update(self, request, *args, **kwargs):
@@ -79,7 +93,105 @@ class IssuanceBatchViewSet(viewsets.ModelViewSet):
         batch = self.get_object()
         if batch.status != IssuanceBatch.STATUS_DRAFT:
             raise ValidationError('Only Draft batches can be deleted.')
+        log_audit(
+            request=request, user=request.user,
+            action='Deleted issuance batch',
+            target=batch.name,
+            details=f'Batch {batch.name} (status: {batch.status}) deleted.',
+            category='admin',
+        )
         return super().destroy(request, *args, **kwargs)
+
+    # ── Batch-scoped certificate view ──────────────────────────────────────
+
+    def _get_batch_cert_qs(self, batch):
+        """Return the certificate queryset for a batch, applying request filters."""
+        qs = (
+            Certificate.objects
+            .filter(issuance_batch=batch)
+            .select_related('issuance_run', 'student_record')
+            .order_by('-generated_date')
+        )
+        params = self.request.query_params
+
+        search = params.get('search', '').strip()
+        if search:
+            qs = qs.filter(
+                Q(student_name__icontains=search) |
+                Q(certificate_number__icontains=search) |
+                Q(student_record__index_number__icontains=search)
+            )
+
+        issuance_run = params.get('issuance_run', '').strip()
+        if issuance_run:
+            qs = qs.filter(issuance_run_id=issuance_run)
+
+        class_of_degree = params.get('class_of_degree', '').strip()
+        if class_of_degree:
+            qs = qs.filter(honors=class_of_degree)
+
+        return qs
+
+    @action(detail=True, methods=['get'], url_path='certificates')
+    def certificates(self, request, pk=None):
+        """Paginated list of certificates issued for this batch."""
+        batch = self.get_object()
+        qs = self._get_batch_cert_qs(batch)
+        paginator = FlexiblePageNumberPagination()
+        page = paginator.paginate_queryset(qs, request)
+        serializer = CertificateSerializer(
+            page, many=True, context={'request': request}
+        )
+        return paginator.get_paginated_response(serializer.data)
+
+    @action(detail=True, methods=['get'], url_path='certificates/download-zip')
+    def download_zip(self, request, pk=None):
+        """Export a ZIP of all certificates matching the active batch filter."""
+        batch = self.get_object()
+        qs = self._get_batch_cert_qs(batch)
+        cert_ids = list(qs.values_list('id', flat=True))
+
+        if not cert_ids:
+            return Response(
+                {'error': 'No certificates match the current filter.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        MAX_ZIP_CERTS = 500
+        if len(cert_ids) > MAX_ZIP_CERTS:
+            return Response(
+                {'error': f'Too many certificates ({len(cert_ids)}). Limit is {MAX_ZIP_CERTS}. '
+                          'Apply tighter filters and try again.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Re-fetch with full objects for PDF generation
+        certs = list(qs)
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for cert in certs:
+                if not cert.pdf_file or not cert.pdf_file.name:
+                    from certificates.views import CertificateViewSet
+                    viewset = CertificateViewSet()
+                    viewset.generate_pdf_for_certificate(cert)
+                    cert.refresh_from_db()
+
+                cert.pdf_file.open('rb')
+                pdf_bytes = cert.pdf_file.read()
+                cert.pdf_file.close()
+
+                filename = f"{cert.certificate_number or str(cert.id)}.pdf"
+                zf.writestr(filename, pdf_bytes)
+
+        buffer.seek(0)
+        ts = timezone.now().strftime('%Y%m%d_%H%M%S')
+        ref = batch.reference_name or batch.name.replace(' ', '_')
+        return FileResponse(
+            buffer,
+            as_attachment=True,
+            filename=f'certificates_{ref}_{ts}.zip',
+        )
 
     # ── Pipeline actions ──────────────────────────────────────────────────
 
@@ -93,6 +205,13 @@ class IssuanceBatchViewSet(viewsets.ModelViewSet):
             raise ValidationError(str(e))
         except BatchLifecycleError as e:
             raise ValidationError(str(e))
+        log_audit(
+            request=request, user=request.user,
+            action='Published issuance batch',
+            target=batch.name,
+            details=f'Published {batch.name} with {result.get("total", 0)} record(s).',
+            category='admin',
+        )
         batch.refresh_from_db()
         return Response({
             **self.get_serializer(batch).data,
@@ -107,6 +226,13 @@ class IssuanceBatchViewSet(viewsets.ModelViewSet):
             result = IssuanceService().close_confirmation(batch, actor=request.user)
         except IssuanceError as e:
             raise ValidationError(str(e))
+        log_audit(
+            request=request, user=request.user,
+            action='Closed confirmation window',
+            target=batch.name,
+            details=f'Closed confirmation for {batch.name}; {result.get("flagged", 0)} record(s) flagged.',
+            category='admin',
+        )
         batch.refresh_from_db()
         return Response({
             **self.get_serializer(batch).data,
@@ -121,6 +247,13 @@ class IssuanceBatchViewSet(viewsets.ModelViewSet):
             result = IssuanceService().start_issuance(batch, actor=request.user)
         except IssuanceError as e:
             raise ValidationError(str(e))
+        log_audit(
+            request=request, user=request.user,
+            action='Started certificate issuance',
+            target=batch.name,
+            details=f'Started issuance for {batch.name}: {result.get("issued", 0)} issued, {result.get("failed", 0)} failed.',
+            category='admin',
+        )
         batch.refresh_from_db()
         return Response({
             **self.get_serializer(batch).data,
@@ -136,6 +269,13 @@ class IssuanceBatchViewSet(viewsets.ModelViewSet):
             IssuanceService().complete(batch, actor=request.user)
         except IssuanceError as e:
             raise ValidationError(str(e))
+        log_audit(
+            request=request, user=request.user,
+            action='Completed issuance batch',
+            target=batch.name,
+            details=f'Batch {batch.name} marked as completed.',
+            category='admin',
+        )
         batch.refresh_from_db()
         return Response(self.get_serializer(batch).data)
 
@@ -173,6 +313,13 @@ class IssuanceBatchViewSet(viewsets.ModelViewSet):
             actor=request.user,
             reason=reason,
         )
+        log_audit(
+            request=request, user=request.user,
+            action='Extended confirmation deadline',
+            target=batch.name,
+            details=f'Extended deadline from {previous_deadline} to {log.new_deadline} for {batch.name}.',
+            category='admin',
+        )
 
         batch.refresh_from_db()
         return Response({
@@ -205,6 +352,13 @@ class IssuanceBatchViewSet(viewsets.ModelViewSet):
             service.transition(batch, to_status, actor=request.user, note=note)
         except BatchLifecycleError as e:
             raise ValidationError(str(e))
+        log_audit(
+            request=request, user=request.user,
+            action='Transitioned batch status',
+            target=batch.name,
+            details=f'Transitioned {batch.name} to {to_status}. Note: {note or "—"}',
+            category='admin',
+        )
         return Response(self.get_serializer(batch).data)
 
     # ── Email delivery visibility ─────────────────────────────────────────
@@ -246,6 +400,13 @@ class IssuanceBatchViewSet(viewsets.ModelViewSet):
             result = EmailDeliveryService().resend_failed(batch, actor=request.user)
         except DeliveryError as e:
             raise ValidationError(str(e))
+        log_audit(
+            request=request, user=request.user,
+            action='Bulk resent failed confirmations',
+            target=batch.name,
+            details=f'Resent {result.get("queued_for_resend", 0)} confirmation(s) for {batch.name}.',
+            category='admin',
+        )
         # Notify the triggering admin
         registry_notifier.resend_complete(
             batch,
@@ -274,9 +435,15 @@ class StudentRecordViewSet(viewsets.ModelViewSet):
         batch = self.get_batch()
         qs = StudentRecord.objects.filter(batch=batch).select_related(
             'faculty', 'department', 'import_batch',
-        ).order_by('full_name', 'index_number')
+        ).prefetch_related('certificates').order_by('full_name', 'index_number')
         params = self.request.query_params
         for key in ('confirmation_status', 'issuance_status'):
+            value = params.get(key)
+            if value:
+                qs = qs.filter(**{key: value})
+        # Dropdown filters — values come from the batch's own distinct list
+        # (see the filter_options action), so match exactly.
+        for key in ('programme', 'class_of_degree', 'faculty_name', 'department_name'):
             value = params.get(key)
             if value:
                 qs = qs.filter(**{key: value})
@@ -302,21 +469,74 @@ class StudentRecordViewSet(viewsets.ModelViewSet):
             )
         return qs
 
+    @action(detail=False, url_path='filter-options')
+    def filter_options(self, request, batch_pk=None):
+        """Distinct values present in this batch, for cascading dropdown filters.
+
+        Faculty/department/programme/class are free text imported from
+        spreadsheets, so the option lists are derived from the data itself.
+        ``faculty_departments`` maps each faculty to the departments observed
+        under it, enabling a cascading faculty -> department filter.
+        """
+        base = StudentRecord.objects.filter(batch=self.get_batch())
+
+        def distinct(field):
+            return sorted(
+                v for v in base.values_list(field, flat=True).distinct() if v
+            )
+
+        pairs = (
+            base.exclude(faculty_name='').exclude(department_name='')
+            .values_list('faculty_name', 'department_name').distinct()
+        )
+        fac_to_depts = {}
+        for fac, dept in pairs:
+            fac_to_depts.setdefault(fac, set()).add(dept)
+
+        return Response({
+            'programme': distinct('programme'),
+            'class_of_degree': distinct('class_of_degree'),
+            'faculty_name': distinct('faculty_name'),
+            'department_name': distinct('department_name'),
+            'faculty_departments': {k: sorted(v) for k, v in fac_to_depts.items()},
+        })
+
     def perform_create(self, serializer):
         batch = self.get_batch()
         if not BatchLifecycleService.can_edit_records(batch):
             raise PermissionDenied('Records can only be added to a Draft batch.')
-        serializer.save(batch=batch)
+        record = serializer.save(batch=batch)
+        log_audit(
+            request=self.request, user=self.request.user,
+            action='Added student record',
+            target=f'{record.full_name} ({record.index_number})',
+            details=f'Added {record.full_name} to batch {batch.name}.',
+            category='admin',
+        )
 
     def perform_update(self, serializer):
         batch = serializer.instance.batch
         if not BatchLifecycleService.can_edit_records(batch):
             raise PermissionDenied('Records can only be edited in a Draft batch.')
-        serializer.save()
+        record = serializer.save()
+        log_audit(
+            request=self.request, user=self.request.user,
+            action='Updated student record',
+            target=f'{record.full_name} ({record.index_number})',
+            details=f'Updated {record.full_name} in batch {batch.name}.',
+            category='admin',
+        )
 
     def perform_destroy(self, instance):
         if not BatchLifecycleService.can_edit_records(instance.batch):
             raise PermissionDenied('Records can only be deleted from a Draft batch.')
+        log_audit(
+            request=self.request, user=self.request.user,
+            action='Deleted student record',
+            target=f'{instance.full_name} ({instance.index_number})',
+            details=f'Deleted {instance.full_name} from batch {instance.batch.name}.',
+            category='admin',
+        )
         instance.delete()
 
     @action(detail=True, methods=['post'], url_path='resend-confirmation')
@@ -336,6 +556,13 @@ class StudentRecordViewSet(viewsets.ModelViewSet):
                 {'detail': str(e)},
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
+        log_audit(
+            request=request, user=request.user,
+            action='Resent confirmation email',
+            target=f'{record.full_name} ({record.index_number})',
+            details=f'Resent confirmation email for {record.full_name} in batch {batch.name}.',
+            category='admin',
+        )
         return Response({'status': 'resent'})
 
 
@@ -369,10 +596,18 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
                 batch=batch,
                 uploaded_by=request.user,
                 file_name=upload.name,
+                original_file_name=upload.name,
                 raw_bytes=raw,
             )
         except ImportRejected as e:
             raise ValidationError(str(e))
+        log_audit(
+            request=request, user=request.user,
+            action='Imported student records',
+            target=batch.name,
+            details=f'Imported {import_batch.record_count} record(s) from {upload.name} into {batch.name}.',
+            category='admin',
+        )
         return Response(
             ImportBatchSerializer(import_batch).data, status=status.HTTP_201_CREATED
         )
@@ -406,6 +641,10 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
         ext = os.path.splitext(upload.name)[1] or '.csv'
         temp_path = f"temp_imports/{temp_id}{ext}"
         default_storage.save(temp_path, io.BytesIO(raw))
+
+        # Persist original filename so confirm step can store it on ImportBatch
+        meta_path = f"temp_imports/{temp_id}.meta"
+        default_storage.save(meta_path, io.BytesIO(json.dumps({'original_file_name': upload.name}).encode()))
 
         return Response({
             'temp_file_id': temp_id,
@@ -462,11 +701,22 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
         raw = default_storage.open(temp_path).read()
         file_name = os.path.basename(temp_path)
 
+        # Restore original filename if meta file exists
+        original_file_name = file_name
+        meta_path = f"temp_imports/{temp_file_id}.meta"
+        if default_storage.exists(meta_path):
+            try:
+                meta_raw = default_storage.open(meta_path).read()
+                original_file_name = json.loads(meta_raw.decode()).get('original_file_name', file_name)
+            except Exception:
+                pass
+
         # Create the ImportBatch record
         import_batch = ImportBatch.objects.create(
             batch=batch,
             uploaded_by=request.user,
             file_name=file_name,
+            original_file_name=original_file_name,
             total_rows=0,
             status=ImportBatch.STATUS_PROCESSING,
             mapping_configuration=mapping,
@@ -487,12 +737,11 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
         }, status=status.HTTP_202_ACCEPTED)
 
     def _find_temp_file(self, temp_file_id):
-        """Locate a temp file by its UUID prefix."""
+        """Locate a temp file by its UUID prefix (ignoring .meta sidecars)."""
         prefix = f"temp_imports/{temp_file_id}"
-        # Simple check: look for files starting with the UUID
         try:
             for fname in default_storage.listdir('temp_imports')[1]:
-                if fname.startswith(temp_file_id):
+                if fname.startswith(temp_file_id) and not fname.endswith('.meta'):
                     return f"temp_imports/{fname}"
         except Exception:
             pass

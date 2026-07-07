@@ -38,7 +38,7 @@ export default function Pagination({
         <select
           value={itemsPerPage}
           onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
-          className="rounded-lg border border-(--color-brand-dark) bg-(--color-brand-dark) px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition-colors duration-200 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
+          className="rounded-lg border border-(--color-brand-dark) bg-white px-3 py-1.5 text-sm font-medium text-(--color-text-primary) shadow-sm transition-colors duration-200 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
         >
           <option value={10}>10</option>
           <option value={20}>20</option>

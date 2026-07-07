@@ -98,7 +98,7 @@ export function useImportWizard(batchId) {
 
   const validateMapping = useCallback(() => {
     const requiredFields = [
-      'index_number', 'full_name',
+      'index_number', 'first_name', 'last_name',
       'institutional_email', 'programme',
       'class_of_degree', 'date_of_completion',
     ];
