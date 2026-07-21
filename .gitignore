@@ -1,4 +1,4 @@
-# Logs
+# --- Logs ---
 logs
 *.log
 npm-debug.log*
@@ -7,12 +7,21 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# --- Dependencies ---
 node_modules
+venv/
+env/
+.venv/
+
+# --- Build / Assets ---
 dist
 dist-ssr
-*.local
+build
+staticfiles/
+media/
 
-# Editor directories and files
+# --- Local Configurations ---
+*.local
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -23,4 +32,31 @@ dist-ssr
 *.sln
 *.sw?
 
+# --- Django Python Cruft ---
+__pycache__/
+*.py[cod]
+*$py.class
+db.sqlite3
+db.sqlite3-journal
+local_settings.py
+
+# --- Database Dumps (CRITICAL) ---
+*.sql
+*.sqlite
+*.dump
+*.backup
+*.pgsql
+
+# --- Environment Variables ---
 .env
+.env.local
+.env.production
+.env.staging
+!.env.example
+
+# --- Certificate & Key Files (Physical Assets) ---
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
