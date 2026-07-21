@@ -54,7 +54,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen w-screen bg-white">
+    <div className="min-h-screen w-screen bg-[linear-gradient(135deg,#89f7fe,#fbd3e9,#f6d365,#fda085)]">
       <div className="min-h-screen grid grid-cols-1 lg:grid-cols-[3fr_2fr]">
         <AuthBrandingPanel subtitle="Welcome back!" />
 

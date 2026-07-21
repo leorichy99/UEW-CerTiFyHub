@@ -145,7 +145,8 @@ export default function GlobalAnalytics() {
     <div className="space-y-6">
       <PageTitle>Analytics</PageTitle>
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-end items-center gap-2">
+            <RefreshButton onClick={handleRefresh} spinning={refreshing} />
           <div className="relative">
             <select
               value={timeRange}
@@ -160,7 +161,6 @@ export default function GlobalAnalytics() {
             </select>
             <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           </div>
-          <RefreshButton onClick={handleRefresh} spinning={refreshing} />
           <button
             onClick={exportAnalytics}
             className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition"

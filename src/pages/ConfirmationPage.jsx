@@ -1,16 +1,15 @@
 
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import {
   Loader2, CheckCircle2, AlertTriangle, XCircle,
-  ShieldCheck, FileEdit, Printer, GripVertical,
+  ShieldCheck, FileEdit, Printer,
 } from "lucide-react";
 
 import { confirmationAPI } from "../services/publicApi";
 import uewLogo from "../assets/uew-logo.svg";
 import DisputeForm from "../components/DisputeForm";
-import DisputeSummary from "../components/DisputeSummary";
 
 const STATUS_BAD = {
   invalid:
@@ -21,12 +20,7 @@ const STATUS_BAD = {
     "This congregation session is no longer accepting confirmations.",
 };
 
-function assembleName(components, order) {
-  const parts = order.map((k) => components[k]).filter(Boolean);
-  return parts.join(" ");
-}
-
-function ReadOnlyField({ label, value, onReportIssue }) {
+function ReadOnlyField({ label, value }) {
   return (
     <div className="border-b border-slate-100 py-2.5 last:border-b-0">
       <div className="flex items-start justify-between gap-2">
@@ -34,82 +28,6 @@ function ReadOnlyField({ label, value, onReportIssue }) {
           <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
           <div className="text-sm text-slate-800 mt-0.5">{value || <span className="text-slate-400">—</span>}</div>
         </div>
-        {onReportIssue && (
-          <button
-            onClick={onReportIssue}
-            className="shrink-0 text-[11px] text-slate-400 hover:text-(--color-brand-dark) underline underline-offset-2"
-          >
-            Report an issue
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function NamePillWidget({ components, initialOrder, onOrderChange }) {
-  const [order, setOrder] = useState(initialOrder);
-  const [dragging, setDragging] = useState(null);
-
-  const activeKeys = useCallback(
-    () => order.filter((k) => components[k]),
-    [order, components]
-  );
-
-  const preview = assembleName(components, order);
-
-  const move = (fromIndex, toIndex) => {
-    const keys = activeKeys();
-    const item = keys[fromIndex];
-    const rest = keys.filter((_, i) => i !== fromIndex);
-    const next = [...rest.slice(0, toIndex), item, ...rest.slice(toIndex)];
-    setOrder(next);
-    onOrderChange?.(next);
-  };
-
-  const keys = activeKeys();
-
-  return (
-    <div className="border-b border-slate-100 py-4">
-      <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Full name</div>
-      <p className="text-xs text-slate-500 mb-3">
-        Drag the pills to arrange your name in the order you want on your certificate.
-      </p>
-
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        {keys.map((key, index) => (
-          <div
-            key={key}
-            draggable
-            onDragStart={(e) => {
-              setDragging(index);
-              e.dataTransfer.effectAllowed = "move";
-            }}
-            onDragEnd={() => setDragging(null)}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = "move";
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              if (dragging !== null && dragging !== index) {
-                move(dragging, index);
-              }
-              setDragging(null);
-            }}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium cursor-grab active:cursor-grabbing select-none transition
-              ${dragging === index ? "bg-blue-100 text-blue-700 ring-2 ring-blue-300" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}
-            `}
-          >
-            <GripVertical size={14} className="text-slate-400" />
-            {components[key]}
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5">
-        <div className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Certificate preview</div>
-        <div className="text-sm font-semibold text-slate-800">{preview}</div>
       </div>
     </div>
   );
@@ -121,10 +39,8 @@ export default function ConfirmationPage() {
   const indexNumber = search.get("ix") || search.get("index_number") || "";
 
   const [state, setState] = useState({ loading: true });
-  const [view, setView] = useState("review"); // review | dispute-form | dispute-summary | done-confirmed | done-disputed
-  const [disputes, setDisputes] = useState([]);
+  const [view, setView] = useState("review"); // review | dispute-form | done-confirmed | done-disputed
   const [submitting, setSubmitting] = useState(false);
-  const [nameOrder, setNameOrder] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,7 +50,6 @@ export default function ConfirmationPage() {
         if (!cancelled) {
           setState({ data: res.data });
           const record = res.data.record;
-          setNameOrder(record.name_order || ["first_name", "other_names", "last_name"]);
           if (record.confirmation_status === "CONFIRMED") {
             setView("done-confirmed");
           } else if (record.confirmation_status === "DISPUTED") {
@@ -153,7 +68,7 @@ export default function ConfirmationPage() {
   const handleConfirm = async () => {
     setSubmitting(true);
     try {
-      await confirmationAPI.confirm(token, indexNumber, nameOrder);
+      await confirmationAPI.confirm(token, indexNumber);
       setView("done-confirmed");
     } catch (err) {
       setState({ error: {
@@ -165,10 +80,10 @@ export default function ConfirmationPage() {
     }
   };
 
-  const handleDisputeSubmit = async (disputesData) => {
+  const handleDisputeSubmit = async (formData) => {
     setSubmitting(true);
     try {
-      await confirmationAPI.dispute(token, indexNumber, null, disputesData);
+      await confirmationAPI.dispute(formData);
       setView("done-disputed");
     } catch (err) {
       setState({ error: {
@@ -181,13 +96,7 @@ export default function ConfirmationPage() {
   };
 
   const openDisputeForm = () => {
-    setDisputes([]);
     setView("dispute-form");
-  };
-
-  const openDisputeSummary = (disputesData) => {
-    setDisputes(disputesData);
-    setView("dispute-summary");
   };
 
   return (
@@ -226,11 +135,8 @@ export default function ConfirmationPage() {
         {state.data && view === "review" && (
           <ReviewPanel
             payload={state.data}
-            nameOrder={nameOrder}
-            onNameOrderChange={setNameOrder}
             onConfirm={handleConfirm}
             onStartDispute={openDisputeForm}
-            onFieldDispute={openDisputeForm}
             submitting={submitting}
           />
         )}
@@ -239,17 +145,7 @@ export default function ConfirmationPage() {
           <DisputeForm
             record={state.data.record}
             onCancel={() => setView("review")}
-            onSubmit={openDisputeSummary}
-            submitting={submitting}
-          />
-        )}
-
-        {state.data && view === "dispute-summary" && (
-          <DisputeSummary
-            disputes={disputes}
-            onEdit={() => setView("dispute-form")}
-            onConfirm={handleDisputeSubmit}
-            onCancel={() => setView("review")}
+            onSubmit={handleDisputeSubmit}
             submitting={submitting}
           />
         )}
@@ -262,40 +158,22 @@ export default function ConfirmationPage() {
   );
 }
 
-function ReviewPanel({ payload, nameOrder, onNameOrderChange, onConfirm, onStartDispute, onFieldDispute, submitting }) {
+function ReviewPanel({ payload, onConfirm, onStartDispute, submitting }) {
   const { record, batch } = payload;
-  const hasNameChange = nameOrder && JSON.stringify(nameOrder) !== JSON.stringify(record.name_order);
-
-  const nameComponents = {
-    first_name: record.first_name,
-    other_names: record.other_names,
-    last_name: record.last_name,
-  };
 
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-xl border border-slate-200 p-6">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-900 mb-4">
-          Please review your details carefully. You can drag your name components into the order you want on your certificate. If any other detail is wrong, click "Report an issue" next to it.
+          Please review your details carefully. If any information is incorrect, click "Report an issue" below.
         </div>
 
-        <NamePillWidget
-          components={nameComponents}
-          initialOrder={nameOrder}
-          onOrderChange={onNameOrderChange}
-        />
-
-        <div className="mt-2">
-          <button
-            onClick={() => onFieldDispute("Full name", record.full_name)}
-            className="text-[11px] text-slate-400 hover:text-amber-600 underline underline-offset-2"
-          >
-            Is a name spelled incorrectly or missing?
-          </button>
-        </div>
-
-        <ReadOnlyField label="Index number" value={record.index_number} />
-        <ReadOnlyField
+        <div className="space-y-1">
+          <ReadOnlyField label="First Name" value={record.first_name} />
+          <ReadOnlyField label="Middle Name" value={record.middle_name} />
+          <ReadOnlyField label="Last Name" value={record.last_name} />
+          <ReadOnlyField label="Index number" value={record.index_number} />
+          <ReadOnlyField
           label="Programme"
           value={record.programme}
           onReportIssue={() => onFieldDispute("Programme", record.programme)}
@@ -303,15 +181,8 @@ function ReviewPanel({ payload, nameOrder, onNameOrderChange, onConfirm, onStart
         <ReadOnlyField
           label="Class of degree"
           value={record.class_of_degree}
-          onReportIssue={() => onFieldDispute("Class of degree", record.class_of_degree)}
         />
-
-        {hasNameChange && (
-          <div className="mt-3 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2">
-            <AlertTriangle size={12} className="inline mr-1" />
-            You have rearranged your name. The order shown in the certificate preview above will be used.
-          </div>
-        )}
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
@@ -321,15 +192,15 @@ function ReviewPanel({ payload, nameOrder, onNameOrderChange, onConfirm, onStart
           className="flex-1 bg-emerald-600 text-white px-4 py-3 rounded-lg hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center justify-center gap-2 font-medium transition-all"
         >
           <ShieldCheck size={18} />
-          Everything is correct — confirm
+          Confirm
         </button>
         <button
           onClick={onStartDispute}
           disabled={submitting}
-          className="flex-1 border border-slate-300 text-white hover:bg-slate-50 hover:text-(--color-text-primary) px-4 py-3 rounded-lg disabled:opacity-50 inline-flex items-center justify-center gap-2 font-medium transition-all"
+          className="flex-1 border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-3 rounded-lg disabled:opacity-50 inline-flex items-center justify-center gap-2 font-medium transition-all"
         >
           <FileEdit size={18} />
-          Report other issue
+          Report Issue
         </button>
       </div>
     </div>

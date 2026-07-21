@@ -331,9 +331,8 @@ class StudentRecord(models.Model):
     )
 
     index_number = models.CharField(max_length=50)
-    full_name = models.CharField(max_length=255, blank=True)
     first_name = models.CharField(max_length=100, blank=True)
-    other_names = models.CharField(max_length=100, blank=True)
+    middle_name = models.CharField(max_length=100, blank=True)
     last_name = models.CharField(max_length=100, blank=True)
     name_order = models.JSONField(default=list, blank=True)
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True)
@@ -403,22 +402,21 @@ class StudentRecord(models.Model):
             models.Index(fields=['batch', 'issuance_status']),
         ]
 
-    def get_full_name(self):
+    @property
+    def full_name(self):
         """Assemble full_name from components in the stored order."""
         components = {
             'first_name': self.first_name or '',
-            'other_names': self.other_names or '',
+            'middle_name': self.middle_name or '',
             'last_name': self.last_name or '',
         }
         if self.name_order:
             parts = [components[k] for k in self.name_order if components.get(k)]
         else:
-            parts = [components['first_name'], components['other_names'], components['last_name']]
+            parts = [components['first_name'], components['middle_name'], components['last_name']]
         return ' '.join(filter(None, parts))
 
     def save(self, *args, **kwargs):
-        if self.first_name or self.last_name:
-            self.full_name = self.get_full_name()
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -489,6 +487,77 @@ class DisputeAttachment(models.Model):
 
     def __str__(self):
         return f"{self.record.index_number} - {self.file.name}"
+
+
+class Dispute(models.Model):
+    """
+    Represents a student dispute against their record data.
+    Disputes are typed (name, programme, class of degree, other) and
+    store the student's claimed values for resolution by registry staff.
+    """
+    NAME_INCORRECT = 'name_incorrect'
+    PROGRAMME_INCORRECT = 'programme_incorrect'
+    CLASS_OF_DEGREE_INCORRECT = 'class_of_degree_incorrect'
+    OTHER = 'other'
+
+    DISPUTE_TYPE_CHOICES = [
+        (NAME_INCORRECT, 'Name is incorrect'),
+        (PROGRAMME_INCORRECT, 'Programme is incorrect'),
+        (CLASS_OF_DEGREE_INCORRECT, 'Class of degree is incorrect'),
+        (OTHER, 'Other'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    student_record = models.ForeignKey(
+        StudentRecord, on_delete=models.CASCADE,
+        related_name='disputes',
+    )
+    dispute_type = models.CharField(
+        max_length=30, choices=DISPUTE_TYPE_CHOICES,
+        help_text='Type of dispute being raised'
+    )
+
+    # Claimed values for name disputes
+    claimed_first_name = models.CharField(max_length=100, null=True, blank=True)
+    claimed_middle_name = models.CharField(max_length=100, null=True, blank=True)
+    claimed_last_name = models.CharField(max_length=100, null=True, blank=True)
+
+    # Claimed value for programme/class of degree disputes
+    claimed_value = models.CharField(max_length=500, null=True, blank=True)
+
+    # Free text note (required for OTHER, optional for structured types)
+    dispute_note = models.TextField(blank=True)
+
+    # Supporting document (required for name disputes)
+    supporting_document = models.FileField(
+        upload_to='dispute_documents/',
+        null=True, blank=True,
+        help_text='ID proof document for name disputes'
+    )
+    supporting_document_filename = models.CharField(
+        max_length=255, null=True, blank=True,
+        help_text='Original filename for display'
+    )
+
+    # Status tracking
+    is_pending = models.BooleanField(default=True, help_text='True until resolved')
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='resolved_disputes',
+    )
+    resolution_note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['student_record', 'is_pending']),
+            models.Index(fields=['dispute_type', 'is_pending']),
+        ]
+
+    def __str__(self):
+        return f"{self.student_record.index_number} - {self.get_dispute_type_display()}"
 
 
 class EmailDeliveryLog(models.Model):

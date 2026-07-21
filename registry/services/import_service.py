@@ -27,7 +27,7 @@ from registry.services.batch_lifecycle_service import BatchLifecycleService
 SYSTEM_FIELDS = {
     'index_number': {'label': 'Index Number', 'required': True},
     'first_name': {'label': 'First Name', 'required': True},
-    'other_names': {'label': 'Other Names', 'required': False},
+    'middle_name': {'label': 'Middle Name', 'required': False},
     'last_name': {'label': 'Last Name', 'required': True},
     'gender': {'label': 'Gender', 'required': False},
     'institutional_email': {'label': 'Institutional Email', 'required': True},
@@ -48,9 +48,9 @@ KNOWN_ALIASES = {
     'first_name': [
         'first name', 'firstname', 'first', 'given name', 'student first name',
     ],
-    'other_names': [
-        'other names', 'othername', 'other name', 'other', 'middle name',
-        'middle names', 'student other names',
+    'middle_name': [
+        'middle name', 'middle names', 'other names', 'othername', 'other name',
+        'other', 'student middle name', 'student other names',
     ],
     'last_name': [
         'last name', 'lastname', 'last', 'surname', 'family name',
@@ -481,15 +481,14 @@ class ImportService:
         admission = self._parse_date(mapped.get('date_of_admission')) if mapped.get('date_of_admission') else None
 
         first_name = mapped.get('first_name', '').strip()
-        other_names = mapped.get('other_names', '').strip()
+        middle_name = mapped.get('middle_name', '').strip()
         last_name = mapped.get('last_name', '').strip()
 
         cleaned = {
             'index_number': mapped['index_number'],
             'first_name': first_name,
-            'other_names': other_names,
+            'middle_name': middle_name,
             'last_name': last_name,
-            'full_name': ' '.join(filter(None, [first_name, other_names, last_name])),
             'gender': (mapped.get('gender') or '').upper(),
             'institutional_email': email,
             'programme': mapped['programme'],
@@ -560,15 +559,14 @@ class ImportService:
         admission = self._parse_date(raw.get('date_of_admission')) if raw.get('date_of_admission') else None
 
         first_name = raw.get('first_name', '').strip()
-        other_names = raw.get('other_names', '').strip()
+        middle_name = raw.get('middle_name', '').strip()
         last_name = raw.get('last_name', '').strip()
 
         cleaned = {
             'index_number': raw['index_number'],
             'first_name': first_name,
-            'other_names': other_names,
+            'middle_name': middle_name,
             'last_name': last_name,
-            'full_name': ' '.join(filter(None, [first_name, other_names, last_name])),
             'gender': (raw.get('gender') or '').upper(),
             'institutional_email': email,
             'programme': raw['programme'],
@@ -603,7 +601,7 @@ class ImportService:
                     cleaned['faculty'] = department.faculty
                     cleaned['faculty_name'] = cleaned['faculty_name'] or department.faculty.name
 
-        known = {'index_number', 'first_name', 'other_names', 'last_name',
+        known = {'index_number', 'first_name', 'middle_name', 'last_name',
                  'institutional_email', 'programme', 'class_of_degree',
                  'date_of_completion', 'gender', 'date_of_admission',
                  'faculty_code', 'department_code'}

@@ -57,8 +57,10 @@ class DisputeServiceTests(APITestCase):
         self.assertEqual(result.full_name, 'Jane Adwoa Doe')
         self.assertEqual(result.confirmation_status, StudentRecord.CONF_PENDING)
         self.assertNotEqual(result.confirmation_token_hash, prior_hash)
-        self.assertIsNotNone(result.dispute_resolved_at)
-        self.assertEqual(result.dispute_resolved_by, self.actor)
+        # Check that dispute was resolved
+        dispute = result.disputes.first()
+        self.assertIsNotNone(dispute.resolved_at)
+        self.assertEqual(dispute.resolved_by, self.actor)
         # Re-confirmation email dispatched
         self.assertEqual(len(mail.outbox), 1)
         self.assertTrue(EmailDeliveryLog.objects.filter(

@@ -26,11 +26,11 @@ export default function CertificateIssuanceTimeline({ overview, analytics, timeR
       className="rounded-xl border border-slate-200 bg-white shadow-sm"
     >
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 **:px-3 py-3">
+      <div className="sm:flex items-start justify-between gap-4 **:px-3 py-3">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Certificate Issuance Timeline</h2>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-start gap-3">
           {/* Time Range Selector */}
           <select
             value={timeRange}

@@ -14,6 +14,7 @@ State flow (all enforced by BatchLifecycleService):
 """
 
 import re
+import secrets
 
 from django.conf import settings
 from django.core.mail import send_mail
@@ -154,12 +155,22 @@ class IssuanceService:
     # ── Per-record issuance ──────────────────────────────────────────────
 
     @transaction.atomic
-    def _issue_one(self, record, *, actor):
+    def _issue_one(self, record, *, actor, issuance_run_id=None):
         try:
+            # Generate verification_token
+            verification_token = secrets.token_urlsafe(32)
+            
+            # Handle issuance_run if provided
+            issuance_run = None
+            if issuance_run_id:
+                from registry.models import IssuanceRun
+                issuance_run = IssuanceRun.objects.filter(pk=issuance_run_id).first()
+            
             cert = Certificate.objects.create(
                 student_record=record,
                 issuance_batch=record.batch,
-                issuance_run=record.last_issuance_run,
+                issuance_run=issuance_run or record.last_issuance_run,
+                verification_token=verification_token,
                 template=record.batch.certificate_template,
                 student_name=record.full_name,
                 degree_type=_map_degree_type(record.programme),
@@ -168,12 +179,24 @@ class IssuanceService:
                 date_awarded=timezone.now().date(),
                 created_by=actor,
             )
+            
+            # Build audit details with batch and run attribution
+            audit_details = f'Certificate {cert.certificate_number} issued via batch {record.batch.name}'
+            if record.batch.reference_name:
+                audit_details += f' ({record.batch.reference_name})'
+            if cert.issuance_run:
+                audit_details += f', run {cert.issuance_run.id}'
+            
             log_audit(
                 request=None, user=actor,
                 action='Issued certificate',
                 target=f'{cert.student_name} - {cert.certificate_number}',
-                details=f'Certificate {cert.certificate_number} issued via batch {record.batch.name}',
+                details=audit_details,
                 category='admin',
+                metadata={
+                    'issuance_batch_reference': record.batch.reference_name,
+                    'issuance_run_id': str(cert.issuance_run.id) if cert.issuance_run else None,
+                },
             )
             record.issuance_status = StudentRecord.ISSUE_ISSUED
             record.issued_at = timezone.now()

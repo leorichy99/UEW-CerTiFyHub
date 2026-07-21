@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from registry.models import (
     IssuanceBatch, StudentRecord, ConfirmationAuditLog,
+    Dispute,
 )
 from registry.services.token_service import hash_token
 
@@ -80,24 +81,13 @@ class ConfirmationService:
         return record
 
     @transaction.atomic
-    def confirm(self, record, *, name_order=None, ip=None, user_agent=''):
+    def confirm(self, record, *, ip=None, user_agent=''):
         if record.confirmation_status == StudentRecord.CONF_CONFIRMED:
             return record  # idempotent — already confirmed
         if record.confirmation_status == StudentRecord.CONF_DISPUTED:
             raise AlreadyFinalised(
                 'This record has an active dispute and cannot be confirmed.'
             )
-        if name_order:
-            record.name_order = name_order
-            components = {
-                'first_name': record.first_name or '',
-                'other_names': record.other_names or '',
-                'last_name': record.last_name or '',
-            }
-            record.full_name = ' '.join(
-                components[k] for k in name_order if components.get(k)
-            )
-            record.save(update_fields=['name_order', 'full_name'])
         record.confirmation_status = StudentRecord.CONF_CONFIRMED
         record.confirmed_at = timezone.now()
         record.confirmation_ip = ip
@@ -136,13 +126,22 @@ class ConfirmationService:
                 'This record is already confirmed and cannot be disputed.'
             )
 
-        # Store dispute data as JSON in dispute_note
-        record.dispute_note = json.dumps(dispute_data)
-        record.dispute_submitted_at = timezone.now()
+        # Check for existing pending dispute
+        if record.disputes.filter(is_pending=True).exists():
+            raise ValueError('A dispute is already pending for this record.')
+
+        # Create Dispute record
+        dispute = Dispute(
+            student_record=record,
+            dispute_type=Dispute.OTHER,  # Default for legacy format
+            dispute_note=note if note else json.dumps(dispute_data),
+            created_at=timezone.now(),
+            is_pending=True,
+        )
+        dispute.save()
+
         record.confirmation_status = StudentRecord.CONF_DISPUTED
-        record.save(update_fields=[
-            'confirmation_status', 'dispute_note', 'dispute_submitted_at',
-        ])
+        record.save(update_fields=['confirmation_status'])
 
         # Create excerpt for audit log
         excerpt = ''

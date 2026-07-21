@@ -25,6 +25,7 @@ export default function VerificationPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isTokenLookup, setIsTokenLookup] = useState(false);
 
   useEffect(() => {
     document.title = "Verify Certificate — UEW CerTiFyHub";
@@ -41,23 +42,32 @@ export default function VerificationPage() {
   useEffect(() => {
     if (id && !hasFetched.current) {
       hasFetched.current = true;
-      verifyCertificate(id);
+      // Route /verify/v/:token means id is just the token
+      // Route /verify/:id means id is certificate number
+      // Check if id looks like a token (64 chars, no slashes)
+      if (id.length === 64 && !id.includes('/')) {
+        setIsTokenLookup(true);
+        verifyToken(id);
+      } else {
+        setIsTokenLookup(false);
+        verifyCertificateNumber(id);
+      }
     }
   }, [id]);
 
-  const verifyCertificate = async (certId) => {
+  const verifyToken = async (token) => {
     setLoading(true);
     setError(null);
     setResult(null);
     setPreviewUrl(null);
     setDrawerOpen(false);
     try {
-      const response = await api.get(`/verify/${certId}/`);
+      const response = await api.get(`/api/verify/v/${token}/`);
       const data = response.data;
       setResult(data);
 
-      // Fetch preview thumbnail for valid or revoked certificates
-      if (data.certificate?.id) {
+      // Fetch preview thumbnail for valid certificates
+      if (data.status === 'VALID' && data.certificate?.id) {
         setPreviewLoading(true);
         try {
           const previewRes = await certificateAPI.getPreview(data.certificate.id);
@@ -78,6 +88,40 @@ export default function VerificationPage() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const verifyCertificateNumber = async (certNumber) => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setPreviewUrl(null);
+    setDrawerOpen(false);
+    try {
+      const response = await api.get(`/api/verify/lookup/?q=${encodeURIComponent(certNumber)}`);
+      const data = response.data;
+      setResult(data);
+      
+      // Auto-open drawer on successful verification
+      setDrawerOpen(true);
+    } catch (err) {
+      setError(
+        err.response?.data?.message || "Certificate not found or invalid.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyCertificate = async (input) => {
+    // Determine if input is a token or certificate number
+    // Tokens are typically 64 chars, certificate numbers are like UEW/YYYY/XXXXXXXX
+    if (input.length === 64 && !input.includes('/')) {
+      setIsTokenLookup(true);
+      verifyToken(input);
+    } else {
+      setIsTokenLookup(false);
+      verifyCertificateNumber(input);
     }
   };
 
@@ -126,7 +170,7 @@ export default function VerificationPage() {
                 id="cert-search"
                 type="text"
                 className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg leading-5 bg-white placeholder-slate-400 focus:outline-none focus:border-white text-sm transition"
-                placeholder="Enter Certificate ID"
+                placeholder="Enter Certificate Number (e.g., UEW/2026/ABC12345)"
                 value={searchId}
                 onChange={(e) => setSearchId(e.target.value)}
               />
@@ -224,84 +268,83 @@ export default function VerificationPage() {
               <div className="bg-red-50 p-4 rounded-lg text-red-800 text-sm">
                 <p className="font-medium mb-1">{result.message}</p>
                 <p className="italic">This certificate is no longer valid for official use and should not be accepted.</p>
+                {result.certificate && (
+                  <div className="mt-3 pt-3 border-t border-red-200">
+                    <p className="font-semibold">Certificate Number:</p>
+                    <p className="font-mono text-red-900">{result.certificate.certificate_number}</p>
+                  </div>
+                )}
               </div>
             )}
 
             {/* Student Details */}
             {result.status === "VALID" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
-                    Student Name
-                  </h3>
-                  <p className="text-xs font-bold text-slate-900">
-                    {result.certificate.student_name}
-                  </p>
+              <>
+                {/* Note for certificate number lookups */}
+                {!isTokenLookup && result.certificate?.note && (
+                  <div className="bg-blue-50 p-4 rounded-lg text-blue-800 text-sm mb-4">
+                    <p className="font-medium">{result.certificate.note}</p>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
+                      Student Name
+                    </h3>
+                    <p className="text-xs font-bold text-slate-900">
+                      {result.certificate.student_name}
+                    </p>
+                  </div>
+                  {isTokenLookup && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
+                        Degree Awarded
+                      </h3>
+                      <p className="text-xs font-bold text-slate-900">
+                        {result.certificate.degree_type_display}
+                      </p>
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
+                      Program of Study
+                    </h3>
+                    <p className="text-xs font-medium text-slate-700">
+                      {result.certificate.program}
+                    </p>
+                  </div>
+                  {isTokenLookup && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
+                        Class of Degree
+                      </h3>
+                      <p className="text-xs font-medium text-slate-700">
+                        {result.certificate.honors_display}
+                      </p>
+                    </div>
+                  )}
+                  {isTokenLookup && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
+                        Date of Issuance
+                      </h3>
+                      <p className="text-xs font-medium text-slate-700">
+                        {result.certificate.date_awarded}
+                      </p>
+                    </div>
+                  )}
+                  <div className="">
+                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
+                      Certificate Number
+                    </h3>
+                    <p className="text-xs font-mono text-blue-600 inline-block">
+                      {result.certificate.certificate_number}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
-                    Degree Awarded
-                  </h3>
-                  <p className="text-xs font-bold text-slate-900">
-                    {result.certificate.degree_type_display}
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
-                    Program of Study
-                  </h3>
-                  <p className="text-xs font-medium text-slate-700">
-                    {result.certificate.program}
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
-                    Class of Degree
-                  </h3>
-                  <p className="text-xs font-medium text-slate-700">
-                    {result.certificate.honors_display}
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
-                    Date of Issuance
-                  </h3>
-                  <p className="text-xs font-medium text-slate-700">
-                    {result.certificate.date_awarded}
-                  </p>
-                </div>
-                <div className="">
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
-                    Certificate Number
-                  </h3>
-                  <p className="text-xs font-mono text-blue-600 inline-block">
-                    {result.certificate.certificate_number}
-                  </p>
-                </div>
-              </div>
+              </>
             )}
 
-            {/* REVOKED Minimal Details */}
-            {result.status === "REVOKED" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                    Student Name
-                  </h3>
-                  <p className="text-lg font-bold text-slate-900">
-                    {result.certificate.student_name}
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                    Certificate Number
-                  </h3>
-                  <p className="text-base font-mono text-slate-600 bg-slate-100 px-3 py-1 rounded inline-block">
-                    {result.certificate.certificate_number}
-                  </p>
-                </div>
-              </div>
-            )}
 
             {/* Copy Verification Link */}
             <div className="flex justify-center pt-4 border-t border-slate-100">

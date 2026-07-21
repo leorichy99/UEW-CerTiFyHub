@@ -22,6 +22,7 @@ from django.utils import timezone
 
 from registry.models import (
     IssuanceBatch, StudentRecord, EmailDeliveryLog, ConfirmationAuditLog,
+    Dispute,
 )
 from registry.services.token_service import (
     generate_token, hash_token, default_expiry,
@@ -29,8 +30,8 @@ from registry.services.token_service import (
 
 
 CORRECTABLE_FIELDS = {
-    'index_number', 'full_name', 'gender', 'institutional_email',
-    'programme', 'class_of_degree', 'date_of_admission',
+    'index_number', 'first_name', 'middle_name', 'last_name', 'gender',
+    'institutional_email', 'programme', 'class_of_degree', 'date_of_admission',
     'date_of_completion', 'extra_fields',
 }
 
@@ -45,13 +46,23 @@ class DisputeService:
             StudentRecord.objects
             .filter(batch=batch, confirmation_status=StudentRecord.CONF_DISPUTED)
             .select_related('faculty', 'department')
-            .order_by('dispute_submitted_at')
+            .prefetch_related('disputes')
+            .order_by('-disputes__created_at')
         )
 
     @transaction.atomic
     def correct(self, record, *, actor, corrections: dict, resolution_note: str = ''):
         self._guard(record)
         self._apply_corrections(record, corrections)
+
+        # Get pending dispute and mark it as resolved
+        dispute = record.disputes.filter(is_pending=True).first()
+        if dispute:
+            dispute.is_pending = False
+            dispute.resolved_at = timezone.now()
+            dispute.resolved_by = actor
+            dispute.resolution_note = (resolution_note or '').strip()[:2000]
+            dispute.save()
 
         raw_token = generate_token()
         record.confirmation_token_hash = hash_token(raw_token)
@@ -60,9 +71,6 @@ class DisputeService:
         )
         record.confirmation_status = StudentRecord.CONF_PENDING
         record.confirmation_email_status = StudentRecord.DELIVERY_PENDING
-        record.dispute_resolved_at = timezone.now()
-        record.dispute_resolved_by = actor
-        record.dispute_resolution_note = (resolution_note or '').strip()[:2000]
         record.save()
 
         self._email_correction(record, raw_token)
@@ -81,15 +89,19 @@ class DisputeService:
             )
         self._guard(record)
 
+        # Get pending dispute and mark it as resolved
+        dispute = record.disputes.filter(is_pending=True).first()
+        if dispute:
+            dispute.is_pending = False
+            dispute.resolved_at = timezone.now()
+            dispute.resolved_by = actor
+            dispute.resolution_note = resolution_note.strip()[:2000]
+            dispute.save()
+
         record.confirmation_status = StudentRecord.CONF_CONFIRMED
         record.confirmed_at = timezone.now()
-        record.dispute_resolved_at = timezone.now()
-        record.dispute_resolved_by = actor
-        record.dispute_resolution_note = resolution_note.strip()[:2000]
         record.save(update_fields=[
             'confirmation_status', 'confirmed_at',
-            'dispute_resolved_at', 'dispute_resolved_by',
-            'dispute_resolution_note',
         ])
 
         self._email_rejection(record)

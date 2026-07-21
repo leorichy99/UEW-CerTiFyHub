@@ -1,12 +1,12 @@
-import { RefreshCw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 
 /**
  * RefreshButton — consistent refresh affordance across dashboards.
  */
 export default function RefreshButton({
   onClick,
-  spinning = false,
-  size = 18,
+  spinning = true,
+  size = 25,
   className = "",
   title = "Refresh data",
 }) {
@@ -17,9 +17,9 @@ export default function RefreshButton({
       disabled={spinning}
       aria-label={title}
       title={title}
-      className={`rounded-lg border border-slate-200 p-2.5 text-slate-500 shadow-sm transition-colors duration-200 hover:bg-slate-50 disabled:opacity-60 ${className}`}
+      className={`text-slate-500 transition-colors duration-200 disabled:opacity-60 ${className}`}
     >
-      <RefreshCw size={size} className={spinning ? "animate-spin" : ""} />
+      <RotateCcw size={size} className={spinning ? "animate-spin" : ""} />
     </button>
   );
 }

@@ -46,7 +46,7 @@ def send_confirmation_invitation(record_id, raw_token):
 @shared_task(name='registry.issue_certificate_for_record',
              autoretry_for=(Exception,), retry_backoff=True,
              max_retries=2, retry_jitter=True)
-def issue_certificate_for_record(record_id, actor_id):
+def issue_certificate_for_record(record_id, actor_id, issuance_run_id=None):
     """Issue a single certificate. See IssuanceService._issue_one."""
     from django.contrib.auth.models import User
     from registry.services.issuance_service import IssuanceService
@@ -61,7 +61,7 @@ def issue_certificate_for_record(record_id, actor_id):
         logger.warning('issue_certificate_for_record: record %s not found', record_id)
         return None
     actor = User.objects.filter(pk=actor_id).first() if actor_id else None
-    IssuanceService()._issue_one(record, actor=actor)
+    IssuanceService()._issue_one(record, actor=actor, issuance_run_id=issuance_run_id)
     return str(record.id)
 
 

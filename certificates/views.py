@@ -771,8 +771,8 @@ class CertificateViewSet(viewsets.ModelViewSet):
 
     @staticmethod
     def _get_verification_url(cert):
-        frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
-        return f"{frontend_url}/verify/{cert.id}"
+        from django.conf import settings
+        return f"{settings.VERIFICATION_BASE_URL}/verify/v/{cert.verification_token}"
 
     def _make_qr_image(self, cert, width=None, height=None):
         from PIL import Image

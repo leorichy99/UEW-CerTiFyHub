@@ -30,6 +30,7 @@ class CertificateSerializer(serializers.ModelSerializer):
             'issuance_run_display',
         ]
         read_only_fields = ['id', 'certificate_number', 'generated_date', 'pdf_file']
+        # verification_token is intentionally excluded from fields to prevent exposure in API responses
     
     def to_representation(self, instance):
         representation = super().to_representation(instance)

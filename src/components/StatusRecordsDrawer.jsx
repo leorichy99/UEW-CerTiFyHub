@@ -125,10 +125,10 @@ export default function StatusRecordsDrawer({
             {record.issuance_error}
           </span>
         ) : "—";
-      case "dispute_note":
-        return record.dispute_note ? (
-          <span className="text-sm text-slate-700 italic max-w-[300px] truncate" title={record.dispute_note}>
-            {record.dispute_note}
+      case "dispute_type":
+        return record.dispute_type ? (
+          <span className="text-sm text-slate-700 capitalize">
+            {record.dispute_type.replace(/_/g, ' ')}
           </span>
         ) : "—";
       default:

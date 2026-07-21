@@ -9,6 +9,7 @@ python-decouple==3.8
 whitenoise>=6.6.0
 reportlab==4.4.9
 matplotlib>=3.8.0
+qrcode>=7.4.0
 sqlparse==0.5.5
 tzdata==2025.3
 
@@ -29,3 +30,6 @@ openpyxl>=3.1.0
 
 # Testing
 factory-boy>=3.3.0
+
+# Rate limiting
+django-ratelimit>=4.1.0

@@ -226,7 +226,7 @@ export default function SuperAdminCertificatesPage() {
   };
 
   const handleVerifyLog = (cert) => {
-    navigate(`/verify/${cert.id}`);
+    navigate(`/verify/${cert.certificate_number}`);
   };
 
   const exportCertificates = () => {

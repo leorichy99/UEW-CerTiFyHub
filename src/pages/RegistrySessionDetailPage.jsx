@@ -350,7 +350,7 @@ function PipelineActions({ session, publish, closeConfirmation, startIssuance, c
         <Button
           onClick={closeConfirmation.run}
           busy={closeConfirmation.isBusy}
-          color="bg-violet-600 hover:bg-violet-700"
+          color="bg-(--color-danger) hover:bg-(--color-danger-hover) transition"
         >
           Close confirmation
         </Button>
@@ -493,7 +493,7 @@ function OverviewTab({ session, loading, onNavigateToIssuance }) {
           onClick={() => handleOpenDrawer("DISPUTED", "Disputed Records", [
             { key: "index_number", label: "Index" },
             { key: "full_name", label: "Name" },
-            { key: "dispute_note", label: "Dispute Note" },
+            { key: "dispute_type", label: "Dispute Type" },
           ], (record) => (
             <button
               onClick={() => setResolveDisputeRecord(record)}
@@ -1132,16 +1132,16 @@ function DisputesTab({ sessionId, onResolved }) {
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <AlertTriangle className="text-amber-600" size={16} />
-                <h3 className="text-sm font-semibold text-slate-800">{r.full_name}</h3>
+                <h3 className="text-sm font-semibold text-slate-800">{r.first_name} {r.middle_name} {r.last_name}</h3>
                 <code className="text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{r.index_number}</code>
               </div>
               <p className="text-xs text-slate-500 mb-2">
-                Disputed {r.dispute_submitted_at?.slice(0, 16).replace("T", " ")} ·
+                Disputed {r.dispute_created_at?.slice(0, 16).replace("T", " ")} ·
                 {r.programme} · {r.class_of_degree}
               </p>
-              <blockquote className="text-sm text-slate-700 bg-amber-50 border-l-2 border-amber-300 pl-3 py-1 italic">
-                {r.dispute_note}
-              </blockquote>
+              <div className="text-sm text-slate-700 bg-amber-50 border-l-2 border-amber-300 pl-3 py-1">
+                {r.dispute_type?.replace(/_/g, ' ') || 'Other issue'}
+              </div>
             </div>
             <button
               onClick={() => setActive(r)}
@@ -1175,7 +1175,9 @@ function ResolveDisputeModal({ sessionId, record, onClose, onResolved }) {
   const [mode, setMode] = useState("correct");
   const [resolutionNote, setResolutionNote] = useState("");
   const [corrections, setCorrections] = useState({
-    full_name: record.full_name,
+    first_name: record.first_name,
+    middle_name: record.middle_name,
+    last_name: record.last_name,
     institutional_email: record.institutional_email,
     programme: record.programme,
     class_of_degree: record.class_of_degree,
@@ -1215,11 +1217,11 @@ function ResolveDisputeModal({ sessionId, record, onClose, onResolved }) {
       <div className="bg-white rounded-xl shadow-xl w-full max-w-xl p-5 max-h-[90vh] overflow-y-auto">
         <h3 className="text-base font-semibold text-slate-800 mb-1">Resolve dispute</h3>
         <p className="text-xs text-slate-500 mb-4">
-          {record.full_name} · {record.index_number}
+          {record.first_name} {record.middle_name} {record.last_name} · {record.index_number}
         </p>
 
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-900 mb-4">
-          <strong>Student's note:</strong> {record.dispute_note}
+          <strong>Dispute type:</strong> {record.dispute_type?.replace(/_/g, ' ') || 'Other'}
         </div>
 
         <div className="flex gap-2 mb-4">
@@ -1244,7 +1246,9 @@ function ResolveDisputeModal({ sessionId, record, onClose, onResolved }) {
               Edit the fields below. A fresh confirmation link will be emailed to the student.
             </p>
             {[
-              ["full_name", "Full name"],
+              ["first_name", "First name"],
+              ["middle_name", "Middle name"],
+              ["last_name", "Last name"],
               ["institutional_email", "Email"],
               ["programme", "Programme"],
               ["class_of_degree", "Class of degree"],
@@ -1600,10 +1604,10 @@ function IssuanceRecordsTable({ session, onChanged, initialIssuanceFilter }) {
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 space-y-5">
+    <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-base font-semibold text-slate-800">Issuance records</h3>
-        <div className="flex items-center gap-3">
+        {/* <h3 className="text-base font-semibold text-slate-800">Issuance records</h3> */}
+        {/* <div className="flex items-center gap-3">
           <div className="hidden sm:flex items-center gap-2 text-xs">
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">
               {totalCount} confirmed
@@ -1622,7 +1626,7 @@ function IssuanceRecordsTable({ session, onChanged, initialIssuanceFilter }) {
           >
             <RefreshCw size={13} /> Refresh
           </button>
-        </div>
+        </div> */}
       </div>
 
       {/* Filters */}

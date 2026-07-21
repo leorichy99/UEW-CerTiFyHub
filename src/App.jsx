@@ -80,6 +80,7 @@ const ROUTE_TITLES = [
   { path: "/login", title: "Login" },
   { path: "/setup-account/:token", title: "Setup Account" },
   { path: "/verify", title: "Verify Certificate" },
+  { path: "/verify/v/:token", title: "Verify Certificate" },
   { path: "/verify/:id", title: "Verify Certificate" },
   { path: "/forgot-password", title: "Forgot Password" },
   { path: "/forgot-password/verify", title: "Verify Reset" },
@@ -150,6 +151,16 @@ function AnimatedRoutes() {
       />
       <Route
         path="/verify"
+        element={
+          <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>}>
+            <VerificationPage />
+          </RouteShell>
+        }
+      />
+      <Route
+        path="/verify/v/:token"
         element={
           <RouteShell fallback={      <div className="min-h-[60vh] flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />

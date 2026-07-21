@@ -1,6 +1,7 @@
 from django.urls import path
-from .views import VerifyCertificateView
+from .views import TokenVerificationView, CertificateNumberLookupView
 
 urlpatterns = [
-    path('<uuid:id>/', VerifyCertificateView.as_view(), name='verify_certificate'),
+    path('v/<str:token>/', TokenVerificationView.as_view(), name='verify_token'),
+    path('lookup/', CertificateNumberLookupView.as_view(), name='verify_lookup'),
 ]

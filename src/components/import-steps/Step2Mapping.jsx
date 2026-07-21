@@ -11,7 +11,7 @@ const SYSTEM_FIELDS = [
   { key: "class_of_degree", label: "Class of Degree", required: true, desc: "Degree classification" },
   { key: "date_of_completion", label: "Date of Completion", required: true, desc: "Programme end date" },
   // Optional fields
-  { key: "other_names", label: "Other Names", required: false, desc: "Middle names or additional names" },
+  { key: "middle_name", label: "Middle Name", required: false, desc: "Middle names or additional names" },
   { key: "gender", label: "Gender", required: false, desc: "Male / Female / Other" },
   { key: "date_of_admission", label: "Date of Admission", required: false, desc: "" },
   { key: "faculty", label: "Faculty", required: false, desc: "" },
@@ -21,7 +21,7 @@ const SYSTEM_FIELDS = [
 const KNOWN_ALIASES = {
   index_number: ["index number", "index no", "index no.", "reg. no.", "reg no", "registration number", "student id", "student number", "id number"],
   first_name: ["first name", "firstname", "first", "given name", "student first name"],
-  other_names: ["other names", "othername", "other name", "other", "middle name", "middle names", "student other names"],
+  middle_name: ["middle name", "middle names", "other names", "othername", "other name", "other", "student middle name", "student other names"],
   last_name: ["last name", "lastname", "last", "surname", "family name", "student last name"],
   gender: ["gender", "sex", "student gender"],
   institutional_email: ["institutional email", "email", "student email", "e-mail", "uew email", "institutional e-mail"],

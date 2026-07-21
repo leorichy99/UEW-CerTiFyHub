@@ -7,7 +7,7 @@ from registry.views import (
     IssuanceRunViewSet,
     PublicConfirmationLookupView, PublicConfirmView, PublicDisputeView,
     PublicDisputeUploadView,
-    BatchDisputesView, ResolveDisputeView,
+    BatchDisputesView, ResolveDisputeView, DisputeDocumentView, DisputeDetailView,
 )
 from registry.sse_views import (
     batch_progress_stream, email_delivery_stream, import_progress_stream,
@@ -75,6 +75,10 @@ urlpatterns = router.urls + [
          name='batch-disputes'),
     path('batches/<uuid:batch_pk>/records/<uuid:record_pk>/resolve-dispute/',
          ResolveDisputeView.as_view(), name='resolve-dispute'),
+    path('disputes/<uuid:dispute_pk>/document/', DisputeDocumentView.as_view(),
+         name='dispute-document'),
+    path('disputes/<uuid:dispute_pk>/', DisputeDetailView.as_view(),
+         name='dispute-detail'),
 
     # Live batch progress (SSE)
     path('batches/<uuid:batch_id>/progress/stream/', batch_progress_stream,

@@ -16,7 +16,6 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000
 
 # Application definition
 INSTALLED_APPS = [
-    'daphne',  # Must be before django.contrib.staticfiles for ASGI
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -210,6 +209,7 @@ EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='UEW CerTiFyHub <noreply@uew.edu.gh>')
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
+VERIFICATION_BASE_URL = config('VERIFICATION_BASE_URL', default='http://localhost:5173')
 
 # CORS Settings
 CORS_ALLOWED_ORIGINS = [

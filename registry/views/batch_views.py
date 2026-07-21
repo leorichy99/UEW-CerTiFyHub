@@ -435,7 +435,7 @@ class StudentRecordViewSet(viewsets.ModelViewSet):
         batch = self.get_batch()
         qs = StudentRecord.objects.filter(batch=batch).select_related(
             'faculty', 'department', 'import_batch',
-        ).prefetch_related('certificates').order_by('full_name', 'index_number')
+        ).prefetch_related('certificates').order_by('last_name', 'first_name', 'index_number')
         params = self.request.query_params
         for key in ('confirmation_status', 'issuance_status'):
             value = params.get(key)
@@ -463,7 +463,9 @@ class StudentRecordViewSet(viewsets.ModelViewSet):
         search = params.get('search')
         if search:
             qs = qs.filter(
-                Q(full_name__icontains=search)
+                Q(first_name__icontains=search)
+                | Q(middle_name__icontains=search)
+                | Q(last_name__icontains=search)
                 | Q(index_number__icontains=search)
                 | Q(programme__icontains=search)
             )

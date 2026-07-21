@@ -20,23 +20,14 @@ export const confirmationAPI = {
     publicApi.get("/registry/public/confirm/lookup/", {
       params: { token, index_number: indexNumber },
     }),
-  confirm: (token, indexNumber, nameOrder) =>
+  confirm: (token, indexNumber) =>
     publicApi.post("/registry/public/confirm/confirm/", {
-      token, index_number: indexNumber, name_order: nameOrder,
+      token, index_number: indexNumber,
     }),
-  dispute: (token, indexNumber, note, disputes) =>
-    publicApi.post("/registry/public/confirm/dispute/", {
-      token, index_number: indexNumber, note, disputes,
-    }),
-  uploadProof: (token, indexNumber, file) => {
-    const formData = new FormData();
-    formData.append('token', token);
-    formData.append('index_number', indexNumber);
-    formData.append('file', file);
-    return publicApi.post("/registry/public/confirm/upload-proof/", formData, {
+  dispute: (formData) =>
+    publicApi.post("/registry/public/confirm/dispute/", formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-    });
-  },
+    }),
 };
 
 export default publicApi;

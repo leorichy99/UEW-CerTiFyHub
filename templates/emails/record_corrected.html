@@ -1,13 +1,32 @@
 {% extends "emails/base_email.html" %}
 
 {% block content %}
-  <h1 style="margin: 0 0 16px; font-size: 20px; font-weight: 700; color: #242576; text-align: center;">Your Record Has Been Updated</h1>
+  <h1 style="margin: 0 0 16px; font-size: 20px; font-weight: 700; color: #242576; text-align: center;">Your Dispute Has Been Approved</h1>
 
   <p style="margin: 0 0 16px;">Hello <strong>{{ student_name }}</strong>,</p>
 
   <p style="margin: 0 0 24px;">
-    Your record for <strong>{{ batch_name }}</strong> has been updated based on your dispute.
-    Please review and re-confirm your details using the link below.
+    Your dispute regarding your record for <strong>{{ batch_name }}</strong> has been approved.
+    The following changes have been made:
+  </p>
+
+  {% if changes %}
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 24px;">
+    <tr>
+      <td style="padding: 16px 20px;">
+        {% for field, change in changes.items %}
+        <p style="margin: 0 0 8px; font-weight: 600; color: #475569; font-size: 13px;">{{ field }}:</p>
+        <p style="margin: 0 0 16px; color: #0f172a; font-size: 14px; line-height: 1.5;">
+          {{ change }}
+        </p>
+        {% endfor %}
+      </td>
+    </tr>
+  </table>
+  {% endif %}
+
+  <p style="margin: 0 0 24px;">
+    Please review and re-confirm your updated details using the link below.
   </p>
 
   <p style="margin: 0 0 24px; text-align: center;">
@@ -22,5 +41,9 @@
   </p>
   <p style="margin: 0; word-break: break-all; text-align: center; font-size: 12px; color: #475569;">
     {{ confirmation_link }}
+  </p>
+
+  <p style="margin: 16px 0 0; color: #64748b; font-size: 13px;">
+    This link will expire on {{ confirmation_deadline }}.
   </p>
 {% endblock %}

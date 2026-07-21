@@ -23,7 +23,9 @@ class StudentRecordRepository:
         if search:
             qs = qs.filter(
                 Q(index_number__icontains=search) |
-                Q(full_name__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(middle_name__icontains=search) |
+                Q(last_name__icontains=search) |
                 Q(institutional_email__icontains=search)
             )
         return qs

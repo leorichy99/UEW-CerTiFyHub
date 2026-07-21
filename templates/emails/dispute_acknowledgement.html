@@ -1,0 +1,43 @@
+{% extends "emails/base_email.html" %}
+
+{% block content %}
+  <h1 style="margin: 0 0 16px; font-size: 20px; font-weight: 700; color: #242576; text-align: center;">Your Dispute Has Been Received</h1>
+
+  <p style="margin: 0 0 16px;">Hello <strong>{{ student_name }}</strong>,</p>
+
+  <p style="margin: 0 0 24px;">
+    We have received your dispute regarding your record for
+    <strong>{{ batch_name }}</strong>. The details are as follows:
+  </p>
+
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 24px;">
+    <tr>
+      <td style="padding: 16px 20px;">
+        <p style="margin: 0 0 4px; font-weight: 600; color: #475569; font-size: 13px;">Dispute type:</p>
+        <p style="margin: 0 0 12px; color: #0f172a; font-size: 14px; line-height: 1.5;">
+          {{ dispute_type_display }}
+        </p>
+
+        {% if dispute_details %}
+        <p style="margin: 0 0 4px; font-weight: 600; color: #475569; font-size: 13px;">Details:</p>
+        <p style="margin: 0 0 12px; color: #0f172a; font-size: 14px; line-height: 1.5;">
+          {{ dispute_details|linebreaksbr }}
+        </p>
+        {% endif %}
+
+        <p style="margin: 0 0 4px; font-weight: 600; color: #475569; font-size: 13px;">Submitted:</p>
+        <p style="margin: 0; color: #0f172a; font-size: 14px; line-height: 1.5;">
+          {{ submitted_at }}
+        </p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="margin: 0 0 24px;">
+    The registrar's office will review your submission. You will receive an email notification once a decision has been made.
+  </p>
+
+  <p style="margin: 0; color: #64748b; font-size: 13px;">
+    If you have any questions, please contact your faculty office directly.
+  </p>
+{% endblock %}
